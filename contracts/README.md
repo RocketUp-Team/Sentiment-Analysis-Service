@@ -20,6 +20,7 @@ Owner note: Trung (AI Core). Do not edit without a PR and notifying Quan and Lon
 Install the service dependencies first:
 
 ```bash
+# run from the repository root
 pip install -r requirements.txt
 ```
 
@@ -86,6 +87,7 @@ When the production model is ready, replace `MockModelInference()` inside `get_m
 ## For Long (Frontend)
 
 Use Swagger UI at `http://localhost:8000/docs` as the source of truth for request and response shapes. The Pydantic schemas in `schemas.py` drive the docs that Long should rely on when building UI integration and validating payloads.
+`contracts/sample_responses.json` also contains concrete sample payloads for predict, explain, batch, and health flows.
 
 For batch upload testing, use `contracts/sample_batch_input.csv`. It already matches the expected CSV format with `text` and optional `lang` columns, so it is safe for manual end-to-end checks and UI file upload validation.
 
@@ -100,5 +102,6 @@ Use green bars for positive contribution values and red bars for negative contri
 ## Running tests
 
 ```bash
+# run from the repository root
 pytest tests/contracts/ -v --cov=contracts --cov-report=term-missing
 ```
