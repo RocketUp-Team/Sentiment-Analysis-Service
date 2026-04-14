@@ -32,10 +32,15 @@ from time import perf_counter
 
 from fastapi import Depends, FastAPI, HTTPException
 
-from contracts.errors import ModelError, UnsupportedLanguageError
-from contracts.mock_model import MockModelInference
-from contracts.model_interface import ModelInference
-from contracts.schemas import HealthResponse, PredictRequest, PredictResponse
+from contracts import (
+    HealthResponse,
+    ModelError,
+    ModelInference,
+    MockModelInference,
+    PredictRequest,
+    PredictResponse,
+    UnsupportedLanguageError,
+)
 
 app = FastAPI()
 
