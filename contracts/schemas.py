@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class AspectSentimentOut(BaseModel):
@@ -36,6 +36,12 @@ class ExplainResponse(BaseModel):
     shap_values: list[float] = Field(default_factory=list)
     base_value: float
     latency_ms: float
+
+    @model_validator(mode="after")
+    def validate_token_and_shap_lengths(self) -> "ExplainResponse":
+        if len(self.tokens) != len(self.shap_values):
+            raise ValueError("tokens and shap_values must have the same length")
+        return self
 
 
 class BatchSubmitResponse(BaseModel):

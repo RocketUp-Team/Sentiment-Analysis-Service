@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -72,6 +75,26 @@ def test_explain_response_parses_sample_data_and_lengths_match():
     assert len(response.tokens) == len(response.shap_values)
     assert response.base_value == 0.01
     assert response.latency_ms == 8.2
+
+
+def test_explain_response_rejects_mismatched_token_and_shap_lengths():
+    with pytest.raises(ValidationError):
+        ExplainResponse(
+            tokens=["great", "food", "today"],
+            shap_values=[0.12, 0.34],
+            base_value=0.01,
+            latency_ms=8.2,
+        )
+
+
+def test_sample_explain_payload_validates_against_schema():
+    sample_path = Path(__file__).resolve().parents[2] / "contracts" / "sample_responses.json"
+    sample_data = json.loads(sample_path.read_text())
+
+    response = ExplainResponse.model_validate(sample_data["POST /api/v1/explain"]["response"])
+
+    assert response.tokens == ["great", "food", "today"]
+    assert response.shap_values == [0.12, 0.34, -0.05]
 
 
 def test_batch_submit_response_parses_job_metadata():

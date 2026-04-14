@@ -17,12 +17,14 @@ Owner note: Trung (AI Core). Do not edit without a PR and notifying Quan and Lon
 
 ## For Quan (Backend)
 
-Install the service dependencies first:
+Install the shared contracts and test dependencies first:
 
 ```bash
 # run from the repository root
 pip install -r requirements.txt
 ```
+
+In this branch, `requirements.txt` only covers the shared contracts package and its test dependencies. The backend app still needs its own FastAPI/runtime dependencies installed separately before you can run the route examples below.
 
 Use `MockModelInference` while wiring the API, but depend on the `ModelInference` interface so the real model can be swapped in later.
 
