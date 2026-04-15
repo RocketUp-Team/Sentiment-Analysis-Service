@@ -1,0 +1,106 @@
+{
+  "POST /api/v1/predict": {
+    "request": {
+      "text": "The food was great but service was slow",
+      "lang": "en"
+    },
+    "response": {
+      "text": "The food was great but service was slow",
+      "sentiment": "positive",
+      "confidence": 0.72,
+      "aspects": [
+        {
+          "aspect": "food",
+          "sentiment": "positive",
+          "confidence": 0.95
+        },
+        {
+          "aspect": "service",
+          "sentiment": "negative",
+          "confidence": 0.88
+        }
+      ],
+      "sarcasm_flag": false,
+      "latency_ms": 45.2
+    }
+  },
+  "POST /api/v1/explain": {
+    "request": {
+      "text": "Great food today",
+      "lang": "en"
+    },
+    "response": {
+      "tokens": [
+        "great",
+        "food",
+        "today"
+      ],
+      "shap_values": [
+        0.12,
+        0.34,
+        -0.05
+      ],
+      "base_value": 0.01,
+      "latency_ms": 8.2
+    }
+  },
+  "POST /api/v1/batch": {
+    "note": "Upload a CSV with columns [text, lang]. lang is optional and defaults to \"en\".",
+    "response": {
+      "job_id": "batch_abc123",
+      "status": "pending",
+      "total_items": 25,
+      "created_at": "2026-04-14T10:30:00Z"
+    }
+  },
+  "GET /api/v1/batch/{job_id}": {
+    "note": "Poll the job until status becomes completed before requesting the result download.",
+    "response_processing": {
+      "job_id": "batch_abc123",
+      "status": "processing",
+      "progress": 0.65,
+      "total_items": 25,
+      "processed_items": 16,
+      "created_at": "2026-04-14T10:30:00Z",
+      "completed_at": null
+    },
+    "response_completed": {
+      "job_id": "batch_abc123",
+      "status": "completed",
+      "progress": 1.0,
+      "total_items": 25,
+      "processed_items": 25,
+      "created_at": "2026-04-14T10:30:00Z",
+      "completed_at": "2026-04-14T10:32:10Z"
+    }
+  },
+  "GET /api/v1/batch/{job_id}/result": {
+    "note": "Returns a CSV download. Respond with HTTP 404 if the job is not completed and HTTP 410 if the result has expired.",
+    "csv_columns": [
+      "text",
+      "lang",
+      "sentiment",
+      "confidence",
+      "aspects_json",
+      "sarcasm_flag"
+    ],
+    "csv_example_row": [
+      "The food was great but...",
+      "en",
+      "positive",
+      "0.72",
+      "[{\"aspect\":\"food\",\"sentiment\":\"positive\",\"confidence\":0.95}]",
+      "false"
+    ]
+  },
+  "GET /api/v1/health": {
+    "response": {
+      "status": "healthy",
+      "model_loaded": true,
+      "version": "0.1.0",
+      "supported_languages": [
+        "en"
+      ]
+    }
+  }
+}
