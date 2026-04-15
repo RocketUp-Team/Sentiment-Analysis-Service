@@ -2,7 +2,9 @@ import pandas as pd
 import pytest
 
 from src.data.transforms.base import BaseTransform
+from src.data.transforms.duplicate_remover import DuplicateRemover
 from src.data.transforms.label_mapper import LabelMapper
+from src.data.transforms.length_filter import LengthFilter
 from src.data.transforms.sentiment_deriver import SentimentDeriver
 from src.data.transforms.text_cleaner import TextCleaner
 
@@ -227,3 +229,32 @@ def test_text_cleaner_returns_aspects_unchanged_by_value():
     _, new_aspects = cleaner.transform(sentences_df, aspects_df)
 
     assert new_aspects.equals(aspects_df)
+
+
+def test_duplicate_remover():
+    sentences_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "text": "same text"},
+            {"sentence_id": "2", "text": "same text"},
+        ]
+    )
+    remover = DuplicateRemover()
+    new_sentences, _ = remover.transform(sentences_df, pd.DataFrame())
+
+    assert len(new_sentences) == 1
+    assert new_sentences.iloc[0]["sentence_id"] == "1"
+
+
+def test_length_filter():
+    sentences_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "text": "abc"},
+            {"sentence_id": "2", "text": "ab"},
+            {"sentence_id": "3", "text": "abcd"},
+        ]
+    )
+    filterer = LengthFilter(min_length=3, max_length=3)
+    new_sentences, _ = filterer.transform(sentences_df, pd.DataFrame())
+
+    assert len(new_sentences) == 1
+    assert new_sentences.iloc[0]["sentence_id"] == "1"
