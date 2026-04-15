@@ -6,6 +6,7 @@ from src.data.transforms.duplicate_remover import DuplicateRemover
 from src.data.transforms.label_mapper import LabelMapper
 from src.data.transforms.length_filter import LengthFilter
 from src.data.transforms.sentiment_deriver import SentimentDeriver
+from src.data.transforms.splitter import Splitter
 from src.data.transforms.text_cleaner import TextCleaner
 
 
@@ -258,3 +259,24 @@ def test_length_filter():
 
     assert len(new_sentences) == 1
     assert new_sentences.iloc[0]["sentence_id"] == "1"
+
+
+def test_splitter():
+    sentences_df = pd.DataFrame(
+        [{"sentence_id": str(i), "split": "train", "sentiment": "positive"} for i in range(10)]
+        + [
+            {"sentence_id": str(i + 10), "split": "test", "sentiment": "negative"}
+            for i in range(5)
+        ]
+    )
+
+    splitter = Splitter(validation_ratio=0.2, seed=42)
+    new_sentences, _ = splitter.transform(sentences_df, pd.DataFrame())
+
+    val_df = new_sentences[new_sentences["split"] == "val"]
+    train_df = new_sentences[new_sentences["split"] == "train"]
+    test_df = new_sentences[new_sentences["split"] == "test"]
+
+    assert len(val_df) == 2
+    assert len(train_df) == 8
+    assert len(test_df) == 5
