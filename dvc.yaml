@@ -1,0 +1,32 @@
+stages:
+  download:
+    cmd: python -m src.data.downloader
+    params:
+      - data.dataset_name
+      - data.splits
+    outs:
+      - data/raw/
+
+  preprocess:
+    cmd: python -m src.data.pipeline
+    deps:
+      - data/raw/
+      - src/data/transforms/
+    params:
+      - preprocessing
+      - sentiment_derivation
+      - label_mapping
+      - data.validation_ratio
+      - data.split_seed
+    outs:
+      - data/processed/
+
+  validate:
+    cmd: python -m src.data.validators
+    deps:
+      - data/processed/
+    params:
+      - validation
+    metrics:
+      - data/reports/quality_report.json:
+          cache: false
