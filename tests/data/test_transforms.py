@@ -280,3 +280,87 @@ def test_splitter():
     assert len(val_df) == 2
     assert len(train_df) == 8
     assert len(test_df) == 5
+
+
+def test_splitter_multiclass_stratified_split_preserves_each_class_in_val():
+    sentences_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "2", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "3", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "4", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "5", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "6", "split": "train", "sentiment": "negative"},
+            {"sentence_id": "7", "split": "train", "sentiment": "negative"},
+            {"sentence_id": "8", "split": "train", "sentiment": "negative"},
+            {"sentence_id": "9", "split": "train", "sentiment": "neutral"},
+            {"sentence_id": "10", "split": "train", "sentiment": "neutral"},
+            {"sentence_id": "11", "split": "test", "sentiment": "negative"},
+            {"sentence_id": "12", "split": "test", "sentiment": "neutral"},
+        ]
+    )
+
+    splitter = Splitter(validation_ratio=0.25, seed=42)
+    new_sentences, _ = splitter.transform(sentences_df, pd.DataFrame())
+
+    val_sentiments = set(new_sentences.loc[new_sentences["split"] == "val", "sentiment"])
+
+    assert val_sentiments == {"positive", "negative", "neutral"}
+
+
+def test_splitter_preserves_non_train_rows_without_relabeling():
+    sentences_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "2", "split": "train", "sentiment": "negative"},
+            {"sentence_id": "3", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "4", "split": "train", "sentiment": "negative"},
+            {"sentence_id": "5", "split": "test", "sentiment": "neutral"},
+        ]
+    )
+
+    splitter = Splitter(validation_ratio=0.5, seed=42)
+    new_sentences, _ = splitter.transform(sentences_df, pd.DataFrame())
+
+    test_rows = new_sentences[new_sentences["sentence_id"] == "5"]
+
+    assert list(test_rows["split"]) == ["test"]
+    assert "val" not in set(test_rows["split"])
+
+
+def test_splitter_returns_original_data_when_train_rows_less_than_two():
+    sentences_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "2", "split": "test", "sentiment": "negative"},
+        ]
+    )
+    aspects_df = pd.DataFrame([{"sentence_id": "1", "sentiment": "positive"}])
+
+    splitter = Splitter(validation_ratio=0.2, seed=42)
+    new_sentences, new_aspects = splitter.transform(sentences_df, aspects_df)
+
+    assert new_sentences.equals(sentences_df)
+    assert new_aspects.equals(aspects_df)
+
+
+def test_splitter_imbalanced_train_labels_raise_value_error():
+    sentences_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "2", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "3", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "4", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "5", "split": "train", "sentiment": "negative"},
+        ]
+    )
+
+    splitter = Splitter(validation_ratio=0.5, seed=42)
+
+    with pytest.raises(ValueError, match="cannot stratify"):
+        splitter.transform(sentences_df, pd.DataFrame())
+
+
+def test_splitter_invalid_validation_ratio_raises_value_error():
+    with pytest.raises(ValueError, match="validation_ratio"):
+        Splitter(validation_ratio=1.0, seed=42)
