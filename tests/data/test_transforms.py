@@ -27,6 +27,11 @@ def test_base_transform_validation():
     with pytest.raises(ValueError, match="dropped required sentence columns"):
         t.validate_output(bad_sentences, aspects_df)
 
+    # Should raise missing aspect columns
+    bad_aspects = pd.DataFrame([{"wrong_col": "positive"}])
+    with pytest.raises(ValueError, match="dropped required aspect columns"):
+        t.validate_output(sentences_df, bad_aspects)
+
     # Should raise empty
     with pytest.raises(ValueError, match="produced empty sentences"):
         t.validate_output(pd.DataFrame(), aspects_df)
