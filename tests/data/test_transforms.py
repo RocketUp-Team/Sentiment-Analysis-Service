@@ -161,13 +161,69 @@ def test_sentiment_deriver_returns_aspects_unchanged_by_value():
     assert new_aspects.equals(aspects_df)
 
 
-def test_text_cleaner():
+def test_text_cleaner_required_columns():
+    assert TextCleaner.required_sentence_columns == ["text"]
+    assert TextCleaner.required_aspect_columns == []
+
+
+def test_text_cleaner_lowercase_false_preserves_casing_and_strips_whitespace():
     sentences_df = pd.DataFrame(
         [{"sentence_id": "1", "text": "  THE Food   was great  \n"}]
+    )
+    aspects_df = pd.DataFrame()
+
+    cleaner = TextCleaner(lowercase=False, strip_whitespace=True)
+    new_sentences, _ = cleaner.transform(sentences_df, aspects_df)
+
+    assert new_sentences.iloc[0]["text"] == "THE Food was great"
+
+
+def test_text_cleaner_strip_whitespace_false_preserves_spacing_while_lowercasing():
+    sentences_df = pd.DataFrame(
+        [{"sentence_id": "1", "text": "  THE Food   was great  \n"}]
+    )
+    aspects_df = pd.DataFrame()
+
+    cleaner = TextCleaner(lowercase=True, strip_whitespace=False)
+    new_sentences, _ = cleaner.transform(sentences_df, aspects_df)
+
+    assert new_sentences.iloc[0]["text"] == "  the food   was great  \n"
+
+
+def test_text_cleaner_drops_empty_and_whitespace_only_rows_when_stripping():
+    sentences_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "text": "   "},
+            {"sentence_id": "2", "text": "  THE Food   was great  \n"},
+        ]
     )
     aspects_df = pd.DataFrame()
 
     cleaner = TextCleaner(lowercase=True, strip_whitespace=True)
     new_sentences, _ = cleaner.transform(sentences_df, aspects_df)
 
-    assert new_sentences.iloc[0]["text"] == "the food was great"
+    assert list(new_sentences["sentence_id"]) == ["2"]
+    assert list(new_sentences["text"]) == ["the food was great"]
+
+
+def test_text_cleaner_does_not_mutate_original_sentences_df():
+    sentences_df = pd.DataFrame(
+        [{"sentence_id": "1", "text": "  THE Food   was great  \n"}]
+    )
+    original = sentences_df.copy(deep=True)
+    aspects_df = pd.DataFrame()
+
+    cleaner = TextCleaner(lowercase=True, strip_whitespace=True)
+    cleaner.transform(sentences_df, aspects_df)
+
+    assert sentences_df.equals(original)
+
+
+def test_text_cleaner_returns_aspects_unchanged_by_value():
+    sentences_df = pd.DataFrame([{"sentence_id": "1", "text": "foo"}])
+    aspects_df = pd.DataFrame([{"sentence_id": "1", "sentiment": "positive"}])
+
+    cleaner = TextCleaner(lowercase=True, strip_whitespace=True)
+    _, new_aspects = cleaner.transform(sentences_df, aspects_df)
+
+    assert new_aspects.equals(aspects_df)

@@ -1,5 +1,3 @@
-import re
-
 import pandas as pd
 
 from .base import BaseTransform
@@ -23,7 +21,7 @@ class TextCleaner(BaseTransform):
             text = text.str.lower()
 
         if self.strip_whitespace:
-            text = text.apply(lambda value: re.sub(r"\s+", " ", value).strip())
+            text = text.str.replace(r"\s+", " ", regex=True).str.strip()
 
         df["text"] = text
         df = df[df["text"].str.len() > 0].copy()
