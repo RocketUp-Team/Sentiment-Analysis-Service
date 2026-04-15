@@ -1,5 +1,3 @@
-import math
-
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
@@ -22,11 +20,6 @@ class Splitter(BaseTransform):
         test_df = sentences_df[~train_mask].copy()
 
         if len(train_df) < 2:
-            return sentences_df, aspects_df
-
-        val_size = math.ceil(len(train_df) * self.validation_ratio)
-        sentiment_counts = train_df["sentiment"].value_counts(dropna=False)
-        if val_size < sentiment_counts.size or sentiment_counts.min() < 2:
             return sentences_df, aspects_df
 
         train_final, val_df = train_test_split(
