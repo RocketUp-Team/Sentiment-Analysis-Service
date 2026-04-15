@@ -4,6 +4,7 @@ import pytest
 from src.data.transforms.base import BaseTransform
 from src.data.transforms.label_mapper import LabelMapper
 from src.data.transforms.sentiment_deriver import SentimentDeriver
+from src.data.transforms.text_cleaner import TextCleaner
 
 
 class DummyTransform(BaseTransform):
@@ -158,3 +159,15 @@ def test_sentiment_deriver_returns_aspects_unchanged_by_value():
     _, new_aspects = deriver.transform(sentences_df, aspects_df)
 
     assert new_aspects.equals(aspects_df)
+
+
+def test_text_cleaner():
+    sentences_df = pd.DataFrame(
+        [{"sentence_id": "1", "text": "  THE Food   was great  \n"}]
+    )
+    aspects_df = pd.DataFrame()
+
+    cleaner = TextCleaner(lowercase=True, strip_whitespace=True)
+    new_sentences, _ = cleaner.transform(sentences_df, aspects_df)
+
+    assert new_sentences.iloc[0]["text"] == "the food was great"
