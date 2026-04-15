@@ -3,6 +3,7 @@ import pytest
 
 from src.data.transforms.base import BaseTransform
 from src.data.transforms.label_mapper import LabelMapper
+from src.data.transforms.sentiment_deriver import SentimentDeriver
 
 
 class DummyTransform(BaseTransform):
@@ -57,3 +58,28 @@ def test_label_mapper():
     assert len(new_aspects) == 1
     assert new_aspects.iloc[0]["aspect_category"] == "general"
     assert new_aspects.iloc[0]["sentiment"] == "positive"
+
+
+def test_sentiment_deriver():
+    sentences_df = pd.DataFrame(
+        [{"sentence_id": "1", "text": "foo"}, {"sentence_id": "2", "text": "bar"}]
+    )
+    aspects_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "sentiment": "positive"},
+            {"sentence_id": "1", "sentiment": "negative"},
+            {"sentence_id": "2", "sentiment": "positive"},
+        ]
+    )
+
+    deriver = SentimentDeriver(mixed_strategy="negative_priority")
+    new_sentences, _ = deriver.transform(sentences_df, aspects_df)
+
+    assert (
+        new_sentences.loc[new_sentences["sentence_id"] == "1", "sentiment"].iloc[0]
+        == "negative"
+    )
+    assert (
+        new_sentences.loc[new_sentences["sentence_id"] == "2", "sentiment"].iloc[0]
+        == "positive"
+    )
