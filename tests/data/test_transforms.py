@@ -83,3 +83,78 @@ def test_sentiment_deriver():
         new_sentences.loc[new_sentences["sentence_id"] == "2", "sentiment"].iloc[0]
         == "positive"
     )
+
+
+def test_sentiment_deriver_neutral_for_sentence_without_matching_aspects():
+    sentences_df = pd.DataFrame([{"sentence_id": "1", "text": "foo"}])
+    aspects_df = pd.DataFrame([{"sentence_id": "2", "sentiment": "positive"}])
+
+    deriver = SentimentDeriver()
+    new_sentences, _ = deriver.transform(sentences_df, aspects_df)
+
+    assert new_sentences.iloc[0]["sentiment"] == "neutral"
+
+
+def test_sentiment_deriver_neutral_for_empty_aspects_df():
+    sentences_df = pd.DataFrame([{"sentence_id": "1", "text": "foo"}])
+    aspects_df = pd.DataFrame(columns=["sentence_id", "sentiment"])
+
+    deriver = SentimentDeriver()
+    new_sentences, _ = deriver.transform(sentences_df, aspects_df)
+
+    assert list(new_sentences["sentiment"]) == ["neutral"]
+
+
+def test_sentiment_deriver_all_negative_and_all_neutral_groups():
+    sentences_df = pd.DataFrame(
+        [{"sentence_id": "1", "text": "foo"}, {"sentence_id": "2", "text": "bar"}]
+    )
+    aspects_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "sentiment": "negative"},
+            {"sentence_id": "1", "sentiment": "negative"},
+            {"sentence_id": "2", "sentiment": "neutral"},
+        ]
+    )
+
+    deriver = SentimentDeriver()
+    new_sentences, _ = deriver.transform(sentences_df, aspects_df)
+
+    assert (
+        new_sentences.loc[new_sentences["sentence_id"] == "1", "sentiment"].iloc[0]
+        == "negative"
+    )
+    assert (
+        new_sentences.loc[new_sentences["sentence_id"] == "2", "sentiment"].iloc[0]
+        == "neutral"
+    )
+
+
+def test_sentiment_deriver_mixed_positive_and_neutral_is_positive():
+    sentences_df = pd.DataFrame([{"sentence_id": "1", "text": "foo"}])
+    aspects_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "sentiment": "positive"},
+            {"sentence_id": "1", "sentiment": "neutral"},
+        ]
+    )
+
+    deriver = SentimentDeriver()
+    new_sentences, _ = deriver.transform(sentences_df, aspects_df)
+
+    assert new_sentences.iloc[0]["sentiment"] == "positive"
+
+
+def test_sentiment_deriver_invalid_strategy_raises_value_error():
+    with pytest.raises(ValueError, match="Unsupported mixed_strategy"):
+        SentimentDeriver(mixed_strategy="typo")
+
+
+def test_sentiment_deriver_returns_aspects_unchanged_by_value():
+    sentences_df = pd.DataFrame([{"sentence_id": "1", "text": "foo"}])
+    aspects_df = pd.DataFrame([{"sentence_id": "1", "sentiment": "positive"}])
+
+    deriver = SentimentDeriver()
+    _, new_aspects = deriver.transform(sentences_df, aspects_df)
+
+    assert new_aspects.equals(aspects_df)

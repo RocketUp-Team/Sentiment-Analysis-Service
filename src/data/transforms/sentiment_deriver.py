@@ -6,12 +6,20 @@ from .base import BaseTransform
 class SentimentDeriver(BaseTransform):
     required_sentence_columns = ["sentence_id", "sentiment"]
     required_aspect_columns = []
+    supported_mixed_strategies = {"negative_priority"}
 
     def __init__(self, mixed_strategy: str = "negative_priority"):
+        if mixed_strategy not in self.supported_mixed_strategies:
+            raise ValueError(
+                f"Unsupported mixed_strategy: {mixed_strategy}. "
+                f"Supported values: {sorted(self.supported_mixed_strategies)}"
+            )
         self.mixed_strategy = mixed_strategy
 
-    def _derive_overall_sentiment(self, aspects: list[str]) -> str:
-        sentiments = {sentiment for sentiment in aspects if pd.notna(sentiment)}
+    def _derive_overall_sentiment(self, aspect_sentiments: list[str]) -> str:
+        sentiments = {
+            sentiment for sentiment in aspect_sentiments if pd.notna(sentiment)
+        }
         if not sentiments:
             return "neutral"
         if len(sentiments) == 1:
