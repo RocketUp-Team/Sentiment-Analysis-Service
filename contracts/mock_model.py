@@ -8,7 +8,7 @@ from contracts.model_interface import AspectSentiment, ModelInference, Predictio
 
 SENTIMENTS = ("positive", "negative", "neutral")
 ASPECTS = ("food", "service", "ambiance", "price", "location", "general")
-SUPPORTED_LANGUAGES = ["en"]
+SUPPORTED_LANGUAGES = ["en", "vi"]
 
 
 class MockModelInference(ModelInference):

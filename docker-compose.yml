@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  fastapi_app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - mlflow
+    networks:
+      - sentiment-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./infra/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+    ports:
+      - "9091:9090"
+    networks:
+      - sentiment-network
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - sentiment-network
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    ports:
+      - "5005:5000"
+    command: mlflow server --host 0.0.0.0 --port 5000
+    networks:
+      - sentiment-network
+
+networks:
+  sentiment-network:
+    driver: bridge

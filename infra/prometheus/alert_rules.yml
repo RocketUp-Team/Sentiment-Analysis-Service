@@ -1,0 +1,20 @@
+groups:
+  - name: sentiment_service_alerts
+    rules:
+      - alert: HighErrorRate
+        expr: rate(api_requests_total{http_status=~"5.."}[5m]) / rate(api_requests_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP 5xx error rate on {{ $labels.endpoint }}"
+          description: "Error rate is above 10% for the last 1 minute."
+
+      - alert: HighInferenceLatency
+        expr: model_inference_latency_seconds_sum / model_inference_latency_seconds_count > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High model inference latency"
+          description: "Average inference latency is above 500ms for the last 5 minutes."
