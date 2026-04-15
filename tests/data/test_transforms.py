@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from src.data.transforms.base import BaseTransform
+from src.data.transforms.label_mapper import LabelMapper
 
 
 class DummyTransform(BaseTransform):
@@ -35,3 +36,24 @@ def test_base_transform_validation():
     # Should raise empty
     with pytest.raises(ValueError, match="produced empty sentences"):
         t.validate_output(pd.DataFrame(), aspects_df)
+
+
+def test_label_mapper():
+    sentences_df = pd.DataFrame([{"sentence_id": "1", "text": "foo"}])
+    aspects_df = pd.DataFrame(
+        [
+            {
+                "sentence_id": "1",
+                "aspect_category": "anecdotes/miscellaneous",
+                "sentiment": "positive",
+            },
+            {"sentence_id": "1", "aspect_category": "food", "sentiment": "conflict"},
+        ]
+    )
+
+    mapper = LabelMapper(aspect_categories={"anecdotes/miscellaneous": "general"})
+    _, new_aspects = mapper.transform(sentences_df, aspects_df)
+
+    assert len(new_aspects) == 1
+    assert new_aspects.iloc[0]["aspect_category"] == "general"
+    assert new_aspects.iloc[0]["sentiment"] == "positive"
