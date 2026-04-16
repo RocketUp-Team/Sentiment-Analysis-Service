@@ -1,0 +1,166 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-nebula: #f8fafc;
+  --panel-glass: rgba(255, 255, 255, 0.7);
+  --accent-primary: #6366f1;
+  --accent-secondary: #8b5cf6;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-glass: rgba(0, 0, 0, 0.05);
+  --shadow-premium: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+}
+
+.dark {
+  --bg-nebula: #020617;
+  --panel-glass: rgba(15, 23, 42, 0.7);
+  --accent-primary: #818cf8;
+  --accent-secondary: #a78bfa;
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --border-glass: rgba(255, 255, 255, 0.05);
+  --shadow-premium: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+}
+
+body {
+  background-color: var(--bg-nebula);
+  color: var(--text-main);
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Premium Nebula Background */
+.chat-bg-pattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  background-color: var(--bg-nebula);
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(20, 184, 166, 0.05) 0%, transparent 50%);
+  filter: blur(80px);
+}
+
+.dark .chat-bg-pattern {
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, rgba(20, 184, 166, 0.1) 0%, transparent 50%);
+}
+
+/* Glassmorphism Core */
+.glass-panel {
+  @apply backdrop-blur-[32px] bg-white/70 dark:bg-slate-900/70 border border-white/20 dark:border-white/5 shadow-xl;
+}
+
+.glass-tg {
+  @apply backdrop-blur-[20px] bg-white/60 dark:bg-slate-900/60 border-b border-black/5 dark:border-white/10;
+}
+
+/* Sidebar Chat Item Overhaul */
+.chat-item {
+  @apply flex items-center gap-4 p-3.5 mx-3 rounded-2xl cursor-pointer transition-all duration-300 relative overflow-hidden;
+}
+
+.chat-item:hover {
+  @apply bg-white/40 dark:bg-white/5 translate-x-1;
+}
+
+.chat-item.active {
+  @apply bg-white dark:bg-slate-800 shadow-lg scale-[1.02] border border-black/5 dark:border-white/10;
+}
+
+.chat-item.active::before {
+  content: '';
+  @apply absolute left-0 top-1/2 -translate-y-1/2 w-1 h-3/5 bg-gradient-to-b from-indigo-500 to-violet-500 rounded-full;
+}
+
+/* Scrollbar Style */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 dark:bg-slate-700 rounded-full hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors;
+}
+
+/* Typography & Headings */
+.tg-title {
+  @apply font-semibold text-base tracking-tight text-slate-800 dark:text-slate-100;
+}
+
+.tg-status {
+  @apply text-xs font-medium tracking-wide text-indigo-500 dark:text-indigo-400 uppercase opacity-80;
+}
+
+/* Bubble Overhaul (Removed Tails for Premium Look) */
+.message-bubble {
+  @apply relative max-w-[85%] md:max-w-[75%] px-4 py-2.5 rounded-2xl shadow-sm mb-2 transition-all duration-500 animate-in fade-in slide-in-from-bottom-2;
+}
+
+.user-bubble {
+  @apply self-end bg-gradient-to-br from-indigo-600 to-violet-600 text-white rounded-tr-none shadow-indigo-500/20;
+}
+
+.bot-bubble {
+  @apply self-start glass-panel rounded-tl-none border-none;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInUp {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideInUp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Redefine the classes I used */
+.animate-in { opacity: 1; }
+.fade-in { animation: fadeIn 0.5s ease-out forwards; }
+.slide-in-from-bottom-2 { animation: slideInUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+.slide-in-from-left {
+  animation: slideInLeft 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+
