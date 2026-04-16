@@ -12,6 +12,7 @@ from contracts.schemas import (
     BatchSubmitResponse, BatchStatusResponse
 )
 from contracts.mock_model import MockModelInference
+from src.model.baseline import BaselineModelInference
 from contracts.model_interface import ModelInference
 from src.monitoring.metrics import REQUEST_COUNT, REQUEST_LATENCY, MODEL_INFERENCE_LATENCY, monitor_middleware
 from contracts.errors import ModelError, UnsupportedLanguageError
@@ -51,10 +52,19 @@ app.add_middleware(
 # Add monitoring middleware
 app.middleware("http")(monitor_middleware)
 
+# Global model instance initialized at startup
+ml_model = None
+
+@app.on_event("startup")
+async def startup_event():
+    global ml_model
+    ml_model = BaselineModelInference()
+
 # Dependency to get model inference instance
-# In a real app, this would be a singleton or loaded at startup
 def get_model() -> ModelInference:
-    return MockModelInference()
+    if ml_model is None:
+        raise HTTPException(status_code=503, detail="Model is still loading or failed to load")
+    return ml_model
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check(model: ModelInference = Depends(get_model)):
