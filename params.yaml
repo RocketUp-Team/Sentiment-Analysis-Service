@@ -1,0 +1,33 @@
+data:
+  dataset_name: "semeval2014_restaurants"
+  splits: ["train", "test"]
+  validation_ratio: 0.1
+  split_seed: 42
+  max_text_length: 2000
+
+preprocessing:
+  lowercase: true
+  strip_whitespace: true
+  remove_duplicates: true
+  drop_conflict_labels: true
+  min_text_length: 3
+
+sentiment_derivation:
+  mixed_strategy: "negative_priority"
+
+label_mapping:
+  aspect_categories:
+    "anecdotes/miscellaneous": "general"
+    "ambience": "ambiance"
+
+validation:
+  min_samples: 100
+  max_null_ratio: 0.01
+  expected_labels:
+    sentiment: ["positive", "negative", "neutral"]
+    aspect: ["food", "service", "ambiance", "price", "location", "general"]
+
+mlflow:
+  tracking_uri: "http://localhost:5000"
+  experiment_name: "data_preprocessing"
+  model_experiment_name: "sentiment_baseline"

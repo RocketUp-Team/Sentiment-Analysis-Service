@@ -1,0 +1,26 @@
+datasets:
+  semeval2014_restaurants:
+    display_name: "SemEval-2014 Task 4 (Restaurants)"
+    version: "1.0"
+    source_url: "TBD"
+    expected_samples:
+      raw_train: 3041
+      raw_test: 800
+      processed_min: 3500
+    transforms:
+      - LabelMapper
+      - SentimentDeriver
+      - TextCleaner
+      - DuplicateRemover
+      - LengthFilter
+      - Splitter
+    aspects: ["food", "service", "ambiance", "price", "location", "general"]
+    sentiments: ["positive", "negative", "neutral"]
+
+  yelp_restaurants:
+    display_name: "Yelp Academic Dataset (Restaurants subset)"
+    version: "TBD"
+    source_url: "TBD"
+    expected_samples: {}
+    transforms: []
+    notes: "Requires ABSA annotation before use; only overall sentiment is available."

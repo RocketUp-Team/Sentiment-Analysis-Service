@@ -27,10 +27,18 @@
 | # | Method | Path | Mô tả |
 |---|--------|------|--------|
 | 1 | `POST` | `/api/v1/predict` | Real-time prediction 1 text |
-| 2 | `POST` | `/api/v1/batch` | Upload CSV, tạo batch job |
-| 3 | `GET` | `/api/v1/batch/{job_id}` | Check status batch job |
-| 4 | `GET` | `/api/v1/batch/{job_id}/result` | Download kết quả CSV |
-| 5 | `GET` | `/api/v1/health` | Health check + model status |
+| 2 | `POST` | `/api/v1/explain` | Tính SHAP/Explainability cho 1 text |
+| 3 | `POST` | `/api/v1/batch` | Upload CSV, tạo batch job |
+| 4 | `GET` | `/api/v1/batch/{job_id}` | Check status batch job |
+| 5 | `GET` | `/api/v1/batch/{job_id}/result` | Download kết quả CSV |
+| 6 | `GET` | `/api/v1/health` | Health check + model status |
+
+**HTTP Status Codes chung:**
+- `200 OK`: Request thành công.
+- `400 Bad Request`: Thiếu field, sai định dạng data, hoặc ngôn ngữ không hỗ trợ (`UnsupportedLanguageError`).
+- `413 Payload Too Large`: Vượt quy định về file size hoặc text length.
+- `422 Unprocessable Entity`: Sai Validation của FastAPI.
+- `500 Internal Server Error`: Lỗi từ hệ thống backend hoặc infer logic (`ModelError`).
 
 ### 1.1. Real-time Predict
 
@@ -43,6 +51,7 @@ Request:
   "lang": "en"
 }
 ```
+*(Giới hạn: `text` tối đa 2000 ký tự. Trả về `HTTP 413` nếu vượt quá).*
 
 Response:
 ```json
@@ -63,13 +72,31 @@ Response:
 - `confidence`: float 0.0–1.0, overall sentiment confidence
 - `aspects`: list of aspect-level sentiments (có thể rỗng nếu không detect được)
 - `sarcasm_flag`: bool
-- `latency_ms`: float, thời gian inference thực tế (không tính network)
+- `latency_ms`: float, thời gian inference thực tế (không tính network - *Backend tự đo ở API layer vì `PredictionResult` không chứa field này*).
 
-### 1.2. Batch Submit
+### 1.2. Explainability (SHAP)
+
+**`POST /api/v1/explain`**
+
+Request: Dùng format giống hệt `/predict`.
+*(Giới hạn: `text` tối đa 2000 ký tự).*
+
+Response:
+```json
+{
+  "tokens": ["The", "food", "was", "great", "but", "service", "was", "slow"],
+  "shap_values": [0.01, 0.45, 0.02, 0.52, -0.05, -0.40, 0.01, -0.30],
+  "base_value": 0.15,
+  "latency_ms": 125.0
+}
+```
+
+### 1.3. Batch Submit
 
 **`POST /api/v1/batch`** (multipart/form-data)
 
 Request: Upload file CSV với columns `[text, lang]`. `lang` optional, default `"en"`.
+*(Giới hạn: File CSV tối đa 5MB, tương đương khoảng 5000 dòng. Trả về `HTTP 413` nếu vượt quá).*
 
 Response:
 ```json
@@ -81,7 +108,7 @@ Response:
 }
 ```
 
-### 1.3. Batch Status
+### 1.4. Batch Status
 
 **`GET /api/v1/batch/{job_id}`**
 
@@ -101,7 +128,7 @@ Response:
 - `status`: `"pending"` | `"processing"` | `"completed"` | `"failed"`
 - `progress`: float 0.0–1.0
 
-### 1.4. Batch Result Download
+### 1.5. Batch Result Download
 
 **`GET /api/v1/batch/{job_id}/result`**
 
@@ -113,7 +140,7 @@ text,lang,sentiment,confidence,aspects_json,sarcasm_flag
 
 Trả HTTP 404 nếu job chưa `completed`. Trả HTTP 410 nếu kết quả đã hết hạn.
 
-### 1.5. Health Check
+### 1.6. Health Check
 
 **`GET /api/v1/health`**
 
@@ -231,12 +258,12 @@ contracts/
 
 | Deliverable | Quân (Backend) | Long (Frontend) |
 |-------------|:-:|:-:|
-| `schemas.py` | ✅ Import vào FastAPI response models | ✅ Biết response format để parse |
-| `model_interface.py` + `mock_model.py` | ✅ Plug vào API endpoints | — |
-| `errors.py` | ✅ Catch errors → HTTP status codes | — |
-| `sample_batch_input.csv` | ✅ Test batch endpoint | ✅ Test upload UI |
-| `sample_responses.json` | — | ✅ Build UI components |
-| SHAP example images | — | ✅ Design SHAP visualization |
+| `schemas.py` | ✅ Dùng làm FastAPI Pydantic Models | — (Dùng Swagger/OpenAPI tự gen Types) |
+| `model_interface.py` + `mock_model.py` | ✅ Code dependency injection cho logic | — |
+| `errors.py` | ✅ Bắt lỗi và match sang HTTP Status Code | — |
+| `sample_batch_input.csv` | ✅ Test file reading cho batch endpoint | ✅ Test luồng pick file Upload UI |
+| `sample_responses.json` | ✅ Tham khảo để viết Backend Unit Tests | — (Chỉ đọc tham khảo nếu Swagger có issue) |
+| SHAP example images | — | ✅ Nhìn ảnh mẫu để code UI Bar Chart/Heatmap |
 
 ### 3.3. Hướng dẫn sử dụng
 
@@ -247,9 +274,9 @@ contracts/
 4. KHÔNG sửa file trong `contracts/` — báo Trung nếu cần thay đổi
 
 **Cho Long:**
-1. Đọc `sample_responses.json` để biết UI cần hiển thị gì
-2. Dùng `sample_batch_input.csv` để test batch upload flow
-3. SHAP visualization: render bar chart từ `SHAPResult.tokens` + `SHAPResult.shap_values`
+1. Dùng Swagger UI (`/docs`) từ server Backend để check JSON Interface, Data Types và tự động compile Type cho Frontend (kiểu này an tâm hơn đọc chay `sample_responses.json`).
+2. Dùng `sample_batch_input.csv` để test batch upload file.
+3. SHAP visualization: Đã có API `/api/v1/explain`, gọi vào để lấy mảng `tokens` và `shap_values` render UI.
 4. KHÔNG sửa file trong `contracts/` — báo Trung nếu cần thay đổi
 
 ### 3.4. Quy tắc thay đổi Contract

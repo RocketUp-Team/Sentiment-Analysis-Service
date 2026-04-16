@@ -1,0 +1,122 @@
+schema: '2.0'
+stages:
+  download:
+    cmd: python -m src.data.downloader
+    deps:
+    - path: data/external/semeval2014/
+      hash: md5
+      md5: 5ff90acf6775611727fffa0f93ebe1a4.dir
+      size: 1594635
+      nfiles: 2
+    - path: src/data/downloader.py
+      hash: md5
+      md5: 5e079126d27d76a6dd133162f1d481c0
+      size: 4561
+    params:
+      params.yaml:
+        data.dataset_name: semeval2014_restaurants
+        data.splits:
+        - train
+        - test
+    outs:
+    - path: data/raw/
+      hash: md5
+      md5: 67282f56afcd4e6499ec88c10deadb6f.dir
+      size: 472218
+      nfiles: 2
+  preprocess:
+    cmd: python -m src.data.pipeline
+    deps:
+    - path: data/raw/
+      hash: md5
+      md5: 67282f56afcd4e6499ec88c10deadb6f.dir
+      size: 472218
+      nfiles: 2
+    - path: src/data/pipeline.py
+      hash: md5
+      md5: 3fdb3e68ab0f7baf935a063b411377e4
+      size: 3860
+    - path: src/data/transforms/
+      hash: md5
+      md5: 788f5975401647aafaf6226f6a6db3fc.dir
+      size: 22721
+      nfiles: 16
+    params:
+      params.yaml:
+        data.split_seed: 42
+        data.validation_ratio: 0.1
+        label_mapping:
+          aspect_categories:
+            anecdotes/miscellaneous: general
+            ambience: ambiance
+        preprocessing:
+          lowercase: true
+          strip_whitespace: true
+          remove_duplicates: true
+          drop_conflict_labels: true
+          min_text_length: 3
+        sentiment_derivation:
+          mixed_strategy: negative_priority
+    outs:
+    - path: data/processed/
+      hash: md5
+      md5: 19b918564158ebb7c7246021b6a3a26f.dir
+      size: 477011
+      nfiles: 2
+  validate:
+    cmd: python -m src.data.validators
+    deps:
+    - path: data/processed/
+      hash: md5
+      md5: 19b918564158ebb7c7246021b6a3a26f.dir
+      size: 477011
+      nfiles: 2
+    - path: src/data/validators.py
+      hash: md5
+      md5: 6c2b383600233919732545fd7e7dc72d
+      size: 14878
+    params:
+      params.yaml:
+        validation:
+          min_samples: 100
+          max_null_ratio: 0.01
+          expected_labels:
+            sentiment:
+            - positive
+            - negative
+            - neutral
+            aspect:
+            - food
+            - service
+            - ambiance
+            - price
+            - location
+            - general
+    outs:
+    - path: data/reports/quality_report.json
+      hash: md5
+      md5: 5a0091b0eee1878bb30f646169d250ed
+      size: 971
+  evaluate_baseline:
+    cmd: python -m src.model.evaluate
+    deps:
+    - path: data/processed/sentences.csv
+      hash: md5
+      md5: bff36f8306f6b5fc761bc2202a8215e8
+      size: 372199
+    - path: src/model/
+      hash: md5
+      md5: 27aee6e484850902e366b44d427f0be8.dir
+      size: 39429
+      nfiles: 10
+    params:
+      params.yaml:
+        mlflow:
+          tracking_uri: http://localhost:5000
+          experiment_name: data_preprocessing
+          model_experiment_name: sentiment_baseline
+    outs:
+    - path: data/reports/baseline_metrics.json
+      hash: md5
+      md5: 3295f2b6c81f2fc600657f7c659b3554
+      size: 920

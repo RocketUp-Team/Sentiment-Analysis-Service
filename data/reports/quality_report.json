@@ -1,0 +1,51 @@
+{
+  "total_samples": 3831,
+  "splits": {
+    "test": {
+      "samples": 799,
+      "null_ratio": 0.0,
+      "label_distribution": {
+        "positive": 501,
+        "negative": 184,
+        "neutral": 114
+      }
+    },
+    "train": {
+      "samples": 2728,
+      "null_ratio": 0.0,
+      "label_distribution": {
+        "positive": 1528,
+        "negative": 669,
+        "neutral": 531
+      }
+    },
+    "val": {
+      "samples": 304,
+      "null_ratio": 0.0,
+      "label_distribution": {
+        "positive": 170,
+        "negative": 75,
+        "neutral": 59
+      }
+    }
+  },
+  "aspect_distribution": {
+    "food": 1565,
+    "general": 1313,
+    "service": 728,
+    "ambiance": 489,
+    "price": 384
+  },
+  "text_length_stats": {
+    "mean": 73.39754633255025,
+    "min": 5,
+    "max": 357,
+    "median": 65.0,
+    "p95": 151.0
+  },
+  "checks_passed": true,
+  "errors": [],
+  "warnings": [
+    "dataset: missing expected aspect_category 'location' in aspects"
+  ]
+}
