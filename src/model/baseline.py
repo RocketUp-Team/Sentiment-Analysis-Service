@@ -59,22 +59,34 @@ class BaselineModelInference(ModelInference):
             }
         return inputs
 
-    def predict_single(self, text: str, lang: str = "en") -> PredictionResult:
-        """Predict overall sentiment. The baseline model does not produce aspects."""
-        self._check_language(lang)
+    def _predict_probabilities(
+        self, texts: str | list[str], *, padding: bool = False
+    ) -> torch.Tensor:
+        """Run the tokenizer/model stack and return class probabilities."""
+        tokenizer_kwargs = {
+            "return_tensors": "pt",
+            "truncation": True,
+            "max_length": self._config.max_length,
+        }
+        if padding:
+            tokenizer_kwargs["padding"] = True
+
         inputs = self._move_inputs_to_device(
             self._tokenizer(
-                text,
-                return_tensors="pt",
-                truncation=True,
-                max_length=self._config.max_length,
+                texts,
+                **tokenizer_kwargs,
             )
         )
 
         with torch.no_grad():
             outputs = self._model(**inputs)
 
-        probs = torch.softmax(outputs.logits, dim=-1)[0]
+        return torch.softmax(outputs.logits, dim=-1)
+
+    def predict_single(self, text: str, lang: str = "en") -> PredictionResult:
+        """Predict overall sentiment. The baseline model does not produce aspects."""
+        self._check_language(lang)
+        probs = self._predict_probabilities(text)[0]
         pred_idx = probs.argmax().item()
 
         return PredictionResult(
@@ -92,20 +104,7 @@ class BaselineModelInference(ModelInference):
             return []
 
         self._check_language(lang)
-        inputs = self._move_inputs_to_device(
-            self._tokenizer(
-                texts,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=self._config.max_length,
-            )
-        )
-
-        with torch.no_grad():
-            outputs = self._model(**inputs)
-
-        probs = torch.softmax(outputs.logits, dim=-1)
+        probs = self._predict_probabilities(texts, padding=True)
         results: list[PredictionResult] = []
         for index in range(len(texts)):
             pred_idx = probs[index].argmax().item()
@@ -122,67 +121,33 @@ class BaselineModelInference(ModelInference):
     def _get_classification_pipeline(self):
         """Lazy-init a callable for SHAP explainability."""
         if self._hf_pipeline is None:
-            try:
-                pipeline_device = (
-                    self._device.index
-                    if self._device.type == "cuda" and self._device.index is not None
-                    else (-1 if self._device.type == "cpu" else self._device)
-                )
-                self._hf_pipeline = hf_pipeline(
-                    "sentiment-analysis",
-                    model=self._model,
-                    tokenizer=self._tokenizer,
-                    device=pipeline_device,
-                    top_k=None,
-                )
-            except Exception:
-                def _fallback_pipeline(texts):
-                    batch = texts if isinstance(texts, list) else [texts]
-                    inputs = self._move_inputs_to_device(
-                        self._tokenizer(
-                            batch,
-                            return_tensors="pt",
-                            padding=True,
-                            truncation=True,
-                            max_length=self._config.max_length,
-                        )
-                    )
-                    with torch.no_grad():
-                        outputs = self._model(**inputs)
-                    probs = torch.softmax(outputs.logits, dim=-1)
-                    results = []
-                    for row in probs:
-                        results.append(
-                            [
-                                {
-                                    "label": self._config.label_map[class_idx],
-                                    "score": float(row[class_idx].item()),
-                                }
-                                for class_idx in sorted(self._config.label_map)
-                            ]
-                        )
-                    return results
-
-                self._hf_pipeline = _fallback_pipeline
+            pipeline_device = (
+                self._device.index
+                if self._device.type == "cuda" and self._device.index is not None
+                else (-1 if self._device.type == "cpu" else self._device)
+            )
+            self._hf_pipeline = hf_pipeline(
+                "sentiment-analysis",
+                model=self._model,
+                tokenizer=self._tokenizer,
+                device=pipeline_device,
+                top_k=None,
+            )
         return self._hf_pipeline
 
     def get_shap_explanation(self, text: str, lang: str = "en") -> SHAPResult:
         """Return SHAP values per token for explainability."""
-        import numpy as np
-
         self._check_language(lang)
+        predicted_probs = self._predict_probabilities(text)[0]
+        predicted_class_idx = int(predicted_probs.argmax().item())
         pipe = self._get_classification_pipeline()
         explainer = shap.Explainer(pipe)
         shap_values = explainer([text])
 
-        class_idx = int(
-            np.argmax(shap_values.base_values[0] + shap_values.values[0].sum(axis=0))
-        )
-
         raw_tokens = shap_values.data[0]
         tokens = raw_tokens.tolist() if hasattr(raw_tokens, "tolist") else list(raw_tokens)
-        values = shap_values.values[0][:, class_idx].tolist()
-        base = float(shap_values.base_values[0][class_idx])
+        values = shap_values.values[0][:, predicted_class_idx].tolist()
+        base = float(shap_values.base_values[0][predicted_class_idx])
 
         return SHAPResult(tokens=tokens, shap_values=values, base_value=base)
 

@@ -45,6 +45,7 @@ def _build_model_with_mocks(config=None, device=None):
 
     mock_hf_model = MagicMock()
     mock_hf_model.to.return_value = mock_hf_model
+    mock_hf_model.hf_device_map = None
 
     @dataclass
     class FakeOutput:
@@ -128,6 +129,18 @@ class TestPredictSingle:
         with pytest.raises(UnsupportedLanguageError):
             model.predict_single("text", lang="fr")
 
+    def test_tokenizer_called_with_expected_arguments(self):
+        model, mock_tokenizer, _ = _build_model_with_mocks()
+
+        model.predict_single("The food was great")
+
+        mock_tokenizer.assert_called_once_with(
+            "The food was great",
+            return_tensors="pt",
+            truncation=True,
+            max_length=ModelConfig().max_length,
+        )
+
 
 # ── predict_batch ──────────────────────────────────────────────
 
@@ -165,15 +178,36 @@ class TestPredictBatch:
         with pytest.raises(UnsupportedLanguageError):
             model.predict_batch(["text"], lang="de")
 
+    def test_tokenizer_called_with_expected_arguments(self):
+        model, mock_tokenizer, mock_hf = _build_model_with_mocks()
+
+        @dataclass
+        class FakeOutput:
+            logits: torch.Tensor
+
+        mock_hf.return_value = FakeOutput(logits=_make_mock_logits(2))
+
+        model.predict_batch(["a", "b"])
+
+        mock_tokenizer.assert_called_with(
+            ["a", "b"],
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=ModelConfig().max_length,
+        )
+
 
 # ── SHAP Explainability ────────────────────────────────────────
 
 class TestSHAPExplanation:
+    @patch("src.model.baseline.hf_pipeline")
     @patch("src.model.baseline.shap")
-    def test_returns_shap_result(self, mock_shap):
+    def test_returns_shap_result(self, mock_shap, mock_pipeline):
         model, _, _ = _build_model_with_mocks()
 
         # Configure mock shap explainer
+        mock_pipeline.return_value = MagicMock()
         mock_explainer = MagicMock()
         mock_shap.Explainer.return_value = mock_explainer
         mock_shap_values = MagicMock()
@@ -187,6 +221,37 @@ class TestSHAPExplanation:
         assert isinstance(result, SHAPResult)
         assert len(result.tokens) == 2
         assert len(result.shap_values) == 2
+
+    @patch("src.model.baseline.hf_pipeline")
+    @patch("src.model.baseline.shap")
+    def test_returns_values_for_predicted_class(self, mock_shap, mock_pipeline):
+        model, _, mock_hf_model = _build_model_with_mocks()
+        mock_pipeline.return_value = MagicMock()
+
+        @dataclass
+        class FakeOutput:
+            logits: torch.Tensor
+
+        # Predicted class is index 0, even though SHAP totals favor index 2.
+        mock_hf_model.return_value = FakeOutput(
+            logits=torch.tensor([[0.9, 0.2, 0.1]])
+        )
+
+        mock_explainer = MagicMock()
+        mock_shap.Explainer.return_value = mock_explainer
+        mock_shap_values = MagicMock()
+        mock_shap_values.data = [["token1", "token2"]]
+        import numpy as np
+        mock_shap_values.values = [
+            np.array([[0.1, 0.2, 5.0], [0.3, 0.4, 6.0]])
+        ]
+        mock_shap_values.base_values = [np.array([0.6, 0.2, 0.1])]
+        mock_explainer.return_value = mock_shap_values
+
+        result = model.get_shap_explanation("test text")
+
+        assert result.shap_values == [0.1, 0.3]
+        assert result.base_value == 0.6
 
 
 # ── Error Handling ─────────────────────────────────────────────
@@ -203,3 +268,13 @@ class TestErrorHandling:
                 BaselineModelInference(
                     config=ModelConfig(), device=torch.device("cpu")
                 )
+
+    def test_pipeline_initialization_failure_propagates(self):
+        model, _, _ = _build_model_with_mocks()
+
+        with patch(
+            "src.model.baseline.hf_pipeline",
+            side_effect=RuntimeError("pipeline setup failed"),
+        ):
+            with pytest.raises(RuntimeError, match="pipeline setup failed"):
+                model._get_classification_pipeline()
