@@ -17,9 +17,10 @@ Instead of relying solely on the constraints of a specific single dataset, the s
 - **Preprocessing Flow**: Unified pipeline outputting a standardized format `(text, aspect, sentiment, is_sarcasm)` bridging both datasets.
 
 ## 4. Model Architecture & LoRA Strategy
-To manage multiple tasks efficiently:
-- We will mount LoRA adapters (using `peft` from HuggingFace) on the existing baseline architectures (RoBERTa for classification and DeBERTa for NLI/ABSA zero-shot context). 
-- Rank setting $r=8$ or $r=16$ targeting only Q (Query) and V (Value) attention projections to substantially reduce memory utilization and freeze the core base model embeddings.
+To manage multiple tasks efficiently and satisfy the **Multi-language Support** requirement:
+- **Base Model Swap**: Before/during fine-tuning, `config.py` will point `model_name` to `cardiffnlp/twitter-xlm-roberta-base-sentiment` (or similar XLM-R variant) and `absa_model_name` to `MoritzLaurer/mDeBERTa-v3-base-mnli-xnli`. This guarantees zero-shot cross-lingual capabilities.
+- **LoRA Adapters**: We will mount LoRA adapters (using `peft` from HuggingFace) on the existing baseline architectures.
+- **Rank setting**: $r=8$ or $r=16$ targeting only Q (Query) and V (Value) attention projections to substantially reduce memory utilization and freeze the core base model embeddings.
 
 ## 5. MLFlow Integration
 A new entrypoint `train.py` (or pipeline extension `src/training/`) will abstract the fine-tuning logic:
