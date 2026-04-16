@@ -48,7 +48,7 @@ class Splitter(BaseTransform):
         test_df = sentences_df[~train_mask].copy()
 
         if len(train_df) < 2:
-            return sentences_df, aspects_df
+            return sentences_df.copy(), aspects_df.copy()
 
         self._validate_stratification_feasibility(train_df)
 

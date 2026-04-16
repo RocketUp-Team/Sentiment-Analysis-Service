@@ -344,6 +344,24 @@ def test_splitter_returns_original_data_when_train_rows_less_than_two():
     assert new_aspects.equals(aspects_df)
 
 
+def test_splitter_short_circuit_returns_copies_not_original_references():
+    sentences_df = pd.DataFrame(
+        [
+            {"sentence_id": "1", "split": "train", "sentiment": "positive"},
+            {"sentence_id": "2", "split": "test", "sentiment": "negative"},
+        ]
+    )
+    aspects_df = pd.DataFrame([{"sentence_id": "1", "sentiment": "positive"}])
+
+    splitter = Splitter(validation_ratio=0.2, seed=42)
+    new_sentences, new_aspects = splitter.transform(sentences_df, aspects_df)
+
+    assert new_sentences is not sentences_df
+    assert new_aspects is not aspects_df
+    assert new_sentences.equals(sentences_df)
+    assert new_aspects.equals(aspects_df)
+
+
 def test_splitter_imbalanced_train_labels_raise_value_error():
     sentences_df = pd.DataFrame(
         [

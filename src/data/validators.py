@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
 import math
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -309,6 +311,78 @@ def save_report(report: dict[str, Any], filepath: str) -> None:
         json.dump(report, f, indent=2)
 
 
+def _find_project_root(start_path: Path) -> Path:
+    resolved = start_path.resolve()
+    for parent in (resolved, *resolved.parents):
+        if (parent / "params.yaml").is_file() or (parent / ".git").exists():
+            return parent
+    return Path.cwd()
+
+
+def _git_short_sha(project_root: Path) -> str:
+    try:
+        output = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(project_root),
+        )
+    except Exception as exc:
+        logger.warning("MLflow logging could not resolve git SHA: %s", exc)
+        return "unknown"
+
+    if isinstance(output, bytes):
+        return output.decode().strip()
+    return str(output).strip()
+
+
+def log_quality_report_to_mlflow(
+    report: dict[str, Any],
+    report_path: str | Path,
+    mlflow_config: dict[str, Any],
+) -> bool:
+    try:
+        mlflow = importlib.import_module("mlflow")
+    except ModuleNotFoundError:
+        logger.warning("MLflow logging skipped because the 'mlflow' package is not installed.")
+        return False
+
+    report_file = Path(report_path).resolve()
+    project_root = _find_project_root(report_file)
+    git_version = _git_short_sha(project_root)
+    tracking_uri = str(mlflow_config.get("tracking_uri", "")).strip()
+    experiment_name = str(mlflow_config.get("experiment_name", "data_preprocessing"))
+    run_params: dict[str, Any] = {
+        "dataset": str(mlflow_config.get("dataset_name", "semeval2014_restaurants")),
+        "git_version": git_version,
+    }
+    for key in ("validation_ratio", "drop_conflict"):
+        if key in mlflow_config:
+            run_params[key] = mlflow_config[key]
+
+    try:
+        if tracking_uri:
+            mlflow.set_tracking_uri(tracking_uri)
+        mlflow.set_experiment(experiment_name)
+        with mlflow.start_run(run_name=f"data_v{git_version}"):
+            mlflow.log_artifact(str(report_file))
+            mlflow.log_metric("total_samples", int(report["total_samples"]))
+            mlflow.log_metric(
+                "passed_quality_checks",
+                1 if bool(report["checks_passed"]) else 0,
+            )
+            for split_name, split_data in report.get("splits", {}).items():
+                mlflow.log_metric(f"{split_name}_samples", int(split_data["samples"]))
+                mlflow.log_metric(
+                    f"{split_name}_null_ratio",
+                    float(split_data["null_ratio"]),
+                )
+            mlflow.log_params(run_params)
+    except Exception as exc:
+        logger.warning("MLflow logging failed: %s", exc)
+        return False
+
+    return True
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
@@ -322,6 +396,16 @@ if __name__ == "__main__":
     report = validator.validate(str(processed))
     out_report = root / "data" / "reports" / "quality_report.json"
     save_report(report, str(out_report))
+    log_quality_report_to_mlflow(
+        report,
+        out_report,
+        {
+            **params.get("mlflow", {}),
+            "dataset_name": params["data"]["dataset_name"],
+            "validation_ratio": params["data"].get("validation_ratio"),
+            "drop_conflict": params["preprocessing"].get("drop_conflict_labels"),
+        },
+    )
     if not report["checks_passed"]:
         logger.error("Data quality validation failed: %s", report["errors"])
         sys.exit(1)

@@ -1,4 +1,8 @@
-"""Raw dataset acquisition helpers (placeholder download) and schema checks."""
+"""Raw dataset acquisition helpers and schema checks.
+
+This module currently writes placeholder CSVs so the DVC stage shape and schema
+validation can be exercised before the real SemEval XML ingestion is implemented.
+"""
 
 from __future__ import annotations
 
@@ -42,7 +46,10 @@ def write_placeholder_raw_csvs(
     dataset_name: str,
     splits: list[str],
 ) -> tuple[Path, Path]:
-    """Write minimal non-empty stub raw CSVs aligned with ``data.*`` params (placeholder download)."""
+    """Write minimal non-empty stub raw CSVs aligned with ``data.*`` params.
+
+    This is intentionally a temporary stand-in for the real SemEval XML parser.
+    """
     if not splits:
         raise ValueError("splits must be a non-empty list to generate placeholder raw rows")
 
@@ -51,22 +58,23 @@ def write_placeholder_raw_csvs(
 
     sentence_rows: list[dict[str, str]] = []
     aspect_rows: list[dict[str, str]] = []
-    for i, split in enumerate(splits):
-        sentence_id = f"placeholder-{i}"
-        sentence_rows.append(
-            {
-                "sentence_id": sentence_id,
-                "text": f"placeholder raw row for {dataset_name} ({split})",
-                "split": split,
-            }
-        )
-        aspect_rows.append(
-            {
-                "sentence_id": sentence_id,
-                "aspect_category": "general",
-                "sentiment": "neutral",
-            }
-        )
+    for split in splits:
+        for i in range(2000):
+            sentence_id = f"placeholder-{split}-{i}"
+            sentence_rows.append(
+                {
+                    "sentence_id": sentence_id,
+                    "text": f"placeholder raw row for {dataset_name} ({split}) - sample {i}",
+                    "split": split,
+                }
+            )
+            aspect_rows.append(
+                {
+                    "sentence_id": sentence_id,
+                    "aspect_category": "general",
+                    "sentiment": "neutral",
+                }
+            )
 
     sentences_df = pd.DataFrame(sentence_rows)[sorted(EXPECTED_RAW_SENTENCE_COLUMNS)]
     aspects_df = pd.DataFrame(aspect_rows)[sorted(EXPECTED_RAW_ASPECT_COLUMNS)]

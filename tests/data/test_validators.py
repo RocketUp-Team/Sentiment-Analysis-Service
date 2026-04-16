@@ -1,10 +1,17 @@
 import json
 import os
+import types
 
 import numpy as np
 import pandas as pd
 
-from src.data.validators import MISSING_SPLIT_KEY, DataQualityValidator, save_report
+import src.data.validators as validators_module
+from src.data.validators import (
+    MISSING_SPLIT_KEY,
+    DataQualityValidator,
+    log_quality_report_to_mlflow,
+    save_report,
+)
 
 
 def _base_params(**overrides):
@@ -316,3 +323,103 @@ def test_save_report_writes_json_and_creates_parent_dirs(tmp_path):
     assert loaded["checks_passed"] is True
     assert loaded["total_samples"] == 1
     assert loaded["splits"]["train"]["samples"] == 1
+
+
+def test_log_quality_report_to_mlflow_returns_false_when_dependency_missing(
+    tmp_path, monkeypatch, caplog
+):
+    report = {
+        "total_samples": 1,
+        "splits": {"train": {"samples": 1, "null_ratio": 0.0, "label_distribution": {"positive": 1}}},
+        "aspect_distribution": {"food": 1},
+        "text_length_stats": {"mean": 3.0, "min": 3, "max": 3, "median": 3.0, "p95": 3.0},
+        "checks_passed": True,
+        "errors": [],
+        "warnings": [],
+    }
+    report_path = tmp_path / "quality_report.json"
+    save_report(report, str(report_path))
+
+    def _missing_module(_: str):
+        raise ModuleNotFoundError("No module named 'mlflow'")
+
+    monkeypatch.setattr(validators_module.importlib, "import_module", _missing_module)
+
+    with caplog.at_level("WARNING"):
+        logged = log_quality_report_to_mlflow(
+            report,
+            report_path,
+            {"tracking_uri": "http://localhost:5000", "experiment_name": "data_preprocessing"},
+        )
+
+    assert logged is False
+    assert any("mlflow" in record.message.lower() for record in caplog.records)
+
+
+def test_log_quality_report_to_mlflow_logs_expected_metrics(tmp_path, monkeypatch):
+    report = {
+        "total_samples": 3,
+        "splits": {
+            "train": {"samples": 2, "null_ratio": 0.0, "label_distribution": {"positive": 2}},
+            "val": {"samples": 1, "null_ratio": 0.0, "label_distribution": {"negative": 1}},
+        },
+        "aspect_distribution": {"food": 2, "service": 1},
+        "text_length_stats": {"mean": 3.0, "min": 3, "max": 3, "median": 3.0, "p95": 3.0},
+        "checks_passed": True,
+        "errors": [],
+        "warnings": [],
+    }
+    report_path = tmp_path / "quality_report.json"
+    save_report(report, str(report_path))
+    calls: list[tuple[str, object]] = []
+
+    class _FakeRun:
+        def __init__(self, run_name: str):
+            self._run_name = run_name
+
+        def __enter__(self):
+            calls.append(("start_run", self._run_name))
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            calls.append(("end_run", self._run_name))
+            return False
+
+    fake_mlflow = types.SimpleNamespace(
+        set_tracking_uri=lambda uri: calls.append(("tracking_uri", uri)),
+        set_experiment=lambda name: calls.append(("experiment", name)),
+        start_run=lambda run_name: _FakeRun(run_name),
+        log_artifact=lambda path: calls.append(("artifact", path)),
+        log_metric=lambda name, value: calls.append(("metric", (name, value))),
+        log_params=lambda params: calls.append(("params", params)),
+    )
+
+    monkeypatch.setattr(
+        validators_module.importlib,
+        "import_module",
+        lambda module_name: fake_mlflow if module_name == "mlflow" else None,
+    )
+    monkeypatch.setattr(
+        validators_module.subprocess,
+        "check_output",
+        lambda *args, **kwargs: b"abc123\n",
+    )
+
+    logged = log_quality_report_to_mlflow(
+        report,
+        report_path,
+        {"tracking_uri": "http://localhost:5000", "experiment_name": "data_preprocessing"},
+    )
+
+    assert logged is True
+    assert ("tracking_uri", "http://localhost:5000") in calls
+    assert ("experiment", "data_preprocessing") in calls
+    assert ("start_run", "data_vabc123") in calls
+    assert ("artifact", str(report_path)) in calls
+    assert ("metric", ("total_samples", 3)) in calls
+    assert ("metric", ("passed_quality_checks", 1)) in calls
+    assert ("metric", ("train_samples", 2)) in calls
+    assert ("metric", ("val_null_ratio", 0.0)) in calls
+    params_call = next(value for name, value in calls if name == "params")
+    assert params_call["dataset"] == "semeval2014_restaurants"
+    assert params_call["git_version"] == "abc123"
