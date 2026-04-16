@@ -1,4 +1,7 @@
-"""Evaluation helpers and CLI for the baseline sentiment model."""
+"""CLI script: evaluate baseline model on processed data and log results to MLflow.
+
+Usage: python -m src.model.evaluate
+"""
 
 from __future__ import annotations
 
@@ -34,6 +37,15 @@ from src.model.config import ModelConfig
 logger = logging.getLogger(__name__)
 
 LABELS = ["positive", "negative", "neutral"]
+
+
+def save_metrics_report(metrics: dict, output_path: Path) -> None:
+    """Persist evaluation metrics to a JSON report file."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(metrics, indent=2, ensure_ascii=True),
+        encoding="utf-8",
+    )
 
 
 def evaluate_on_dataset(
@@ -195,10 +207,14 @@ def main() -> int:
 
     root = _project_root()
     params = load_params(str(root / "params.yaml"))
-    config = ModelConfig()
-    model = BaselineModelInference(config)
 
     sentences_path = root / "data" / "processed" / "sentences.csv"
+    if not sentences_path.exists():
+        logger.error("Processed data not found at %s", sentences_path)
+        return 1
+
+    config = ModelConfig()
+    model = BaselineModelInference(config)
     sentences_df = pd.read_csv(sentences_path)
     metrics = evaluate_on_dataset(model, sentences_df, split="test")
     if metrics.get("n_samples", 0) == 0:
@@ -206,6 +222,7 @@ def main() -> int:
         return 1
 
     metrics["device"] = str(getattr(model, "_device", "cpu"))
+    save_metrics_report(metrics, root / "data" / "reports" / "baseline_metrics.json")
     log_to_mlflow(config, metrics, params)
 
     print(f"\n{'=' * 50}")

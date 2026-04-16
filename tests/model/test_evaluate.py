@@ -1,4 +1,5 @@
 """Tests for evaluation metrics computation — model predictions are mocked."""
+import json
 import pandas as pd
 import pytest
 from unittest.mock import MagicMock, patch
@@ -207,3 +208,81 @@ class TestLogToMlflow:
         log_to_mlflow(config, metrics, params_yaml)
 
         mock_mlflow.set_experiment.assert_called_once_with("sentiment_baseline")
+
+
+class TestMainCli:
+    @patch("src.model.evaluate.pd.read_csv")
+    @patch("src.model.evaluate.BaselineModelInference")
+    @patch("src.model.evaluate.ModelConfig")
+    @patch("src.model.evaluate.load_params", return_value={})
+    @patch("src.model.evaluate._project_root")
+    def test_returns_error_when_processed_sentences_missing(
+        self,
+        mock_project_root,
+        mock_load_params,
+        mock_model_config,
+        mock_baseline_model,
+        mock_read_csv,
+        tmp_path,
+    ):
+        from src.model.evaluate import main
+
+        mock_project_root.return_value = tmp_path
+
+        result = main()
+
+        assert result == 1
+        mock_load_params.assert_called_once()
+        mock_model_config.assert_not_called()
+        mock_baseline_model.assert_not_called()
+        mock_read_csv.assert_not_called()
+
+    @patch("src.model.evaluate.log_to_mlflow")
+    @patch("src.model.evaluate.evaluate_on_dataset")
+    @patch("src.model.evaluate.BaselineModelInference")
+    @patch("src.model.evaluate.ModelConfig")
+    @patch("src.model.evaluate.load_params", return_value={})
+    @patch("src.model.evaluate._project_root")
+    def test_writes_baseline_metrics_report_on_success(
+        self,
+        mock_project_root,
+        mock_load_params,
+        mock_model_config,
+        mock_baseline_model,
+        mock_evaluate_on_dataset,
+        mock_log_to_mlflow,
+        tmp_path,
+    ):
+        from src.model.evaluate import main
+
+        processed_dir = tmp_path / "data" / "processed"
+        processed_dir.mkdir(parents=True)
+        pd.DataFrame(
+            {"text": ["ok"], "sentiment": ["positive"], "split": ["test"]}
+        ).to_csv(processed_dir / "sentences.csv", index=False)
+
+        mock_project_root.return_value = tmp_path
+        mock_model = MagicMock()
+        mock_model._device = "cpu"
+        mock_baseline_model.return_value = mock_model
+        metrics = {
+            "split": "test",
+            "n_samples": 1,
+            "accuracy": 1.0,
+            "f1_macro": 1.0,
+            "f1_per_class": [1.0, 1.0, 1.0],
+            "precision_macro": 1.0,
+            "recall_macro": 1.0,
+            "mean_confidence": 0.9,
+            "classification_report": "dummy report",
+            "confusion_matrix": [[1, 0, 0], [0, 0, 0], [0, 0, 0]],
+        }
+        mock_evaluate_on_dataset.return_value = metrics
+
+        result = main()
+
+        report_path = tmp_path / "data" / "reports" / "baseline_metrics.json"
+        assert result == 0
+        assert report_path.exists()
+        assert json.loads(report_path.read_text(encoding="utf-8"))["accuracy"] == 1.0
+        mock_log_to_mlflow.assert_called_once()
