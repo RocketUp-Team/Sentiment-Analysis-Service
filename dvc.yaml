@@ -30,3 +30,15 @@ stages:
     metrics:
       - data/reports/quality_report.json:
           cache: false
+
+  evaluate_baseline:
+    cmd: python -m src.model.evaluate
+    deps:
+      - src/model/
+      - data/processed/sentences.csv
+    params:
+      - params.yaml:
+          - mlflow
+    metrics:
+      - data/reports/baseline_metrics.json:
+          cache: false
