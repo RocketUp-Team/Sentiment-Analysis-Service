@@ -1,5 +1,29 @@
 .worktrees/
 **/__pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv/
+env.bak/
+venv.bak/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.angular/cache/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Coverage
 .coverage
 .coverage.*

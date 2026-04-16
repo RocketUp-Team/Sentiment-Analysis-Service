@@ -12,6 +12,17 @@ services:
     networks:
       - sentiment-network
 
+  frontend:
+    build:
+      context: ./app/sentiment-analysis-chatbot
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - fastapi_app
+    networks:
+      - sentiment-network
+
   prometheus:
     image: prom/prometheus:latest
     volumes:
