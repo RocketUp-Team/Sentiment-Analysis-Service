@@ -59,5 +59,5 @@ def test_write_placeholder_raw_csvs_writes_schema_valid_stub(tmp_path):
     assert set(sentences_df["split"]) == {"train", "dev"}
     assert sentences_df["text"].str.contains("stub_ds").all()
     assert sentences_df["sentence_id"].tolist() == aspects_df["sentence_id"].tolist()
-    assert len(sentences_df) == 2
-    assert len(aspects_df) == 2
+    assert len(sentences_df) == 4000
+    assert len(aspects_df) == 4000
