@@ -9,7 +9,7 @@ import { Message, PredictRequest, PredictResponse } from '../models/message.mode
 })
 export class SentimentAnalysisService {
   private http = inject(HttpClient);
-  private apiUrl = 'http://localhost:8000/predict';
+  private apiUrl = '/api/predict';
 
   // Signals for state management
   private messagesSignal = signal<Message[]>([]);
@@ -68,7 +68,7 @@ export class SentimentAnalysisService {
       requestOb$ = this.predict(backendText, lang);
     } else {
       // Gọi API Upload
-      requestOb$ = this.http.post<PredictResponse>(`http://localhost:8000/${endpoint}`, payload).pipe(
+      requestOb$ = this.http.post<PredictResponse>(`/api/${endpoint}`, payload).pipe(
         catchError(err => {
           console.warn(`Backend connection failed for ${endpoint}, using mock fallback...`, err);
           return this.mockPredict(backendText);
