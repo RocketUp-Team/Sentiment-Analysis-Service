@@ -18,6 +18,7 @@ sentiment_derivation:
 label_mapping:
   aspect_categories:
     "anecdotes/miscellaneous": "general"
+    "ambience": "ambiance"
 
 validation:
   min_samples: 100

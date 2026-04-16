@@ -1,6 +1,9 @@
 stages:
   download:
     cmd: python -m src.data.downloader
+    deps:
+      - src/data/downloader.py
+      - data/external/semeval2014/
     params:
       - data.dataset_name
       - data.splits
@@ -10,6 +13,7 @@ stages:
   preprocess:
     cmd: python -m src.data.pipeline
     deps:
+      - src/data/pipeline.py
       - data/raw/
       - src/data/transforms/
     params:
@@ -24,6 +28,7 @@ stages:
   validate:
     cmd: python -m src.data.validators
     deps:
+      - src/data/validators.py
       - data/processed/
     params:
       - validation

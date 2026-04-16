@@ -98,8 +98,8 @@ if __name__ == "__main__":
     root = Path(__file__).resolve().parents[2]
     params = load_params(str(root / "params.yaml"))
     pipeline = PreprocessingPipeline(_build_transforms_from_params(params))
-    sentences = pd.read_csv(root / "data" / "raw" / "sentences.csv")
-    aspects = pd.read_csv(root / "data" / "raw" / "aspects.csv")
+    sentences = pd.read_csv(root / "data" / "raw" / "sentences.csv", dtype=str)
+    aspects = pd.read_csv(root / "data" / "raw" / "aspects.csv", dtype=str)
     out_s, out_a = pipeline.run(sentences, aspects)
     out_dir = root / "data" / "processed"
     out_dir.mkdir(parents=True, exist_ok=True)
