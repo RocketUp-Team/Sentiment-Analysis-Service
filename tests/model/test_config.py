@@ -52,3 +52,23 @@ class TestModelConfig:
         config = ModelConfig()
         project_labels = {"positive", "negative", "neutral"}
         assert set(config.label_map.values()) == project_labels
+
+
+class TestModelConfigABSA:
+    def test_default_absa_model_name(self):
+        assert ModelConfig().absa_model_name == "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
+
+    def test_default_absa_threshold(self):
+        assert ModelConfig().absa_threshold == 0.5
+
+    def test_default_absa_categories(self):
+        categories = ModelConfig().absa_categories
+        assert set(categories) == {
+            "food",
+            "service",
+            "ambiance",
+            "price",
+            "location",
+            "general",
+        }
+        assert len(categories) == 6

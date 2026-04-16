@@ -15,6 +15,9 @@ class ModelConfig:
         default_lang: Default language code.
         supported_languages: Tuple of supported language codes.
         label_map: Mapping from model output index to sentiment label.
+        absa_model_name: HuggingFace zero-shot ABSA model identifier.
+        absa_threshold: Minimum confidence threshold for ABSA predictions.
+        absa_categories: Tuple of supported ABSA aspect categories.
     """
 
     model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"
@@ -29,4 +32,14 @@ class ModelConfig:
                 2: "positive",
             }
         )
+    )
+    absa_model_name: str = "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
+    absa_threshold: float = 0.5
+    absa_categories: tuple[str, ...] = (
+        "food",
+        "service",
+        "ambiance",
+        "price",
+        "location",
+        "general",
     )
