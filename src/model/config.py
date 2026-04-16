@@ -45,5 +45,5 @@ class ModelConfig:
         "location",
         "general",
     )
-    absa_aspect_template: str = "The text contains a discussion about {}."
-    absa_sentiment_template: str = "The sentiment expressed towards {aspect} is {{}}."
+    absa_aspect_template: str = "This review is about {}."
+    absa_sentiment_template: str = "The sentiment about {aspect} is {{}}."
