@@ -81,11 +81,23 @@ class FakeZeroShotPipeline:
             "scores": [0.82, 0.12, 0.06],
         }
         self._call_count = 0
+        self.calls = []
+        self.pipeline_factory_calls = []
+        self.zero_shot_factory_kwargs = None
+        self.sentiment_pipeline = MagicMock()
 
     def __call__(
         self, text, candidate_labels, hypothesis_template="", multi_label=False
     ):
         self._call_count += 1
+        self.calls.append(
+            {
+                "text": text,
+                "candidate_labels": list(candidate_labels),
+                "hypothesis_template": hypothesis_template,
+                "multi_label": multi_label,
+            }
+        )
         if multi_label:
             return self.aspect_result
         return self.sentiment_result
@@ -123,9 +135,18 @@ def _build_model_with_mocks_absa(
     mock_hf_model.return_value = FakeOutput(logits=_make_mock_logits(1))
 
     def fake_pipeline_factory(task, **kwargs):
+        fake_zero_shot.pipeline_factory_calls.append(
+            {"task": task, "kwargs": dict(kwargs)}
+        )
         if task == "sentiment-analysis":
-            return MagicMock()
+            return fake_zero_shot.sentiment_pipeline
         if task == "zero-shot-classification":
+            missing_kwargs = {"model", "device"} - set(kwargs)
+            if missing_kwargs:
+                raise AssertionError(
+                    f"Missing zero-shot pipeline kwargs: {sorted(missing_kwargs)}"
+                )
+            fake_zero_shot.zero_shot_factory_kwargs = dict(kwargs)
             return fake_zero_shot
         raise ValueError(f"Unexpected pipeline task: {task}")
 
