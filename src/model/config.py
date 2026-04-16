@@ -1,6 +1,8 @@
 """Model configuration dataclass."""
 
 from dataclasses import dataclass, field
+from collections.abc import Mapping
+from types import MappingProxyType
 
 
 @dataclass(frozen=True)
@@ -19,10 +21,12 @@ class ModelConfig:
     max_length: int = 512
     default_lang: str = "en"
     supported_languages: tuple[str, ...] = ("en",)
-    label_map: dict[int, str] = field(
-        default_factory=lambda: {
-            0: "negative",
-            1: "neutral",
-            2: "positive",
-        }
+    label_map: Mapping[int, str] = field(
+        default_factory=lambda: MappingProxyType(
+            {
+                0: "negative",
+                1: "neutral",
+                2: "positive",
+            }
+        )
     )

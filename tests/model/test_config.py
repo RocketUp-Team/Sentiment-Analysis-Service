@@ -36,6 +36,12 @@ class TestModelConfig:
         except AttributeError:
             pass  # Expected — frozen dataclass
 
+        try:
+            config.label_map[0] = "changed"
+            assert False, "Should have raised TypeError"
+        except TypeError:
+            pass  # Expected — read-only mapping
+
     def test_custom_model_name(self):
         config = ModelConfig(model_name="custom/model")
         assert config.model_name == "custom/model"
