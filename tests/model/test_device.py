@@ -13,6 +13,7 @@ class TestGetDevice:
     def test_returns_cuda_when_available(self):
         with patch("src.model.device.torch") as mock_torch:
             mock_torch.cuda.is_available.return_value = True
+            mock_torch.backends.mps.is_available.return_value = True
             mock_torch.device = torch.device
             device = get_device()
         assert device == torch.device("cuda")
