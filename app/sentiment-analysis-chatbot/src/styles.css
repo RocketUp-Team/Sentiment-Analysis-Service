@@ -59,9 +59,13 @@ body {
     radial-gradient(circle at 50% 50%, rgba(20, 184, 166, 0.1) 0%, transparent 50%);
 }
 
-/* Glassmorphism Core */
+/* Glassmorphism Core - Optimized for readability */
 .glass-panel {
-  @apply backdrop-blur-[32px] bg-white/70 dark:bg-slate-900/70 border border-white/20 dark:border-white/5 shadow-xl;
+  @apply backdrop-blur-[16px] bg-white/90 dark:bg-slate-950/90 border border-black/5 dark:border-white/10 shadow-2xl;
+}
+
+.settings-overlay {
+  @apply bg-white dark:bg-[#020617] p-8 absolute inset-0 z-30 transition-all duration-500 shadow-2xl border-r border-black/5 dark:border-white/5;
 }
 
 .glass-tg {
@@ -164,3 +168,12 @@ body {
 }
 
 
+
+@keyframes ripple {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.animate-ripple {
+  animation: ripple 1.5s infinite;
+}

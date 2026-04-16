@@ -7,6 +7,8 @@ import {
   Smile,
   Mic,
   Send,
+  Globe,
+  X
 } from 'lucide-angular';
 
 @Component({
@@ -17,7 +19,7 @@ import {
     <div class="flex items-center gap-4 w-full transition-all duration-500">
       <!-- Premium Glass Input Card -->
       <div
-        class="flex-1 glass-panel !bg-white/40 dark:!bg-slate-900/40 rounded-3xl flex items-center px-3 md:px-6 gap-2 md:gap-4 border border-white/20 dark:border-white/5 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:bg-white dark:focus-within:bg-slate-900 transition-all duration-300"
+        class="flex-1 glass-panel !bg-white/40 dark:!bg-slate-900/40 rounded-3xl flex items-center px-3 md:px-6 gap-2 md:gap-4 border border-white/20 dark:border-white/5 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:bg-white dark:focus-within:bg-slate-900 transition-all duration-300 relative overflow-hidden"
       >
         <button
           class="text-slate-400 hover:text-indigo-500 transition-all duration-300 active:scale-95"
@@ -34,6 +36,16 @@ import {
           accept=".pdf,.doc,.docx"
           [disabled]="disabled || isRecording"
         />
+
+        <!-- Language Switcher -->
+        <button
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-indigo-500/10 text-slate-500 dark:text-slate-400 transition-all active:scale-90 border border-transparent hover:border-indigo-500/20"
+          (click)="toggleLang()"
+          [disabled]="disabled || isRecording"
+        >
+          <lucide-angular name="globe" [size]="14"></lucide-angular>
+          <span class="text-[10px] font-black uppercase tracking-widest">{{ lang }}</span>
+        </button>
 
         <!-- File Badge -->
         <div
@@ -61,7 +73,8 @@ import {
           <div
             class="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse"
           ></div>
-          Đang ghi âm... {{ recordingTime }}s
+          <span class="animate-pulse tracking-tight">Đang ghi âm...</span>
+          <span class="text-[10px] font-black bg-red-500/10 px-2 py-0.5 rounded-full">{{ recordingTime }}s</span>
         </div>
 
         <!-- Normal Input -->
@@ -84,52 +97,50 @@ import {
         </button>
       </div>
 
-      <!-- Action Button with Gradient & Depth -->
-      <button
-        (mousedown)="startHold($event)"
-        (mouseup)="stopHold($event)"
-        (mouseleave)="cancelHold($event)"
-        (touchstart)="startHold($event)"
-        (touchend)="stopHold($event)"
-        (touchcancel)="cancelHold($event)"
-        (click)="handleClick($event)"
-        [disabled]="disabled"
-        [ngClass]="
-          isRecording
-            ? 'bg-red-500 dark:bg-red-500 shadow-red-500/50 text-white w-12 h-12 md:w-14 md:h-14 scale-110'
-            : 'bg-gradient-to-br from-indigo-500 to-violet-600 shadow-indigo-500/30 text-white ' +
-              (text.trim() || selectedFile
-                ? 'w-12 h-12 md:h-14 md:w-auto px-4 md:px-7'
-                : 'w-12 h-12 md:w-14 md:h-14')
-        "
-        class="flex items-center justify-center text-white rounded-[24px] md:rounded-3xl transition-all duration-300 transform active:scale-95 shadow-xl select-none shrink-0"
-      >
-        <lucide-angular
-          *ngIf="!text.trim() && !selectedFile && !isRecording"
-          name="mic"
-          [size]="24"
-        ></lucide-angular>
-        <lucide-angular
-          *ngIf="isRecording"
-          name="mic"
-          [size]="24"
-          class="animate-pulse"
-        ></lucide-angular>
-        <div
-          *ngIf="(text.trim() || selectedFile) && !isRecording"
-          class="flex items-center gap-2.5"
+      <!-- Action Button with Ripple -->
+      <div class="relative flex items-center justify-center">
+        <!-- Ripple Effect Background -->
+        <div *ngIf="isRecording" class="absolute inset-0 bg-red-500/20 rounded-full animate-ripple pointer-events-none"></div>
+        <div *ngIf="isRecording" class="absolute inset-0 bg-red-500/10 rounded-full animate-ripple [animation-delay:0.5s] pointer-events-none"></div>
+
+        <button
+          (mousedown)="startHold($event)"
+          (mouseup)="stopHold($event)"
+          (mouseleave)="cancelHold($event)"
+          (touchstart)="startHold($event)"
+          (touchend)="stopHold($event)"
+          (touchcancel)="cancelHold($event)"
+          (click)="handleClick($event)"
+          [disabled]="disabled"
+          [ngClass]="
+            isRecording
+              ? 'bg-red-500 shadow-red-500/50 text-white w-14 h-14 scale-110'
+              : 'bg-gradient-to-br from-indigo-500 to-violet-600 shadow-indigo-500/30 text-white ' +
+                (text.trim() || selectedFile
+                  ? 'w-12 h-12 md:h-14 md:w-auto px-6 md:px-8'
+                  : 'w-12 h-12 md:w-14 md:h-14')
+          "
+          class="relative flex items-center justify-center text-white rounded-[24px] md:rounded-3xl transition-all duration-500 transform active:scale-95 shadow-xl select-none z-10"
         >
-          <span
-            class="text-xs font-black uppercase tracking-[0.2em] hidden md:inline"
-            >Send</span
-          >
           <lucide-angular
-            name="send"
-            [size]="20"
-            class="ml-0.5"
+            *ngIf="!isRecording && !text.trim() && !selectedFile"
+            name="mic"
+            [size]="24"
           ></lucide-angular>
-        </div>
-      </button>
+          <lucide-angular
+            *ngIf="isRecording"
+            name="mic"
+            [size]="28"
+          ></lucide-angular>
+          <div
+            *ngIf="(text.trim() || selectedFile) && !isRecording"
+            class="flex items-center gap-2.5"
+          >
+            <span class="text-xs font-black uppercase tracking-[0.2em] hidden md:inline">Send</span>
+            <lucide-angular name="send" [size]="20"></lucide-angular>
+          </div>
+        </button>
+      </div>
     </div>
   `,
 })
@@ -293,6 +304,13 @@ export class ChatInputComponent {
     } else if (this.text.trim()) {
       this.onSendText.emit({ text: this.text.trim(), lang: this.lang });
       this.text = '';
+    }
+  }
+
+  toggleLang() {
+    this.lang = this.lang === 'vi' ? 'en' : 'vi';
+    if (this.recognition) {
+      this.recognition.lang = this.lang === 'vi' ? 'vi-VN' : 'en-US';
     }
   }
 }

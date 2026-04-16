@@ -1,24 +1,40 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# Stage 1: Build dependencies
+FROM python:3.11-slim AS builder
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file into the container
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install python dependencies in a virtualenv or simply in a separate directory
 COPY requirements.txt .
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Optimize torch installation for CPU and clean cache
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
-COPY . .
+# Stage 2: Final image
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy only the installed dependencies from the builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy source code
+COPY src/ ./src/
+COPY contracts/ ./contracts/
 
 # Environment variables
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
-# Expose the port the app runs on
+# Expose port
 EXPOSE 8000
 
-# Run the application
+# Run the app
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

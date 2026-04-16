@@ -13,18 +13,10 @@ import { LucideAngularModule, CheckCheck, Smile, Frown, Meh, Loader2, AlertCircl
         'message-bubble relative group hover:scale-[1.01] transition-all duration-300',
         isUser ? 'user-bubble' : 'bot-bubble'
       ]">
-        <!-- Luxury Image Support with Glass Overlay -->
-        <div *ngIf="message.text.includes('banner-team')" class="mb-4 -mx-4 -mt-2.5 overflow-hidden rounded-t-2xl relative">
-           <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent z-10"></div>
-           <img src="https://raw.githubusercontent.com/RocketUp-Team/Sentiment-Analysis-Service/main/app/banner.jpg" 
-                class="w-full object-cover max-h-[220px] transition-transform duration-700 group-hover:scale-110" 
-                onerror="this.style.display='none'">
-        </div>
-
         <!-- Message Content -->
         <div class="space-y-3">
           <p class="pr-10 leading-relaxed text-[15.5px] font-medium tracking-normal whitespace-pre-wrap">
-            {{ message.text.replace('banner-team', '') }}
+            {{ message.text }}
           </p>
           
           <!-- Premium Bot Insights Section -->

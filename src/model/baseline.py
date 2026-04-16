@@ -40,6 +40,8 @@ class BaselineModelInference(ModelInference):
         self._hf_pipeline = None
         self._absa_pipeline = None
         self._load_model()
+        # Pre-load ABSA pipeline to avoid lazy-loading timeouts during first request
+        self._get_absa_pipeline()
 
     def _load_model(self) -> None:
         """Load tokenizer and model, then move the model to the target device."""
