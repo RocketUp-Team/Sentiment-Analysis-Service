@@ -40,7 +40,9 @@ class BaselineModelInference(ModelInference):
         self._hf_pipeline = None
         self._absa_pipeline = None
         self._load_model()
-        # Pre-load ABSA pipeline to avoid lazy-loading timeouts during first request
+
+    def preload(self) -> None:
+        """Eagerly load heavy sub-models (like ABSA) to avoid runtime delay."""
         self._get_absa_pipeline()
 
     def _load_model(self) -> None:

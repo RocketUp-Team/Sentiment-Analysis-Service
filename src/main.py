@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI):
     # Global model instance initialized at startup
     global ml_model
     ml_model = BaselineModelInference()
+    ml_model.preload()
     yield
     # Clean up here if needed
 

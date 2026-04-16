@@ -36,7 +36,7 @@ class ModelConfig:
         )
     )
     absa_model_name: str = "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
-    absa_threshold: float = 0.45
+    absa_threshold: float = 0.5
     absa_categories: tuple[str, ...] = (
         "food",
         "service",
