@@ -30,6 +30,40 @@ def _make_mock_logits(batch_size: int = 1) -> torch.Tensor:
     return logits
 
 
+def _expected_pipeline_device(device: torch.device):
+    """Mirror the pipeline device mapping used by the model."""
+    if device.type == "cuda" and device.index is not None:
+        return device.index
+    if device.type == "cpu":
+        return -1
+    return device
+
+
+def _assert_absa_pipeline_factory_call(mock_pipeline, model):
+    """Verify prediction-time lazy loading uses the ABSA zero-shot pipeline."""
+    mock_pipeline.assert_called_once()
+    args, kwargs = mock_pipeline.call_args
+    assert args == ("zero-shot-classification",)
+    assert kwargs["model"] == model._config.absa_model_name
+    assert kwargs["device"] == _expected_pipeline_device(model.device)
+
+
+def _assert_aspect_detection_call(call, text):
+    """Verify the first zero-shot pass extracts ABSA aspects."""
+    assert call["text"] == text
+    assert call["candidate_labels"] == list(ModelConfig().absa_categories)
+    assert call["hypothesis_template"] == "This review is about {}."
+    assert call["multi_label"] is True
+
+
+def _assert_aspect_sentiment_call(call, text, aspect_name):
+    """Verify the per-aspect zero-shot pass scores sentiment labels."""
+    assert call["text"] == text
+    assert call["candidate_labels"] == ["positive", "negative", "neutral"]
+    assert call["hypothesis_template"] == f"The sentiment about {aspect_name} is {{}}."
+    assert call["multi_label"] is False
+
+
 def _build_model_with_mocks(config=None, device=None):
     """Patch HuggingFace and build a BaselineModelInference."""
     config = config or ModelConfig()
@@ -66,6 +100,100 @@ def _build_model_with_mocks(config=None, device=None):
         model = BaselineModelInference(config=config, device=device)
 
     return model, mock_tokenizer, mock_hf_model
+
+
+class FakeZeroShotPipeline:
+    """Simple fake for zero-shot aspect and sentiment pipeline calls."""
+
+    def __init__(self, aspect_result=None, sentiment_result=None):
+        self.aspect_result = aspect_result or {
+            "labels": ["food", "service", "ambiance", "price", "location", "general"],
+            "scores": [0.85, 0.78, 0.12, 0.08, 0.05, 0.10],
+        }
+        self.sentiment_result = sentiment_result or {
+            "labels": ["positive", "negative", "neutral"],
+            "scores": [0.82, 0.12, 0.06],
+        }
+        self._call_count = 0
+        self.calls = []
+        self.pipeline_factory_calls = []
+        self.zero_shot_factory_kwargs = None
+        self.sentiment_pipeline = MagicMock()
+
+    def __call__(
+        self, text, candidate_labels, hypothesis_template="", multi_label=False
+    ):
+        self._call_count += 1
+        self.calls.append(
+            {
+                "text": text,
+                "candidate_labels": list(candidate_labels),
+                "hypothesis_template": hypothesis_template,
+                "multi_label": multi_label,
+            }
+        )
+        if multi_label:
+            return self.aspect_result
+        return self.sentiment_result
+
+
+def _build_model_with_mocks_absa(
+    config=None,
+    device=None,
+    fake_zero_shot: FakeZeroShotPipeline | None = None,
+):
+    """Patch HuggingFace and build a BaselineModelInference with ABSA fakes."""
+    config = config or ModelConfig()
+    device = device or torch.device("cpu")
+    fake_zero_shot = fake_zero_shot or FakeZeroShotPipeline()
+
+    mock_tokenizer = MagicMock()
+    mock_tokenizer.return_value = _MockBatchEncoding(
+        {
+            "input_ids": torch.tensor([[1, 2, 3]]),
+            "attention_mask": torch.tensor([[1, 1, 1]]),
+        }
+    )
+
+    mock_hf_model = MagicMock()
+    mock_hf_model.to.return_value = mock_hf_model
+    mock_hf_model.hf_device_map = None
+
+    @dataclass
+    class FakeOutput:
+        logits: torch.Tensor
+
+    mock_hf_model.__call__ = MagicMock(
+        return_value=FakeOutput(logits=_make_mock_logits(1))
+    )
+    mock_hf_model.return_value = FakeOutput(logits=_make_mock_logits(1))
+
+    def fake_pipeline_factory(task, **kwargs):
+        fake_zero_shot.pipeline_factory_calls.append(
+            {"task": task, "kwargs": dict(kwargs)}
+        )
+        if task == "sentiment-analysis":
+            return fake_zero_shot.sentiment_pipeline
+        if task == "zero-shot-classification":
+            missing_kwargs = {"model", "device"} - set(kwargs)
+            if missing_kwargs:
+                raise AssertionError(
+                    f"Missing zero-shot pipeline kwargs: {sorted(missing_kwargs)}"
+                )
+            fake_zero_shot.zero_shot_factory_kwargs = dict(kwargs)
+            return fake_zero_shot
+        raise ValueError(f"Unexpected pipeline task: {task}")
+
+    with patch("src.model.baseline.AutoTokenizer") as MockTokenizer, \
+         patch("src.model.baseline.AutoModelForSequenceClassification") as MockModel, \
+         patch("src.model.baseline.hf_pipeline", side_effect=fake_pipeline_factory):
+        MockTokenizer.from_pretrained.return_value = mock_tokenizer
+        MockModel.from_pretrained.return_value = mock_hf_model
+
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=device)
+
+    return model, fake_zero_shot
 
 
 # ── Interface Compliance ───────────────────────────────────────
@@ -118,10 +246,38 @@ class TestPredictSingle:
         result = model.predict_single("The food was great")
         assert 0.0 <= result.confidence <= 1.0
 
-    def test_aspects_empty_for_baseline(self):
-        model, _, _ = _build_model_with_mocks()
-        result = model.predict_single("The food was great")
-        assert result.aspects == []
+    def test_aspects_returned_from_absa(self):
+        fake_zero_shot = FakeZeroShotPipeline()
+        model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
+
+        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot) as mock_pipeline:
+            result = model.predict_single("The food was amazing but service was terrible")
+
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
+
+        assert len(result.aspects) > 0
+        assert len(fake_zero_shot.calls) == 3
+        _assert_aspect_detection_call(
+            fake_zero_shot.calls[0],
+            "The food was amazing but service was terrible",
+        )
+        _assert_aspect_sentiment_call(
+            fake_zero_shot.calls[1],
+            "The food was amazing but service was terrible",
+            "food",
+        )
+        _assert_aspect_sentiment_call(
+            fake_zero_shot.calls[2],
+            "The food was amazing but service was terrible",
+            "service",
+        )
+
+        allowed_aspects = set(ModelConfig().absa_categories)
+        allowed_sentiments = {"positive", "negative", "neutral"}
+        for aspect in result.aspects:
+            assert aspect.aspect in allowed_aspects
+            assert aspect.sentiment in allowed_sentiments
+            assert 0.0 <= aspect.confidence <= 1.0
 
     def test_sarcasm_flag_false_for_baseline(self):
         model, _, _ = _build_model_with_mocks()
@@ -174,7 +330,7 @@ class TestPredictBatch:
         results = model.predict_batch(["a", "b"])
         for r in results:
             assert isinstance(r, PredictionResult)
-            assert r.aspects == []
+            assert isinstance(r.aspects, list)
             assert r.sarcasm_flag is False
 
     def test_unsupported_language_raises(self):
@@ -276,3 +432,209 @@ class TestErrorHandling:
         ):
             with pytest.raises(RuntimeError, match="pipeline setup failed"):
                 model._get_classification_pipeline()
+
+
+class TestABSA:
+    def test_absa_pipeline_not_loaded_before_predict(self):
+        model, fake_zero_shot = _build_model_with_mocks_absa()
+
+        assert hasattr(model, "_absa_pipeline")
+        assert model._absa_pipeline is None
+
+        with patch(
+            "src.model.baseline.hf_pipeline",
+            return_value=fake_zero_shot,
+        ) as mock_pipeline:
+            first = model.predict_single("The food was amazing but service was terrible")
+            second = model.predict_single("The food was amazing but service was terrible")
+
+        assert model._absa_pipeline is fake_zero_shot
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
+        assert len(first.aspects) > 0
+        assert len(second.aspects) > 0
+
+    def test_absa_fallback_on_pipeline_error(self):
+        model, _ = _build_model_with_mocks_absa()
+
+        with patch(
+            "src.model.baseline.hf_pipeline",
+            side_effect=RuntimeError("absa pipeline setup failed"),
+        ) as mock_pipeline:
+            result = model.predict_single("The food was amazing but service was terrible")
+
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
+        assert result.aspects == []
+
+    def test_absa_threshold_filters_low_scores(self):
+        fake_zero_shot = FakeZeroShotPipeline(
+            aspect_result={
+                "labels": ["food", "service", "ambiance", "price", "location", "general"],
+                "scores": [0.49, 0.30, 0.12, 0.08, 0.05, 0.10],
+            }
+        )
+        model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
+
+        with patch(
+            "src.model.baseline.hf_pipeline",
+            return_value=fake_zero_shot,
+        ) as mock_pipeline:
+            result = model.predict_single("The food was okay but the service was average")
+
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
+        assert result.aspects == []
+        assert len(fake_zero_shot.calls) == 1
+        _assert_aspect_detection_call(
+            fake_zero_shot.calls[0],
+            "The food was okay but the service was average",
+        )
+
+    def test_absa_per_aspect_sentiment_assigned_correctly(self):
+        class PerAspectFakeZeroShotPipeline(FakeZeroShotPipeline):
+            def __init__(self):
+                super().__init__(
+                    aspect_result={
+                        "labels": [
+                            "food",
+                            "service",
+                            "ambiance",
+                            "price",
+                            "location",
+                            "general",
+                        ],
+                        "scores": [0.91, 0.88, 0.12, 0.08, 0.05, 0.04],
+                    }
+                )
+
+            def __call__(
+                self, text, candidate_labels, hypothesis_template="", multi_label=False
+            ):
+                self._call_count += 1
+                self.calls.append(
+                    {
+                        "text": text,
+                        "candidate_labels": list(candidate_labels),
+                        "hypothesis_template": hypothesis_template,
+                        "multi_label": multi_label,
+                    }
+                )
+                if multi_label:
+                    return self.aspect_result
+                if "food" in hypothesis_template:
+                    return {
+                        "labels": ["positive", "neutral", "negative"],
+                        "scores": [0.93, 0.04, 0.03],
+                    }
+                if "service" in hypothesis_template:
+                    return {
+                        "labels": ["negative", "neutral", "positive"],
+                        "scores": [0.89, 0.08, 0.03],
+                    }
+                raise AssertionError(f"Unexpected sentiment prompt: {hypothesis_template}")
+
+        fake_zero_shot = PerAspectFakeZeroShotPipeline()
+        model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
+
+        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot) as mock_pipeline:
+            result = model.predict_single("The food was amazing but service was terrible")
+
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
+        assert [(aspect.aspect, aspect.sentiment) for aspect in result.aspects] == [
+            ("food", "positive"),
+            ("service", "negative"),
+        ]
+        assert len(fake_zero_shot.calls) == 3
+        _assert_aspect_detection_call(
+            fake_zero_shot.calls[0],
+            "The food was amazing but service was terrible",
+        )
+        _assert_aspect_sentiment_call(
+            fake_zero_shot.calls[1],
+            "The food was amazing but service was terrible",
+            "food",
+        )
+        _assert_aspect_sentiment_call(
+            fake_zero_shot.calls[2],
+            "The food was amazing but service was terrible",
+            "service",
+        )
+
+    def test_predict_batch_includes_aspects(self):
+        class PerTextFakeZeroShotPipeline(FakeZeroShotPipeline):
+            def __call__(
+                self, text, candidate_labels, hypothesis_template="", multi_label=False
+            ):
+                self._call_count += 1
+                self.calls.append(
+                    {
+                        "text": text,
+                        "candidate_labels": list(candidate_labels),
+                        "hypothesis_template": hypothesis_template,
+                        "multi_label": multi_label,
+                    }
+                )
+                if multi_label:
+                    if "slow service" in text:
+                        return {
+                            "labels": [
+                                "service",
+                                "ambiance",
+                                "food",
+                                "price",
+                                "location",
+                                "general",
+                            ],
+                            "scores": [0.94, 0.20, 0.12, 0.08, 0.05, 0.04],
+                        }
+                    return {
+                        "labels": [
+                            "food",
+                            "service",
+                            "ambiance",
+                            "price",
+                            "location",
+                            "general",
+                        ],
+                        "scores": [0.92, 0.21, 0.12, 0.08, 0.05, 0.04],
+                    }
+                if "service" in hypothesis_template:
+                    return {
+                        "labels": ["negative", "neutral", "positive"],
+                        "scores": [0.91, 0.06, 0.03],
+                    }
+                if "food" in hypothesis_template:
+                    return {
+                        "labels": ["positive", "neutral", "negative"],
+                        "scores": [0.90, 0.07, 0.03],
+                    }
+                raise AssertionError(f"Unexpected sentiment prompt: {hypothesis_template}")
+
+        fake_zero_shot = PerTextFakeZeroShotPipeline()
+        model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
+        texts = [
+            "The food was amazing but service was terrible",
+            "Great ambiance, slow service, fair price",
+        ]
+
+        @dataclass
+        class FakeOutput:
+            logits: torch.Tensor
+
+        model._model.return_value = FakeOutput(logits=_make_mock_logits(2))
+
+        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot) as mock_pipeline:
+            results = model.predict_batch(texts)
+
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
+        assert len(results) == 2
+        assert [aspect.aspect for aspect in results[0].aspects] == ["food"]
+        assert [aspect.aspect for aspect in results[1].aspects] == ["service"]
+        _assert_aspect_detection_call(fake_zero_shot.calls[0], texts[0])
+        _assert_aspect_sentiment_call(fake_zero_shot.calls[1], texts[0], "food")
+        _assert_aspect_detection_call(fake_zero_shot.calls[2], texts[1])
+        _assert_aspect_sentiment_call(fake_zero_shot.calls[3], texts[1], "service")
+
+        for result in results:
+            for aspect in result.aspects:
+                assert aspect.aspect in ModelConfig().absa_categories
+                assert aspect.sentiment in ("positive", "negative", "neutral")
+                assert 0.0 <= aspect.confidence <= 1.0
