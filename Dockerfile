@@ -29,9 +29,16 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY src/ ./src/
 COPY contracts/ ./contracts/
 
-# Environment variables
+# Environment variables for build & runtime
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+
+# Step 1: Download models while online
+RUN python src/model/download_models.py
+
+# Step 2: Force offline mode for runtime (faster startup, no net checks)
+ENV TRANSFORMERS_OFFLINE=1
+ENV HF_DATASETS_OFFLINE=1
 
 # Expose port
 EXPOSE 8000
