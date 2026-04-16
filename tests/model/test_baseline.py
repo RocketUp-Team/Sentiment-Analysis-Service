@@ -212,10 +212,19 @@ class TestPredictSingle:
         result = model.predict_single("The food was great")
         assert 0.0 <= result.confidence <= 1.0
 
-    def test_aspects_empty_for_baseline(self):
-        model, _, _ = _build_model_with_mocks()
-        result = model.predict_single("The food was great")
-        assert result.aspects == []
+    @patch("src.model.baseline.hf_pipeline", return_value=FakeZeroShotPipeline())
+    def test_aspects_returned_from_absa(self, mock_pipeline):
+        model, _ = _build_model_with_mocks_absa()
+        result = model.predict_single("The food was amazing but service was terrible")
+
+        assert len(result.aspects) > 0
+
+        allowed_aspects = set(ModelConfig().absa_categories)
+        allowed_sentiments = {"positive", "negative", "neutral"}
+        for aspect in result.aspects:
+            assert aspect.aspect in allowed_aspects
+            assert aspect.sentiment in allowed_sentiments
+            assert 0.0 <= aspect.confidence <= 1.0
 
     def test_sarcasm_flag_false_for_baseline(self):
         model, _, _ = _build_model_with_mocks()
@@ -370,3 +379,125 @@ class TestErrorHandling:
         ):
             with pytest.raises(RuntimeError, match="pipeline setup failed"):
                 model._get_classification_pipeline()
+
+
+class TestABSA:
+    def test_absa_pipeline_not_loaded_before_predict(self):
+        model, fake_zero_shot = _build_model_with_mocks_absa()
+
+        assert hasattr(model, "_absa_pipeline")
+        assert model._absa_pipeline is None
+        assert fake_zero_shot.pipeline_factory_calls == []
+
+    def test_absa_fallback_on_pipeline_error(self):
+        model, _ = _build_model_with_mocks_absa()
+
+        with patch(
+            "src.model.baseline.hf_pipeline",
+            side_effect=RuntimeError("absa pipeline setup failed"),
+        ) as mock_pipeline:
+            result = model.predict_single("The food was amazing but service was terrible")
+
+        assert result.aspects == []
+        mock_pipeline.assert_called_once()
+
+    def test_absa_threshold_filters_low_scores(self):
+        fake_zero_shot = FakeZeroShotPipeline(
+            aspect_result={
+                "labels": ["food", "service", "ambiance", "price", "location", "general"],
+                "scores": [0.49, 0.30, 0.12, 0.08, 0.05, 0.10],
+            }
+        )
+        model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
+
+        with patch(
+            "src.model.baseline.hf_pipeline",
+            return_value=fake_zero_shot,
+        ) as mock_pipeline:
+            result = model.predict_single("The food was okay but the service was average")
+
+        assert result.aspects == []
+        mock_pipeline.assert_called_once()
+        assert len(fake_zero_shot.calls) == 1
+        assert fake_zero_shot.calls[0]["multi_label"] is True
+
+    def test_absa_per_aspect_sentiment_assigned_correctly(self):
+        class PerAspectFakeZeroShotPipeline(FakeZeroShotPipeline):
+            def __init__(self):
+                super().__init__(
+                    aspect_result={
+                        "labels": [
+                            "food",
+                            "service",
+                            "ambiance",
+                            "price",
+                            "location",
+                            "general",
+                        ],
+                        "scores": [0.91, 0.88, 0.12, 0.08, 0.05, 0.04],
+                    }
+                )
+
+            def __call__(
+                self, text, candidate_labels, hypothesis_template="", multi_label=False
+            ):
+                self._call_count += 1
+                self.calls.append(
+                    {
+                        "text": text,
+                        "candidate_labels": list(candidate_labels),
+                        "hypothesis_template": hypothesis_template,
+                        "multi_label": multi_label,
+                    }
+                )
+                if multi_label:
+                    return self.aspect_result
+                if "food" in hypothesis_template:
+                    return {
+                        "labels": ["positive", "neutral", "negative"],
+                        "scores": [0.93, 0.04, 0.03],
+                    }
+                if "service" in hypothesis_template:
+                    return {
+                        "labels": ["negative", "neutral", "positive"],
+                        "scores": [0.89, 0.08, 0.03],
+                    }
+                raise AssertionError(f"Unexpected sentiment prompt: {hypothesis_template}")
+
+        fake_zero_shot = PerAspectFakeZeroShotPipeline()
+        model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
+
+        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot):
+            result = model.predict_single("The food was amazing but service was terrible")
+
+        assert [(aspect.aspect, aspect.sentiment) for aspect in result.aspects] == [
+            ("food", "positive"),
+            ("service", "negative"),
+        ]
+        assert len(fake_zero_shot.calls) == 3
+
+    def test_predict_batch_includes_aspects(self):
+        fake_zero_shot = FakeZeroShotPipeline()
+        model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
+
+        @dataclass
+        class FakeOutput:
+            logits: torch.Tensor
+
+        model._model.return_value = FakeOutput(logits=_make_mock_logits(2))
+
+        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot):
+            results = model.predict_batch(
+                [
+                    "The food was amazing but service was terrible",
+                    "Great food, slow service, nice ambiance",
+                ]
+            )
+
+        assert len(results) == 2
+        assert all(len(result.aspects) > 0 for result in results)
+        for result in results:
+            for aspect in result.aspects:
+                assert aspect.aspect in ModelConfig().absa_categories
+                assert aspect.sentiment in ("positive", "negative", "neutral")
+                assert 0.0 <= aspect.confidence <= 1.0
