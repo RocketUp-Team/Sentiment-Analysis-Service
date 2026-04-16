@@ -1,22 +1,30 @@
-"""BaselineModelInference — pre-trained RoBERTa sentiment classification."""
+"""BaselineModelInference — RoBERTa sentiment + zero-shot ABSA support."""
 
 from __future__ import annotations
 
+import logging
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers import pipeline as hf_pipeline
 
 from contracts.errors import ModelError, UnsupportedLanguageError
-from contracts.model_interface import ModelInference, PredictionResult, SHAPResult
+from contracts.model_interface import (
+    AspectSentiment,
+    ModelInference,
+    PredictionResult,
+    SHAPResult,
+)
 from src.model.config import ModelConfig
 from src.model.device import get_device
 
+logger = logging.getLogger(__name__)
+
 
 class BaselineModelInference(ModelInference):
-    """Implement ModelInference interface using pre-trained RoBERTa.
+    """Implement ModelInference with RoBERTa sentiment and zero-shot ABSA.
 
     - Overall sentiment: predicted from model
-    - ABSA aspects: returns [] (baseline has no ABSA)
+    - ABSA aspects: extracted with a zero-shot classifier
     - SHAP: uses shap.Explainer with HuggingFace pipeline
     """
 
@@ -30,6 +38,7 @@ class BaselineModelInference(ModelInference):
         self._model = None
         self._tokenizer = None
         self._hf_pipeline = None
+        self._absa_pipeline = None
         self._load_model()
 
     def _load_model(self) -> None:
@@ -83,7 +92,7 @@ class BaselineModelInference(ModelInference):
         return torch.softmax(outputs.logits, dim=-1)
 
     def predict_single(self, text: str, lang: str = "en") -> PredictionResult:
-        """Predict overall sentiment. The baseline model does not produce aspects."""
+        """Predict overall sentiment and extract aspect sentiment when available."""
         self._check_language(lang)
         probs = self._predict_probabilities(text)[0]
         pred_idx = probs.argmax().item()
@@ -91,7 +100,7 @@ class BaselineModelInference(ModelInference):
         return PredictionResult(
             sentiment=self._config.label_map[pred_idx],
             confidence=round(probs[pred_idx].item(), 4),
-            aspects=[],
+            aspects=self._extract_aspects(text),
             sarcasm_flag=False,
         )
 
@@ -111,7 +120,7 @@ class BaselineModelInference(ModelInference):
                 PredictionResult(
                     sentiment=self._config.label_map[pred_idx],
                     confidence=round(probs[index][pred_idx].item(), 4),
-                    aspects=[],
+                    aspects=self._extract_aspects(texts[index]),
                     sarcasm_flag=False,
                 )
             )
@@ -133,6 +142,63 @@ class BaselineModelInference(ModelInference):
                 top_k=None,
             )
         return self._hf_pipeline
+
+    def _get_absa_pipeline(self):
+        """Lazy-init the zero-shot classifier used for ABSA extraction."""
+        if self._absa_pipeline is None:
+            pipeline_device = (
+                self._device.index
+                if self._device.type == "cuda" and self._device.index is not None
+                else (-1 if self._device.type == "cpu" else self._device)
+            )
+            try:
+                self._absa_pipeline = hf_pipeline(
+                    "zero-shot-classification",
+                    model=self._config.absa_model_name,
+                    device=pipeline_device,
+                )
+            except Exception as exc:
+                raise ModelError(f"Failed to load ABSA model: {exc}") from exc
+        return self._absa_pipeline
+
+    def _extract_aspects(self, text: str) -> list[AspectSentiment]:
+        """Extract aspect-level sentiment, falling back to no aspects on failure."""
+        try:
+            pipeline = self._get_absa_pipeline()
+            aspect_result = pipeline(
+                text,
+                candidate_labels=list(self._config.absa_categories),
+                hypothesis_template="This review is about {}.",
+                multi_label=True,
+            )
+            detected_aspects = [
+                label
+                for label, score in zip(
+                    aspect_result["labels"],
+                    aspect_result["scores"],
+                )
+                if score > self._config.absa_threshold
+            ]
+
+            aspects: list[AspectSentiment] = []
+            for aspect_name in detected_aspects:
+                sent_result = pipeline(
+                    text,
+                    candidate_labels=["positive", "negative", "neutral"],
+                    hypothesis_template=f"The sentiment about {aspect_name} is {{}}.",
+                    multi_label=False,
+                )
+                aspects.append(
+                    AspectSentiment(
+                        aspect=aspect_name,
+                        sentiment=sent_result["labels"][0],
+                        confidence=round(sent_result["scores"][0], 4),
+                    )
+                )
+            return aspects
+        except Exception:
+            logger.warning("Failed to extract ABSA aspects for input text", exc_info=True)
+            return []
 
     def get_shap_explanation(self, text: str, lang: str = "en") -> SHAPResult:
         """Return SHAP values per token for explainability."""

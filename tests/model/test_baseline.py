@@ -330,7 +330,7 @@ class TestPredictBatch:
         results = model.predict_batch(["a", "b"])
         for r in results:
             assert isinstance(r, PredictionResult)
-            assert r.aspects == []
+            assert isinstance(r.aspects, list)
             assert r.sarcasm_flag is False
 
     def test_unsupported_language_raises(self):
