@@ -48,6 +48,22 @@ def _assert_absa_pipeline_factory_call(mock_pipeline, model):
     assert kwargs["device"] == _expected_pipeline_device(model.device)
 
 
+def _assert_aspect_detection_call(call, text):
+    """Verify the first zero-shot pass extracts ABSA aspects."""
+    assert call["text"] == text
+    assert call["candidate_labels"] == list(ModelConfig().absa_categories)
+    assert call["hypothesis_template"] == "This review is about {}."
+    assert call["multi_label"] is True
+
+
+def _assert_aspect_sentiment_call(call, text, aspect_name):
+    """Verify the per-aspect zero-shot pass scores sentiment labels."""
+    assert call["text"] == text
+    assert call["candidate_labels"] == ["positive", "negative", "neutral"]
+    assert call["hypothesis_template"] == f"The sentiment about {aspect_name} is {{}}."
+    assert call["multi_label"] is False
+
+
 def _build_model_with_mocks(config=None, device=None):
     """Patch HuggingFace and build a BaselineModelInference."""
     config = config or ModelConfig()
@@ -240,6 +256,21 @@ class TestPredictSingle:
         _assert_absa_pipeline_factory_call(mock_pipeline, model)
 
         assert len(result.aspects) > 0
+        assert len(fake_zero_shot.calls) == 3
+        _assert_aspect_detection_call(
+            fake_zero_shot.calls[0],
+            "The food was amazing but service was terrible",
+        )
+        _assert_aspect_sentiment_call(
+            fake_zero_shot.calls[1],
+            "The food was amazing but service was terrible",
+            "food",
+        )
+        _assert_aspect_sentiment_call(
+            fake_zero_shot.calls[2],
+            "The food was amazing but service was terrible",
+            "service",
+        )
 
         allowed_aspects = set(ModelConfig().absa_categories)
         allowed_sentiments = {"positive", "negative", "neutral"}
@@ -411,6 +442,18 @@ class TestABSA:
         assert model._absa_pipeline is None
         assert fake_zero_shot.pipeline_factory_calls == []
 
+        with patch(
+            "src.model.baseline.hf_pipeline",
+            return_value=fake_zero_shot,
+        ) as mock_pipeline:
+            first = model.predict_single("The food was amazing but service was terrible")
+            second = model.predict_single("The food was amazing but service was terrible")
+
+        assert model._absa_pipeline is fake_zero_shot
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
+        assert len(first.aspects) > 0
+        assert len(second.aspects) > 0
+
     def test_absa_fallback_on_pipeline_error(self):
         model, _ = _build_model_with_mocks_absa()
 
@@ -441,7 +484,10 @@ class TestABSA:
         _assert_absa_pipeline_factory_call(mock_pipeline, model)
         assert result.aspects == []
         assert len(fake_zero_shot.calls) == 1
-        assert fake_zero_shot.calls[0]["multi_label"] is True
+        _assert_aspect_detection_call(
+            fake_zero_shot.calls[0],
+            "The food was okay but the service was average",
+        )
 
     def test_absa_per_aspect_sentiment_assigned_correctly(self):
         class PerAspectFakeZeroShotPipeline(FakeZeroShotPipeline):
@@ -498,9 +544,20 @@ class TestABSA:
             ("service", "negative"),
         ]
         assert len(fake_zero_shot.calls) == 3
-        assert fake_zero_shot.calls[0]["multi_label"] is True
-        assert fake_zero_shot.calls[1]["hypothesis_template"] == "The sentiment about food is {}."
-        assert fake_zero_shot.calls[2]["hypothesis_template"] == "The sentiment about service is {}."
+        _assert_aspect_detection_call(
+            fake_zero_shot.calls[0],
+            "The food was amazing but service was terrible",
+        )
+        _assert_aspect_sentiment_call(
+            fake_zero_shot.calls[1],
+            "The food was amazing but service was terrible",
+            "food",
+        )
+        _assert_aspect_sentiment_call(
+            fake_zero_shot.calls[2],
+            "The food was amazing but service was terrible",
+            "service",
+        )
 
     def test_predict_batch_includes_aspects(self):
         class PerTextFakeZeroShotPipeline(FakeZeroShotPipeline):
@@ -572,11 +629,10 @@ class TestABSA:
         assert len(results) == 2
         assert [aspect.aspect for aspect in results[0].aspects] == ["food"]
         assert [aspect.aspect for aspect in results[1].aspects] == ["service"]
-
-        extraction_calls = [
-            call["text"] for call in fake_zero_shot.calls if call["multi_label"] is True
-        ]
-        assert extraction_calls == texts
+        _assert_aspect_detection_call(fake_zero_shot.calls[0], texts[0])
+        _assert_aspect_sentiment_call(fake_zero_shot.calls[1], texts[0], "food")
+        _assert_aspect_detection_call(fake_zero_shot.calls[2], texts[1])
+        _assert_aspect_sentiment_call(fake_zero_shot.calls[3], texts[1], "service")
 
         for result in results:
             for aspect in result.aspects:
