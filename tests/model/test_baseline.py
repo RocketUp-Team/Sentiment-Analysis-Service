@@ -30,6 +30,24 @@ def _make_mock_logits(batch_size: int = 1) -> torch.Tensor:
     return logits
 
 
+def _expected_pipeline_device(device: torch.device):
+    """Mirror the pipeline device mapping used by the model."""
+    if device.type == "cuda" and device.index is not None:
+        return device.index
+    if device.type == "cpu":
+        return -1
+    return device
+
+
+def _assert_absa_pipeline_factory_call(mock_pipeline, model):
+    """Verify prediction-time lazy loading uses the ABSA zero-shot pipeline."""
+    mock_pipeline.assert_called_once()
+    args, kwargs = mock_pipeline.call_args
+    assert args == ("zero-shot-classification",)
+    assert kwargs["model"] == model._config.absa_model_name
+    assert kwargs["device"] == _expected_pipeline_device(model.device)
+
+
 def _build_model_with_mocks(config=None, device=None):
     """Patch HuggingFace and build a BaselineModelInference."""
     config = config or ModelConfig()
@@ -212,10 +230,14 @@ class TestPredictSingle:
         result = model.predict_single("The food was great")
         assert 0.0 <= result.confidence <= 1.0
 
-    @patch("src.model.baseline.hf_pipeline", return_value=FakeZeroShotPipeline())
-    def test_aspects_returned_from_absa(self, mock_pipeline):
-        model, _ = _build_model_with_mocks_absa()
-        result = model.predict_single("The food was amazing but service was terrible")
+    def test_aspects_returned_from_absa(self):
+        fake_zero_shot = FakeZeroShotPipeline()
+        model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
+
+        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot) as mock_pipeline:
+            result = model.predict_single("The food was amazing but service was terrible")
+
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
 
         assert len(result.aspects) > 0
 
@@ -398,8 +420,8 @@ class TestABSA:
         ) as mock_pipeline:
             result = model.predict_single("The food was amazing but service was terrible")
 
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
         assert result.aspects == []
-        mock_pipeline.assert_called_once()
 
     def test_absa_threshold_filters_low_scores(self):
         fake_zero_shot = FakeZeroShotPipeline(
@@ -416,8 +438,8 @@ class TestABSA:
         ) as mock_pipeline:
             result = model.predict_single("The food was okay but the service was average")
 
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
         assert result.aspects == []
-        mock_pipeline.assert_called_once()
         assert len(fake_zero_shot.calls) == 1
         assert fake_zero_shot.calls[0]["multi_label"] is True
 
@@ -467,18 +489,75 @@ class TestABSA:
         fake_zero_shot = PerAspectFakeZeroShotPipeline()
         model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
 
-        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot):
+        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot) as mock_pipeline:
             result = model.predict_single("The food was amazing but service was terrible")
 
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
         assert [(aspect.aspect, aspect.sentiment) for aspect in result.aspects] == [
             ("food", "positive"),
             ("service", "negative"),
         ]
         assert len(fake_zero_shot.calls) == 3
+        assert fake_zero_shot.calls[0]["multi_label"] is True
+        assert fake_zero_shot.calls[1]["hypothesis_template"] == "The sentiment about food is {}."
+        assert fake_zero_shot.calls[2]["hypothesis_template"] == "The sentiment about service is {}."
 
     def test_predict_batch_includes_aspects(self):
-        fake_zero_shot = FakeZeroShotPipeline()
+        class PerTextFakeZeroShotPipeline(FakeZeroShotPipeline):
+            def __call__(
+                self, text, candidate_labels, hypothesis_template="", multi_label=False
+            ):
+                self._call_count += 1
+                self.calls.append(
+                    {
+                        "text": text,
+                        "candidate_labels": list(candidate_labels),
+                        "hypothesis_template": hypothesis_template,
+                        "multi_label": multi_label,
+                    }
+                )
+                if multi_label:
+                    if "slow service" in text:
+                        return {
+                            "labels": [
+                                "service",
+                                "ambiance",
+                                "food",
+                                "price",
+                                "location",
+                                "general",
+                            ],
+                            "scores": [0.94, 0.20, 0.12, 0.08, 0.05, 0.04],
+                        }
+                    return {
+                        "labels": [
+                            "food",
+                            "service",
+                            "ambiance",
+                            "price",
+                            "location",
+                            "general",
+                        ],
+                        "scores": [0.92, 0.21, 0.12, 0.08, 0.05, 0.04],
+                    }
+                if "service" in hypothesis_template:
+                    return {
+                        "labels": ["negative", "neutral", "positive"],
+                        "scores": [0.91, 0.06, 0.03],
+                    }
+                if "food" in hypothesis_template:
+                    return {
+                        "labels": ["positive", "neutral", "negative"],
+                        "scores": [0.90, 0.07, 0.03],
+                    }
+                raise AssertionError(f"Unexpected sentiment prompt: {hypothesis_template}")
+
+        fake_zero_shot = PerTextFakeZeroShotPipeline()
         model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
+        texts = [
+            "The food was amazing but service was terrible",
+            "Great ambiance, slow service, fair price",
+        ]
 
         @dataclass
         class FakeOutput:
@@ -486,16 +565,19 @@ class TestABSA:
 
         model._model.return_value = FakeOutput(logits=_make_mock_logits(2))
 
-        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot):
-            results = model.predict_batch(
-                [
-                    "The food was amazing but service was terrible",
-                    "Great food, slow service, nice ambiance",
-                ]
-            )
+        with patch("src.model.baseline.hf_pipeline", return_value=fake_zero_shot) as mock_pipeline:
+            results = model.predict_batch(texts)
 
+        _assert_absa_pipeline_factory_call(mock_pipeline, model)
         assert len(results) == 2
-        assert all(len(result.aspects) > 0 for result in results)
+        assert [aspect.aspect for aspect in results[0].aspects] == ["food"]
+        assert [aspect.aspect for aspect in results[1].aspects] == ["service"]
+
+        extraction_calls = [
+            call["text"] for call in fake_zero_shot.calls if call["multi_label"] is True
+        ]
+        assert extraction_calls == texts
+
         for result in results:
             for aspect in result.aspects:
                 assert aspect.aspect in ModelConfig().absa_categories
