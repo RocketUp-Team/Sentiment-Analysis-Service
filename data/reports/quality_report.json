@@ -5,7 +5,9 @@
       "samples": 799,
       "null_ratio": 0.0,
       "label_distribution": {
-        "neutral": 799
+        "positive": 501,
+        "negative": 184,
+        "neutral": 114
       }
     },
     "train": {
@@ -28,11 +30,11 @@
     }
   },
   "aspect_distribution": {
-    "food": 1164,
-    "general": 1095,
-    "service": 561,
-    "ambiance": 384,
-    "price": 304
+    "food": 1565,
+    "general": 1313,
+    "service": 728,
+    "ambiance": 489,
+    "price": 384
   },
   "text_length_stats": {
     "mean": 73.39754633255025,
@@ -44,8 +46,6 @@
   "checks_passed": true,
   "errors": [],
   "warnings": [
-    "split test: missing expected sentence sentiment class 'positive'",
-    "split test: missing expected sentence sentiment class 'negative'",
     "dataset: missing expected aspect_category 'location' in aspects"
   ]
 }

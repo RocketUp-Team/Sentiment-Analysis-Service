@@ -56,7 +56,7 @@ def extract_semeval_xmls(
     external_dir = raw_path.parent / "external" / "semeval2014"
     split_file_map = {
         "train": external_dir / "Restaurants_Train_v2.xml",
-        "test": external_dir / "Restaurants_Test_Data_phaseB.xml",
+        "test": external_dir / "Restaurants_Test_Gold.xml",
     }
 
     sentence_rows: list[dict[str, str]] = []

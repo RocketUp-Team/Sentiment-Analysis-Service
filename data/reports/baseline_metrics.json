@@ -1,32 +1,32 @@
 {
   "split": "test",
   "n_samples": 799,
-  "accuracy": 0.18397997496871088,
-  "f1_macro": 0.10359408033826639,
+  "accuracy": 0.8135168961201502,
+  "f1_macro": 0.7388702607479773,
   "f1_per_class": [
-    0.0,
-    0.0,
-    0.3107822410147992
+    0.8979591836734694,
+    0.7899159663865546,
+    0.5287356321839081
   ],
-  "precision_macro": 0.3333333333333333,
-  "recall_macro": 0.06132665832290363,
+  "precision_macro": 0.7343323442063419,
+  "recall_macro": 0.7499370062316252,
   "mean_confidence": 0.8460329161451814,
-  "classification_report": "              precision    recall  f1-score   support\n\n    positive       0.00      0.00      0.00         0\n    negative       0.00      0.00      0.00         0\n     neutral       1.00      0.18      0.31       799\n\n    accuracy                           0.18       799\n   macro avg       0.33      0.06      0.10       799\nweighted avg       1.00      0.18      0.31       799\n",
+  "classification_report": "              precision    recall  f1-score   support\n\n    positive       0.92      0.88      0.90       501\n    negative       0.82      0.77      0.79       184\n     neutral       0.47      0.61      0.53       114\n\n    accuracy                           0.81       799\n   macro avg       0.73      0.75      0.74       799\nweighted avg       0.83      0.81      0.82       799\n",
   "confusion_matrix": [
     [
-      0,
-      0,
-      0
+      440,
+      16,
+      45
     ],
     [
-      0,
-      0,
-      0
+      10,
+      141,
+      33
     ],
     [
-      479,
-      173,
-      147
+      29,
+      16,
+      69
     ]
   ],
   "device": "mps"
