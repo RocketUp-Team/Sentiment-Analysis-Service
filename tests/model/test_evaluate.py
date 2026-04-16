@@ -133,7 +133,6 @@ class TestEvaluateOnDataset:
         df = _make_test_df()
         preds = df["sentiment"].tolist()
         mock_model = _make_mock_model(preds[:2])  # batch of 2
-        # Need mock_model.predict_batch to handle multiple calls
         mock_model.predict_batch.side_effect = [
             [
                 PredictionResult(
@@ -147,6 +146,60 @@ class TestEvaluateOnDataset:
         metrics = evaluate_on_dataset(mock_model, df, split="test", batch_size=2)
         assert metrics["n_samples"] == 6
         assert metrics["accuracy"] == pytest.approx(1.0)
+
+    def test_raises_on_prediction_count_mismatch(self):
+        from src.model.evaluate import evaluate_on_dataset
+
+        df = _make_test_df()
+        mock_model = MagicMock()
+        mock_model.predict_batch.return_value = [
+            PredictionResult(
+                sentiment="positive", confidence=0.9, aspects=[], sarcasm_flag=False
+            )
+        ]
+
+        with pytest.raises(ValueError, match="Prediction count does not match"):
+            evaluate_on_dataset(mock_model, df, split="test", batch_size=100)
+
+
+# ── _log_reporting_artifacts ───────────────────────────────────
+
+class TestLogReportingArtifacts:
+    def test_logs_three_artifacts(self):
+        from src.model.evaluate import _log_reporting_artifacts
+
+        mock_mlflow = MagicMock()
+        metrics = {
+            "confusion_matrix": [[30, 5, 5], [3, 25, 2], [2, 3, 25]],
+            "classification_report": "dummy report",
+            "accuracy": 0.8,
+            "f1_macro": 0.75,
+        }
+
+        _log_reporting_artifacts(mock_mlflow, metrics)
+
+        assert mock_mlflow.log_artifact.call_count == 3
+
+    def test_artifact_filenames(self):
+        from src.model.evaluate import _log_reporting_artifacts
+
+        mock_mlflow = MagicMock()
+        metrics = {
+            "confusion_matrix": [[30, 5, 5], [3, 25, 2], [2, 3, 25]],
+            "classification_report": "dummy report",
+            "accuracy": 0.8,
+            "f1_macro": 0.75,
+        }
+
+        _log_reporting_artifacts(mock_mlflow, metrics)
+
+        logged_paths = [
+            call.args[0] for call in mock_mlflow.log_artifact.call_args_list
+        ]
+        filenames = [p.rsplit("/", 1)[-1] for p in logged_paths]
+        assert "confusion_matrix.png" in filenames
+        assert "classification_report.txt" in filenames
+        assert "metrics_summary.json" in filenames
 
 
 # ── log_to_mlflow ─────────────────────────────────────────────
@@ -223,7 +276,7 @@ class TestLogToMlflow:
 
 class TestMainCli:
     @patch("src.model.evaluate.pd.read_csv")
-    @patch("src.model.evaluate.BaselineModelInference")
+    @patch("src.model.baseline.BaselineModelInference")
     @patch("src.model.evaluate.ModelConfig")
     @patch("src.model.evaluate.load_params", return_value={})
     @patch("src.model.evaluate._project_root")
@@ -250,7 +303,7 @@ class TestMainCli:
 
     @patch("src.model.evaluate.log_to_mlflow")
     @patch("src.model.evaluate.evaluate_on_dataset")
-    @patch("src.model.evaluate.BaselineModelInference")
+    @patch("src.model.baseline.BaselineModelInference")
     @patch("src.model.evaluate.ModelConfig")
     @patch("src.model.evaluate.load_params", return_value={})
     @patch("src.model.evaluate._project_root")
@@ -274,7 +327,7 @@ class TestMainCli:
 
         mock_project_root.return_value = tmp_path
         mock_model = MagicMock()
-        mock_model._device = "cpu"
+        mock_model.device = "cpu"
         mock_baseline_model.return_value = mock_model
         metrics = {
             "split": "test",
@@ -300,7 +353,7 @@ class TestMainCli:
 
     @patch("src.model.evaluate.log_to_mlflow", side_effect=RuntimeError("mlflow down"))
     @patch("src.model.evaluate.evaluate_on_dataset")
-    @patch("src.model.evaluate.BaselineModelInference")
+    @patch("src.model.baseline.BaselineModelInference")
     @patch("src.model.evaluate.ModelConfig")
     @patch("src.model.evaluate.load_params", return_value={})
     @patch("src.model.evaluate._project_root")
@@ -325,7 +378,7 @@ class TestMainCli:
 
         mock_project_root.return_value = tmp_path
         mock_model = MagicMock()
-        mock_model._device = "cpu"
+        mock_model.device = "cpu"
         mock_baseline_model.return_value = mock_model
         mock_evaluate_on_dataset.return_value = {
             "split": "test",

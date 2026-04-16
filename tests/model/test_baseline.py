@@ -91,6 +91,10 @@ class TestProperties:
         model, _, _ = _build_model_with_mocks()
         assert isinstance(model.supported_languages, list)
 
+    def test_device_property_returns_device(self):
+        model, _, _ = _build_model_with_mocks()
+        assert model.device == torch.device("cpu")
+
     def test_repr_contains_model_name(self):
         model, _, _ = _build_model_with_mocks()
         assert "cardiffnlp" in repr(model)
@@ -202,20 +206,17 @@ class TestPredictBatch:
 
 class TestSHAPExplanation:
     @patch("src.model.baseline.hf_pipeline")
-    @patch("src.model.baseline.shap")
-    def test_returns_shap_result(self, mock_shap, mock_pipeline):
+    @patch("shap.Explainer")
+    def test_returns_shap_result(self, mock_explainer_cls, mock_pipeline):
         model, _, _ = _build_model_with_mocks()
 
-        # Configure mock shap explainer
         mock_pipeline.return_value = MagicMock()
-        mock_explainer = MagicMock()
-        mock_shap.Explainer.return_value = mock_explainer
         mock_shap_values = MagicMock()
         mock_shap_values.data = [["token1", "token2"]]
         import numpy as np
         mock_shap_values.values = [np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])]
         mock_shap_values.base_values = [np.array([0.1, 0.2, 0.7])]
-        mock_explainer.return_value = mock_shap_values
+        mock_explainer_cls.return_value.return_value = mock_shap_values
 
         result = model.get_shap_explanation("test text")
         assert isinstance(result, SHAPResult)
@@ -223,8 +224,8 @@ class TestSHAPExplanation:
         assert len(result.shap_values) == 2
 
     @patch("src.model.baseline.hf_pipeline")
-    @patch("src.model.baseline.shap")
-    def test_returns_values_for_predicted_class(self, mock_shap, mock_pipeline):
+    @patch("shap.Explainer")
+    def test_returns_values_for_predicted_class(self, mock_explainer_cls, mock_pipeline):
         model, _, mock_hf_model = _build_model_with_mocks()
         mock_pipeline.return_value = MagicMock()
 
@@ -232,13 +233,10 @@ class TestSHAPExplanation:
         class FakeOutput:
             logits: torch.Tensor
 
-        # Predicted class is index 0, even though SHAP totals favor index 2.
         mock_hf_model.return_value = FakeOutput(
             logits=torch.tensor([[0.9, 0.2, 0.1]])
         )
 
-        mock_explainer = MagicMock()
-        mock_shap.Explainer.return_value = mock_explainer
         mock_shap_values = MagicMock()
         mock_shap_values.data = [["token1", "token2"]]
         import numpy as np
@@ -246,7 +244,7 @@ class TestSHAPExplanation:
             np.array([[0.1, 0.2, 5.0], [0.3, 0.4, 6.0]])
         ]
         mock_shap_values.base_values = [np.array([0.6, 0.2, 0.1])]
-        mock_explainer.return_value = mock_shap_values
+        mock_explainer_cls.return_value.return_value = mock_shap_values
 
         result = model.get_shap_explanation("test text")
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shap
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers import pipeline as hf_pipeline
@@ -137,6 +136,8 @@ class BaselineModelInference(ModelInference):
 
     def get_shap_explanation(self, text: str, lang: str = "en") -> SHAPResult:
         """Return SHAP values per token for explainability."""
+        import shap
+
         self._check_language(lang)
         predicted_probs = self._predict_probabilities(text)[0]
         predicted_class_idx = int(predicted_probs.argmax().item())
@@ -158,6 +159,10 @@ class BaselineModelInference(ModelInference):
     @property
     def is_loaded(self) -> bool:
         return self._model is not None
+
+    @property
+    def device(self) -> torch.device:
+        return self._device
 
     def __repr__(self) -> str:
         return (

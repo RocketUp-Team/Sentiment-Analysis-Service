@@ -25,7 +25,6 @@ from sklearn.metrics import (
 
 from contracts.model_interface import ModelInference
 from src.data.utils import load_params
-from src.model.baseline import BaselineModelInference
 from src.model.config import ModelConfig
 
 logger = logging.getLogger(__name__)
@@ -214,6 +213,8 @@ def _project_root() -> Path:
 
 def main() -> int:
     """Evaluate the baseline model on processed test data and log to MLflow."""
+    from src.model.baseline import BaselineModelInference
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
@@ -235,7 +236,7 @@ def main() -> int:
         logger.error(metrics.get("error", "Evaluation produced no samples."))
         return 1
 
-    metrics["device"] = str(getattr(model, "_device", "cpu"))
+    metrics["device"] = str(model.device)
     save_metrics_report(metrics, root / "data" / "reports" / "baseline_metrics.json")
     try:
         log_to_mlflow(config, metrics, params)
