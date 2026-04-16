@@ -1,0 +1,51 @@
+{
+  "total_samples": 4000,
+  "splits": {
+    "test": {
+      "samples": 2000,
+      "null_ratio": 0.0,
+      "label_distribution": {
+        "neutral": 2000
+      }
+    },
+    "train": {
+      "samples": 1800,
+      "null_ratio": 0.0,
+      "label_distribution": {
+        "neutral": 1800
+      }
+    },
+    "val": {
+      "samples": 200,
+      "null_ratio": 0.0,
+      "label_distribution": {
+        "neutral": 200
+      }
+    }
+  },
+  "aspect_distribution": {
+    "general": 4000
+  },
+  "text_length_stats": {
+    "mean": 67.945,
+    "min": 65,
+    "max": 69,
+    "median": 68.0,
+    "p95": 69.0
+  },
+  "checks_passed": true,
+  "errors": [],
+  "warnings": [
+    "split test: missing expected sentence sentiment class 'positive'",
+    "split test: missing expected sentence sentiment class 'negative'",
+    "split train: missing expected sentence sentiment class 'positive'",
+    "split train: missing expected sentence sentiment class 'negative'",
+    "split val: missing expected sentence sentiment class 'positive'",
+    "split val: missing expected sentence sentiment class 'negative'",
+    "dataset: missing expected aspect_category 'food' in aspects",
+    "dataset: missing expected aspect_category 'service' in aspects",
+    "dataset: missing expected aspect_category 'ambiance' in aspects",
+    "dataset: missing expected aspect_category 'price' in aspects",
+    "dataset: missing expected aspect_category 'location' in aspects"
+  ]
+}
