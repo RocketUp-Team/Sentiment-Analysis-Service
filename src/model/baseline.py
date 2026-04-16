@@ -167,7 +167,7 @@ class BaselineModelInference(ModelInference):
             aspect_result = pipeline(
                 text,
                 candidate_labels=list(self._config.absa_categories),
-                hypothesis_template="This review is about {}.",
+                hypothesis_template=self._config.absa_aspect_template,
                 multi_label=True,
             )
             detected_aspects = [
@@ -184,7 +184,9 @@ class BaselineModelInference(ModelInference):
                 sent_result = pipeline(
                     text,
                     candidate_labels=["positive", "negative", "neutral"],
-                    hypothesis_template=f"The sentiment about {aspect_name} is {{}}.",
+                    hypothesis_template=self._config.absa_sentiment_template.format(
+                        aspect=aspect_name
+                    ),
                     multi_label=False,
                 )
                 aspects.append(
