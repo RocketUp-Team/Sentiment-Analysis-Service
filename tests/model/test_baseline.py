@@ -68,6 +68,79 @@ def _build_model_with_mocks(config=None, device=None):
     return model, mock_tokenizer, mock_hf_model
 
 
+class FakeZeroShotPipeline:
+    """Simple fake for zero-shot aspect and sentiment pipeline calls."""
+
+    def __init__(self, aspect_result=None, sentiment_result=None):
+        self.aspect_result = aspect_result or {
+            "labels": ["food", "service", "ambiance", "price", "location", "general"],
+            "scores": [0.85, 0.78, 0.12, 0.08, 0.05, 0.10],
+        }
+        self.sentiment_result = sentiment_result or {
+            "labels": ["positive", "negative", "neutral"],
+            "scores": [0.82, 0.12, 0.06],
+        }
+        self._call_count = 0
+
+    def __call__(
+        self, text, candidate_labels, hypothesis_template="", multi_label=False
+    ):
+        self._call_count += 1
+        if multi_label:
+            return self.aspect_result
+        return self.sentiment_result
+
+
+def _build_model_with_mocks_absa(
+    config=None,
+    device=None,
+    fake_zero_shot: FakeZeroShotPipeline | None = None,
+):
+    """Patch HuggingFace and build a BaselineModelInference with ABSA fakes."""
+    config = config or ModelConfig()
+    device = device or torch.device("cpu")
+    fake_zero_shot = fake_zero_shot or FakeZeroShotPipeline()
+
+    mock_tokenizer = MagicMock()
+    mock_tokenizer.return_value = _MockBatchEncoding(
+        {
+            "input_ids": torch.tensor([[1, 2, 3]]),
+            "attention_mask": torch.tensor([[1, 1, 1]]),
+        }
+    )
+
+    mock_hf_model = MagicMock()
+    mock_hf_model.to.return_value = mock_hf_model
+    mock_hf_model.hf_device_map = None
+
+    @dataclass
+    class FakeOutput:
+        logits: torch.Tensor
+
+    mock_hf_model.__call__ = MagicMock(
+        return_value=FakeOutput(logits=_make_mock_logits(1))
+    )
+    mock_hf_model.return_value = FakeOutput(logits=_make_mock_logits(1))
+
+    def fake_pipeline_factory(task, **kwargs):
+        if task == "sentiment-analysis":
+            return MagicMock()
+        if task == "zero-shot-classification":
+            return fake_zero_shot
+        raise ValueError(f"Unexpected pipeline task: {task}")
+
+    with patch("src.model.baseline.AutoTokenizer") as MockTokenizer, \
+         patch("src.model.baseline.AutoModelForSequenceClassification") as MockModel, \
+         patch("src.model.baseline.hf_pipeline", side_effect=fake_pipeline_factory):
+        MockTokenizer.from_pretrained.return_value = mock_tokenizer
+        MockModel.from_pretrained.return_value = mock_hf_model
+
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=device)
+
+    return model, fake_zero_shot
+
+
 # ── Interface Compliance ───────────────────────────────────────
 
 class TestInterfaceCompliance:
