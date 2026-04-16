@@ -152,12 +152,12 @@ class TestEvaluateOnDataset:
 # ── log_to_mlflow ─────────────────────────────────────────────
 
 class TestLogToMlflow:
-    @patch("src.model.evaluate.mlflow")
-    def test_calls_mlflow_log_params_and_metrics(self, mock_mlflow):
-        from src.model.evaluate import log_to_mlflow
+    def test_calls_mlflow_log_params_and_metrics(self):
+        import src.model.evaluate as evaluate_module
         from src.model.config import ModelConfig
 
         config = ModelConfig()
+        mock_mlflow = MagicMock()
         metrics = {
             "accuracy": 0.8,
             "f1_macro": 0.75,
@@ -177,20 +177,27 @@ class TestLogToMlflow:
             }
         }
 
-        log_to_mlflow(config, metrics, params_yaml)
+        with patch.object(
+            evaluate_module.importlib, "import_module", return_value=mock_mlflow
+        ) as mock_import_module, patch.object(
+            evaluate_module, "_log_reporting_artifacts"
+        ) as mock_log_reporting_artifacts:
+            evaluate_module.log_to_mlflow(config, metrics, params_yaml)
 
+        mock_import_module.assert_called_once_with("mlflow")
         mock_mlflow.set_tracking_uri.assert_called_once_with("http://localhost:5000")
         mock_mlflow.set_experiment.assert_called_once_with("test_exp")
         mock_mlflow.start_run.assert_called_once()
         mock_mlflow.log_params.assert_called_once()
         mock_mlflow.log_metrics.assert_called_once()
+        mock_log_reporting_artifacts.assert_called_once_with(mock_mlflow, metrics)
 
-    @patch("src.model.evaluate.mlflow")
-    def test_uses_default_experiment_name(self, mock_mlflow):
-        from src.model.evaluate import log_to_mlflow
+    def test_uses_default_experiment_name(self):
+        import src.model.evaluate as evaluate_module
         from src.model.config import ModelConfig
 
         config = ModelConfig()
+        mock_mlflow = MagicMock()
         metrics = {
             "accuracy": 0.8,
             "f1_macro": 0.75,
@@ -205,9 +212,13 @@ class TestLogToMlflow:
         }
         params_yaml = {}  # No mlflow config
 
-        log_to_mlflow(config, metrics, params_yaml)
+        with patch.object(
+            evaluate_module.importlib, "import_module", return_value=mock_mlflow
+        ), patch.object(evaluate_module, "_log_reporting_artifacts") as mock_log_reporting_artifacts:
+            evaluate_module.log_to_mlflow(config, metrics, params_yaml)
 
         mock_mlflow.set_experiment.assert_called_once_with("sentiment_baseline")
+        mock_log_reporting_artifacts.assert_called_once_with(mock_mlflow, metrics)
 
 
 class TestMainCli:
@@ -285,4 +296,54 @@ class TestMainCli:
         assert result == 0
         assert report_path.exists()
         assert json.loads(report_path.read_text(encoding="utf-8"))["accuracy"] == 1.0
+        mock_log_to_mlflow.assert_called_once()
+
+    @patch("src.model.evaluate.log_to_mlflow", side_effect=RuntimeError("mlflow down"))
+    @patch("src.model.evaluate.evaluate_on_dataset")
+    @patch("src.model.evaluate.BaselineModelInference")
+    @patch("src.model.evaluate.ModelConfig")
+    @patch("src.model.evaluate.load_params", return_value={})
+    @patch("src.model.evaluate._project_root")
+    def test_returns_success_when_mlflow_logging_fails(
+        self,
+        mock_project_root,
+        mock_load_params,
+        mock_model_config,
+        mock_baseline_model,
+        mock_evaluate_on_dataset,
+        mock_log_to_mlflow,
+        tmp_path,
+        caplog,
+    ):
+        from src.model.evaluate import main
+
+        processed_dir = tmp_path / "data" / "processed"
+        processed_dir.mkdir(parents=True)
+        pd.DataFrame(
+            {"text": ["ok"], "sentiment": ["positive"], "split": ["test"]}
+        ).to_csv(processed_dir / "sentences.csv", index=False)
+
+        mock_project_root.return_value = tmp_path
+        mock_model = MagicMock()
+        mock_model._device = "cpu"
+        mock_baseline_model.return_value = mock_model
+        mock_evaluate_on_dataset.return_value = {
+            "split": "test",
+            "n_samples": 1,
+            "accuracy": 1.0,
+            "f1_macro": 1.0,
+            "f1_per_class": [1.0, 1.0, 1.0],
+            "precision_macro": 1.0,
+            "recall_macro": 1.0,
+            "mean_confidence": 0.9,
+            "classification_report": "dummy report",
+            "confusion_matrix": [[1, 0, 0], [0, 0, 0], [0, 0, 0]],
+        }
+
+        result = main()
+
+        report_path = tmp_path / "data" / "reports" / "baseline_metrics.json"
+        assert result == 0
+        assert report_path.exists()
+        assert any("MLflow logging failed" in record.message for record in caplog.records)
         mock_log_to_mlflow.assert_called_once()

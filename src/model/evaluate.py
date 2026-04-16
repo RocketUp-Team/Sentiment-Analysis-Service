@@ -5,22 +5,16 @@ Usage: python -m src.model.evaluate
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
 import sys
 import tempfile
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
-
-import matplotlib.pyplot as plt
-import mlflow
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
-    ConfusionMatrixDisplay,
     accuracy_score,
     classification_report,
     confusion_matrix,
@@ -126,8 +120,48 @@ def evaluate_on_dataset(
     }
 
 
+def _log_reporting_artifacts(mlflow_client, metrics: dict) -> None:
+    """Render and upload evaluation artifacts for an MLflow run."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import ConfusionMatrixDisplay
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        figure, axis = plt.subplots(figsize=(8, 6))
+        ConfusionMatrixDisplay(
+            confusion_matrix=np.asarray(metrics["confusion_matrix"]),
+            display_labels=LABELS,
+        ).plot(ax=axis)
+        axis.set_title("Baseline Model Confusion Matrix")
+        cm_path = temp_path / "confusion_matrix.png"
+        figure.savefig(cm_path, dpi=150, bbox_inches="tight")
+        plt.close(figure)
+        mlflow_client.log_artifact(str(cm_path))
+
+        report_path = temp_path / "classification_report.txt"
+        report_path.write_text(metrics["classification_report"], encoding="utf-8")
+        mlflow_client.log_artifact(str(report_path))
+
+        summary_path = temp_path / "metrics_summary.json"
+        summary_path.write_text(
+            json.dumps(
+                {"metrics": metrics},
+                indent=2,
+                ensure_ascii=True,
+            ),
+            encoding="utf-8",
+        )
+        mlflow_client.log_artifact(str(summary_path))
+
+
 def log_to_mlflow(config: ModelConfig, metrics: dict, params_yaml: dict) -> None:
     """Log baseline-model evaluation params, metrics, and artifacts to MLflow."""
+    mlflow_client = importlib.import_module("mlflow")
     mlflow_config = params_yaml.get("mlflow", {})
     tracking_uri = mlflow_config.get("tracking_uri", "http://localhost:5000")
     experiment_name = mlflow_config.get(
@@ -135,8 +169,8 @@ def log_to_mlflow(config: ModelConfig, metrics: dict, params_yaml: dict) -> None
         "sentiment_baseline",
     )
 
-    mlflow.set_tracking_uri(tracking_uri)
-    mlflow.set_experiment(experiment_name)
+    mlflow_client.set_tracking_uri(tracking_uri)
+    mlflow_client.set_experiment(experiment_name)
 
     run_params = {
         "model_name": config.model_name,
@@ -155,37 +189,17 @@ def log_to_mlflow(config: ModelConfig, metrics: dict, params_yaml: dict) -> None
         "n_samples": int(metrics["n_samples"]),
     }
 
-    with mlflow.start_run(run_name="baseline_roberta"):
-        mlflow.log_params(run_params)
-        mlflow.log_metrics(run_metrics)
+    with mlflow_client.start_run(run_name="baseline_roberta"):
+        mlflow_client.log_params(run_params)
+        mlflow_client.log_metrics(run_metrics)
 
         for index, label in enumerate(LABELS):
-            mlflow.log_metric(f"f1_{label}", float(metrics["f1_per_class"][index]))
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-
-            figure, axis = plt.subplots(figsize=(8, 6))
-            ConfusionMatrixDisplay(
-                confusion_matrix=np.asarray(metrics["confusion_matrix"]),
-                display_labels=LABELS,
-            ).plot(ax=axis)
-            axis.set_title("Baseline Model Confusion Matrix")
-            cm_path = temp_path / "confusion_matrix.png"
-            figure.savefig(cm_path, dpi=150, bbox_inches="tight")
-            plt.close(figure)
-            mlflow.log_artifact(str(cm_path))
-
-            report_path = temp_path / "classification_report.txt"
-            report_path.write_text(metrics["classification_report"], encoding="utf-8")
-            mlflow.log_artifact(str(report_path))
-
-            summary_path = temp_path / "metrics_summary.json"
-            summary_path.write_text(
-                json.dumps({"params": run_params, "metrics": run_metrics}, indent=2),
-                encoding="utf-8",
+            mlflow_client.log_metric(
+                f"f1_{label}",
+                float(metrics["f1_per_class"][index]),
             )
-            mlflow.log_artifact(str(summary_path))
+
+        _log_reporting_artifacts(mlflow_client, metrics)
 
     logger.info(
         "Logged MLflow evaluation run with accuracy=%.4f f1_macro=%.4f",
@@ -223,7 +237,10 @@ def main() -> int:
 
     metrics["device"] = str(getattr(model, "_device", "cpu"))
     save_metrics_report(metrics, root / "data" / "reports" / "baseline_metrics.json")
-    log_to_mlflow(config, metrics, params)
+    try:
+        log_to_mlflow(config, metrics, params)
+    except Exception as exc:
+        logger.warning("MLflow logging failed: %s", exc)
 
     print(f"\n{'=' * 50}")
     print("Baseline Evaluation Results (test split)")
