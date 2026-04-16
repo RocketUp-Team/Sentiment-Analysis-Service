@@ -1,3 +1,7 @@
+from dataclasses import FrozenInstanceError
+
+import pytest
+
 from src.model.config import ModelConfig
 
 
@@ -30,11 +34,8 @@ class TestModelConfig:
     def test_frozen_immutability(self):
         """Config should be immutable (frozen dataclass)."""
         config = ModelConfig()
-        try:
+        with pytest.raises(FrozenInstanceError):
             config.model_name = "other"
-            assert False, "Should have raised FrozenInstanceError"
-        except AttributeError:
-            pass  # Expected — frozen dataclass
 
         try:
             config.label_map[0] = "changed"
