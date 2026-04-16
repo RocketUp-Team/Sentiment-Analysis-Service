@@ -126,19 +126,23 @@ class BaselineModelInference(ModelInference):
             )
         return results
 
+    @property
+    def _pipeline_device(self):
+        """Map the torch device to the format expected by HuggingFace pipelines."""
+        if self._device.type == "cuda" and self._device.index is not None:
+            return self._device.index
+        if self._device.type == "cpu":
+            return -1
+        return self._device
+
     def _get_classification_pipeline(self):
         """Lazy-init a callable for SHAP explainability."""
         if self._hf_pipeline is None:
-            pipeline_device = (
-                self._device.index
-                if self._device.type == "cuda" and self._device.index is not None
-                else (-1 if self._device.type == "cpu" else self._device)
-            )
             self._hf_pipeline = hf_pipeline(
                 "sentiment-analysis",
                 model=self._model,
                 tokenizer=self._tokenizer,
-                device=pipeline_device,
+                device=self._pipeline_device,
                 top_k=None,
             )
         return self._hf_pipeline
@@ -146,16 +150,11 @@ class BaselineModelInference(ModelInference):
     def _get_absa_pipeline(self):
         """Lazy-init the zero-shot classifier used for ABSA extraction."""
         if self._absa_pipeline is None:
-            pipeline_device = (
-                self._device.index
-                if self._device.type == "cuda" and self._device.index is not None
-                else (-1 if self._device.type == "cpu" else self._device)
-            )
             try:
                 self._absa_pipeline = hf_pipeline(
                     "zero-shot-classification",
                     model=self._config.absa_model_name,
-                    device=pipeline_device,
+                    device=self._pipeline_device,
                 )
             except Exception as exc:
                 raise ModelError(f"Failed to load ABSA model: {exc}") from exc

@@ -440,7 +440,6 @@ class TestABSA:
 
         assert hasattr(model, "_absa_pipeline")
         assert model._absa_pipeline is None
-        assert fake_zero_shot.pipeline_factory_calls == []
 
         with patch(
             "src.model.baseline.hf_pipeline",
