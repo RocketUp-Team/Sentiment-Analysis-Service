@@ -5,6 +5,8 @@ from src.data.downloader import (
     EXPECTED_RAW_ASPECT_COLUMNS,
     EXPECTED_RAW_SENTENCE_COLUMNS,
     SchemaError,
+    build_sarcasm_frame,
+    build_uit_vsfc_frame,
     validate_raw_schema,
     write_placeholder_raw_csvs,
 )
@@ -61,3 +63,35 @@ def test_write_placeholder_raw_csvs_writes_schema_valid_stub(tmp_path):
     assert sentences_df["sentence_id"].tolist() == aspects_df["sentence_id"].tolist()
     assert len(sentences_df) == 4000
     assert len(aspects_df) == 4000
+
+
+def test_build_sarcasm_frame_adds_split_lang_and_source_columns():
+    split_frames = {
+        "train": pd.DataFrame(
+            [
+                {"text": "love it", "label": 1},
+                {"text": "sure, amazing", "label": 0},
+            ]
+        ),
+        "test": pd.DataFrame([{"text": "wow", "label": 1}]),
+    }
+
+    result = build_sarcasm_frame(split_frames)
+
+    assert result.columns.tolist() == ["text", "label", "lang", "split", "source"]
+    assert result["lang"].tolist() == ["en", "en", "en"]
+    assert result["split"].tolist() == ["train", "train", "test"]
+    assert result["source"].tolist() == ["tweet_eval_irony"] * 3
+
+
+def test_build_uit_vsfc_frame_maps_numeric_labels_to_project_strings():
+    result = build_uit_vsfc_frame(
+        sentences=["rất tốt", "bình thường", "quá tệ"],
+        labels=[2, 1, 0],
+        split="validation",
+    )
+
+    assert result.columns.tolist() == ["text", "label", "lang", "split", "source"]
+    assert result["label"].tolist() == ["positive", "neutral", "negative"]
+    assert result["lang"].tolist() == ["vi", "vi", "vi"]
+    assert result["split"].tolist() == ["validation", "validation", "validation"]

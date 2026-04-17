@@ -23,10 +23,10 @@ def test_predict_request_stores_text_and_lang():
     assert request.lang == "en"
 
 
-def test_predict_request_defaults_lang_to_en():
+def test_predict_request_defaults_lang_to_none():
     request = PredictRequest(text="Hello")
 
-    assert request.lang == "en"
+    assert request.lang is None
 
 
 def test_predict_request_rejects_text_longer_than_2000_chars():
@@ -49,6 +49,8 @@ def test_predict_response_parses_sample_data():
             AspectSentimentOut(aspect="service", sentiment="neutral", confidence=0.61),
         ],
         sarcasm_flag=False,
+        detected_lang="en",
+        lang_confidence=1.0,
         latency_ms=12.5,
     )
 
@@ -59,6 +61,8 @@ def test_predict_response_parses_sample_data():
     assert response.aspects[0].aspect == "food"
     assert response.aspects[1].sentiment == "neutral"
     assert response.sarcasm_flag is False
+    assert response.detected_lang == "en"
+    assert response.lang_confidence == 1.0
     assert response.latency_ms == 12.5
 
 

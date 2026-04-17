@@ -1,0 +1,15 @@
+{
+  "overall_f1": 0.0,
+  "per_lang_f1": {
+    "en": 0.0,
+    "vi": 0.0,
+    "other": 0.0
+  },
+  "per_lang_gap": 0.0,
+  "sample_counts": {
+    "en": 0,
+    "vi": 0,
+    "other": 0
+  },
+  "confusion_matrices": {}
+}

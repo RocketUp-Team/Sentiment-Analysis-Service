@@ -47,3 +47,79 @@ stages:
     metrics:
       - data/reports/baseline_metrics.json:
           cache: false
+
+  download_sarcasm:
+    cmd: python3 -m src.data.downloader
+    deps:
+      - src/data/downloader.py
+    params:
+      - training.sarcasm
+    outs:
+      - data/raw/sarcasm.csv
+
+  download_sentiment:
+    cmd: python3 -m src.data.downloader
+    deps:
+      - src/data/downloader.py
+      - data/external/semeval2014/
+    params:
+      - training.sentiment
+      - sentiment_derivation
+    outs:
+      - data/raw/sentiment_en.csv
+      - data/raw/sentiment_vi.csv
+
+  prepare_eval:
+    cmd: python3 -m src.scripts.evaluate_finetuned --task sentiment
+    deps:
+      - src/scripts/evaluate_finetuned.py
+    params:
+      - evaluation
+    outs:
+      - data/eval/
+
+  finetune_sarcasm:
+    cmd: python3 -m src.scripts.run_finetuning --task sarcasm
+    deps:
+      - src/scripts/run_finetuning.py
+      - src/training/
+      - data/raw/sarcasm.csv
+    params:
+      - training.sarcasm
+      - mlflow
+      - adapters
+    outs:
+      - models/adapters/sarcasm
+
+  finetune_sentiment:
+    cmd: python3 -m src.scripts.run_finetuning --task sentiment
+    deps:
+      - src/scripts/run_finetuning.py
+      - src/training/
+      - data/raw/sentiment_en.csv
+      - data/raw/sentiment_vi.csv
+    params:
+      - training.sentiment
+      - mlflow
+      - adapters
+    outs:
+      - models/adapters/sentiment
+
+  evaluate_finetuned:
+    cmd: python3 -m src.scripts.evaluate_finetuned --task sentiment
+    deps:
+      - src/scripts/evaluate_finetuned.py
+      - src/model/
+      - models/adapters/sarcasm
+      - models/adapters/sentiment
+      - data/eval/
+    params:
+      - evaluation
+      - adapters
+    metrics:
+      - reports/metrics_finetuned.json:
+          cache: false
+      - reports/per_language_f1.json:
+          cache: false
+      - reports/fairness_report.json:
+          cache: false
