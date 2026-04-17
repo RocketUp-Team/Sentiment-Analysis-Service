@@ -59,7 +59,7 @@ class TestModelConfigABSA:
         assert ModelConfig().absa_model_name == "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
 
     def test_default_absa_threshold(self):
-        assert ModelConfig().absa_threshold == 0.5
+        assert ModelConfig().absa_threshold == 0.45
 
     def test_default_absa_categories(self):
         categories = ModelConfig().absa_categories
@@ -72,3 +72,13 @@ class TestModelConfigABSA:
             "general",
         }
         assert len(categories) == 6
+
+
+def test_default_batch_size_is_32():
+    config = ModelConfig()
+    assert config.batch_size == 32
+
+
+def test_batch_size_is_configurable():
+    config = ModelConfig(batch_size=16)
+    assert config.batch_size == 16
