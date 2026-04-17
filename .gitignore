@@ -27,3 +27,12 @@ Thumbs.db
 # Coverage
 .coverage
 .coverage.*
+
+# LaTeX build artifacts (keep .tex source and .pdf, ignore compiler output)
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.synctex.gz
