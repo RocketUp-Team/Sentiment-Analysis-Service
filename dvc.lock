@@ -120,3 +120,304 @@ stages:
       hash: md5
       md5: 3295f2b6c81f2fc600657f7c659b3554
       size: 920
+  download_sarcasm:
+    cmd: python3 -m src.data.downloader --task sarcasm
+    deps:
+    - path: src/data/downloader.py
+      hash: md5
+      md5: c3d8ada0a274d120f185f1abadd51ef0
+      size: 10807
+    params:
+      params.yaml:
+        training.sarcasm:
+          dataset_version: tweet_eval_irony_v1
+          model_name: xlm-roberta-base
+          adapter_output_dir: models/adapters/sarcasm
+          learning_rate: 0.0002
+          epochs: 3
+          batch_size: 16
+          gradient_accumulation_steps: 2
+          max_length: 128
+          seed: 42
+    outs:
+    - path: data/raw/sarcasm.csv
+      hash: md5
+      md5: 2e85b8140a05464404cc9ea2979331fd
+      size: 505953
+  download_sentiment:
+    cmd: python3 -m src.data.downloader --task sentiment
+    deps:
+    - path: src/data/downloader.py
+      hash: md5
+      md5: c3d8ada0a274d120f185f1abadd51ef0
+      size: 10807
+    params:
+      params.yaml:
+        sentiment_derivation:
+          mixed_strategy: negative_priority
+        training.sentiment:
+          dataset_version: multilingual_sentiment_v1
+          model_name: xlm-roberta-base
+          adapter_output_dir: models/adapters/sentiment
+          learning_rate: 0.0002
+          epochs: 5
+          batch_size: 16
+          gradient_accumulation_steps: 2
+          max_length: 128
+          seed: 42
+    outs:
+    - path: data/raw/sentiment_en.csv
+      hash: md5
+      md5: 4931366b234fdccdc5e92172b7203a30
+      size: 452052
+    - path: data/raw/sentiment_vi.csv
+      hash: md5
+      md5: 3b09fe29f8f214d3dcba75135b9fc659
+      size: 1718908
+  finetune_sarcasm:
+    cmd: python3 -m src.scripts.run_finetuning --task sarcasm
+    deps:
+    - path: data/raw/sarcasm.csv
+      hash: md5
+      md5: 2e85b8140a05464404cc9ea2979331fd
+      size: 505953
+    - path: src/scripts/run_finetuning.py
+      hash: md5
+      md5: c95c0b45caa7a473a43c4835eb371d33
+      size: 8120
+    - path: src/training/
+      hash: md5
+      md5: 6c1a89edf17f812ee7bc1089141beb66.dir
+      size: 17629
+      nfiles: 12
+    params:
+      params.yaml:
+        adapters:
+          sentiment_path: models/adapters/sentiment
+          sarcasm_path: models/adapters/sarcasm
+        mlflow:
+          tracking_uri: http://localhost:5000
+          experiment_name: data_preprocessing
+          model_experiment_name: sentiment_baseline
+        training.sarcasm:
+          dataset_version: tweet_eval_irony_v1
+          model_name: xlm-roberta-base
+          adapter_output_dir: models/adapters/sarcasm
+          learning_rate: 0.0002
+          epochs: 3
+          batch_size: 16
+          gradient_accumulation_steps: 2
+          max_length: 128
+          seed: 42
+    outs:
+    - path: models/adapters/sarcasm
+      hash: md5
+      md5: d940bdbabe4af979f1e8fbf3f1b26cf6.dir
+      size: 130046247
+      nfiles: 49
+  finetune_sentiment:
+    cmd: python3 -m src.scripts.run_finetuning --task sentiment
+    deps:
+    - path: data/raw/sentiment_en.csv
+      hash: md5
+      md5: 4931366b234fdccdc5e92172b7203a30
+      size: 452052
+    - path: data/raw/sentiment_vi.csv
+      hash: md5
+      md5: 3b09fe29f8f214d3dcba75135b9fc659
+      size: 1718908
+    - path: src/scripts/run_finetuning.py
+      hash: md5
+      md5: c95c0b45caa7a473a43c4835eb371d33
+      size: 8120
+    - path: src/training/
+      hash: md5
+      md5: 6c1a89edf17f812ee7bc1089141beb66.dir
+      size: 17629
+      nfiles: 12
+    params:
+      params.yaml:
+        adapters:
+          sentiment_path: models/adapters/sentiment
+          sarcasm_path: models/adapters/sarcasm
+        mlflow:
+          tracking_uri: http://localhost:5000
+          experiment_name: data_preprocessing
+          model_experiment_name: sentiment_baseline
+        training.sentiment:
+          dataset_version: multilingual_sentiment_v1
+          model_name: xlm-roberta-base
+          adapter_output_dir: models/adapters/sentiment
+          learning_rate: 0.0002
+          epochs: 5
+          batch_size: 16
+          gradient_accumulation_steps: 2
+          max_length: 128
+          seed: 42
+    outs:
+    - path: models/adapters/sentiment
+      hash: md5
+      md5: c0b8aa318d0eb09d42a6bb9ad2fdc115.dir
+      size: 168001307
+      nfiles: 63
+  export_onnx_sarcasm:
+    cmd: python3 -m src.scripts.export_onnx --adapter-name sarcasm
+    deps:
+    - path: models/adapters/sarcasm
+      hash: md5
+      md5: d940bdbabe4af979f1e8fbf3f1b26cf6.dir
+      size: 130046247
+      nfiles: 49
+    - path: src/model/onnx_exporter.py
+      hash: md5
+      md5: 433bc01e2d1f4dc389e5af40550f502e
+      size: 2971
+    - path: src/scripts/export_onnx.py
+      hash: md5
+      md5: 3145e0d0f656f1b4d4ee145d838067ee
+      size: 1453
+    outs:
+    - path: models/onnx/sarcasm_fp32
+      hash: md5
+      md5: 86534e3bb3210e1f4f5cc91eec275233.dir
+      size: 1134657337
+      nfiles: 6
+    - path: models/onnx/sarcasm_int8
+      hash: md5
+      md5: 861bd50b8dfeee3e386689dc353db9f5.dir
+      size: 301572920
+      nfiles: 7
+  export_onnx_sentiment:
+    cmd: python3 -m src.scripts.export_onnx --adapter-name sentiment
+    deps:
+    - path: models/adapters/sentiment
+      hash: md5
+      md5: c0b8aa318d0eb09d42a6bb9ad2fdc115.dir
+      size: 168001307
+      nfiles: 63
+    - path: src/model/onnx_exporter.py
+      hash: md5
+      md5: 433bc01e2d1f4dc389e5af40550f502e
+      size: 2971
+    - path: src/scripts/export_onnx.py
+      hash: md5
+      md5: 3145e0d0f656f1b4d4ee145d838067ee
+      size: 1453
+    outs:
+    - path: models/onnx/sentiment_fp32
+      hash: md5
+      md5: fcd38a8ad6d5dfe25296a002a441efc0.dir
+      size: 1134657337
+      nfiles: 6
+    - path: models/onnx/sentiment_int8
+      hash: md5
+      md5: 97a7d4a811bad79506e56b4b3d373086.dir
+      size: 301572920
+      nfiles: 7
+  benchmark_onnx:
+    cmd: python3 -m src.scripts.benchmark_onnx --samples 1000 --batch-size 32 
+      --output reports/onnx_benchmark.json
+    deps:
+    - path: models/onnx/sentiment_fp32
+      hash: md5
+      md5: fcd38a8ad6d5dfe25296a002a441efc0.dir
+      size: 1134657337
+      nfiles: 6
+    - path: models/onnx/sentiment_int8
+      hash: md5
+      md5: 97a7d4a811bad79506e56b4b3d373086.dir
+      size: 301572920
+      nfiles: 7
+    - path: src/model/baseline.py
+      hash: md5
+      md5: 899d63860b6df037db9f2cc55dcb0cef
+      size: 13472
+    - path: src/scripts/benchmark_onnx.py
+      hash: md5
+      md5: c7b61043f10bfe1138b297dd39681042
+      size: 2744
+    outs:
+    - path: reports/onnx_benchmark.json
+      hash: md5
+      md5: 00949d2b673120182c74e8522dc4fa00
+      size: 396
+  prepare_eval:
+    cmd: python3 -m src.scripts.prepare_eval
+    deps:
+    - path: data/raw/sentiment_en.csv
+      hash: md5
+      md5: 4931366b234fdccdc5e92172b7203a30
+      size: 452052
+    - path: data/raw/sentiment_vi.csv
+      hash: md5
+      md5: 3b09fe29f8f214d3dcba75135b9fc659
+      size: 1718908
+    - path: src/scripts/prepare_eval.py
+      hash: md5
+      md5: fb7008fc5b6095b72698152bff826573
+      size: 4706
+    params:
+      params.yaml:
+        evaluation:
+          mixed_lang_eval_path: data/eval/mixed_lang_eval.csv
+          vi_sarcasm_eval_path: data/eval/vi_sarcasm_eval.csv
+          metrics_output_path: reports/metrics_finetuned.json
+          per_language_output_path: reports/per_language_f1.json
+          fairness_output_path: reports/fairness_report.json
+    outs:
+    - path: data/eval/
+      hash: md5
+      md5: c78a57802ac32612f5598e9942c8537a.dir
+      size: 46296
+      nfiles: 2
+  evaluate_finetuned:
+    cmd: python3 -m src.scripts.evaluate_finetuned --task sentiment
+    deps:
+    - path: data/eval/
+      hash: md5
+      md5: c78a57802ac32612f5598e9942c8537a.dir
+      size: 46296
+      nfiles: 2
+    - path: models/adapters/sarcasm
+      hash: md5
+      md5: d940bdbabe4af979f1e8fbf3f1b26cf6.dir
+      size: 130046247
+      nfiles: 49
+    - path: models/adapters/sentiment
+      hash: md5
+      md5: c0b8aa318d0eb09d42a6bb9ad2fdc115.dir
+      size: 168001307
+      nfiles: 63
+    - path: src/model/
+      hash: md5
+      md5: 6865d6250195b7cbe8f900453a4f3e3c.dir
+      size: 71692
+      nfiles: 17
+    - path: src/scripts/evaluate_finetuned.py
+      hash: md5
+      md5: 4f983b16607cb9b0aa8e3055aea03d74
+      size: 4665
+    params:
+      params.yaml:
+        adapters:
+          sentiment_path: models/adapters/sentiment
+          sarcasm_path: models/adapters/sarcasm
+        evaluation:
+          mixed_lang_eval_path: data/eval/mixed_lang_eval.csv
+          vi_sarcasm_eval_path: data/eval/vi_sarcasm_eval.csv
+          metrics_output_path: reports/metrics_finetuned.json
+          per_language_output_path: reports/per_language_f1.json
+          fairness_output_path: reports/fairness_report.json
+    outs:
+    - path: reports/fairness_report.json
+      hash: md5
+      md5: 38f51c120bbd07f099a02b09a3bd5ea6
+      size: 576
+    - path: reports/metrics_finetuned.json
+      hash: md5
+      md5: f3ef8a0594bf18f212cd1382dbee4d49
+      size: 81
+    - path: reports/per_language_f1.json
+      hash: md5
+      md5: 3e6cdaa23cbed0d00e94a073af6ad5f6
+      size: 85

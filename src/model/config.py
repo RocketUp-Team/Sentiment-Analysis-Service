@@ -30,8 +30,8 @@ class ModelConfig:
     finetuned_model_name: str = "xlm-roberta-base"
     sentiment_adapter_path: str = "models/adapters/sentiment"
     sarcasm_adapter_path: str = "models/adapters/sarcasm"
-    onnx_model_path: str = "models/onnx/fp32"
-    onnx_int8_model_path: str = "models/onnx/int8"
+    onnx_model_path: str = "models/onnx/sentiment_fp32/model.onnx"
+    onnx_int8_model_path: str = "models/onnx/sentiment_int8/model_quantized.onnx"
     max_length: int = 512
     default_lang: str = "en"
     supported_languages: tuple[str, ...] = ("en", "vi")

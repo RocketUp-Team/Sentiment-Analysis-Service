@@ -4,7 +4,10 @@ from transformers import AutoTokenizer
 
 class OnnxInferenceSession:
     def __init__(self, model_path: str, tokenizer_name: str, max_length: int = 512):
-        self.session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        self.session = ort.InferenceSession(
+            model_path, 
+            providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+        )
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self.max_length = max_length
         self.input_names = [i.name for i in self.session.get_inputs()]

@@ -23,6 +23,7 @@ class OnnxExporter:
         base_model = AutoModelForSequenceClassification.from_pretrained(
             self._config.finetuned_model_name,
             num_labels=len(self._config.label_map),
+            use_safetensors=True,
         )
         
         # 2. Load PEFT adapter

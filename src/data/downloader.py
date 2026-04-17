@@ -97,8 +97,14 @@ def download_sentiment_datasets(en_out_path: Path, vi_out_path: Path) -> None:
 
     en_ds = _load_hf_dataset("parquet", data_files=_MULTILINGUAL_SENTIMENTS_EN_FILES)
     en_frames: list[pd.DataFrame] = []
+    _EN_SENTIMENT_MAP = {
+        0: "positive",
+        1: "neutral",
+        2: "negative",
+    }
     for split, split_ds in en_ds.items():
         split_df = split_ds.to_pandas().loc[:, ["text", "label"]].copy()
+        split_df["label"] = split_df["label"].map(_EN_SENTIMENT_MAP)
         split_df["lang"] = "en"
         split_df["source"] = "multilingual_sentiments"
         split_df["split"] = split

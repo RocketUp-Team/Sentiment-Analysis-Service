@@ -69,6 +69,7 @@ class BaselineModelInference(ModelInference):
                 base_model = AutoModelForSequenceClassification.from_pretrained(
                     self._config.finetuned_model_name,
                     num_labels=len(self._config.label_map),
+                    use_safetensors=True,
                 ).to(self._device)
                 self._model = PeftModel.from_pretrained(
                     base_model,
@@ -82,7 +83,8 @@ class BaselineModelInference(ModelInference):
             else:
                 self._tokenizer = AutoTokenizer.from_pretrained(self._config.model_name)
                 self._model = AutoModelForSequenceClassification.from_pretrained(
-                    self._config.model_name
+                    self._config.model_name,
+                    use_safetensors=True,
                 ).to(self._device)
                 
             if self._model is not None:

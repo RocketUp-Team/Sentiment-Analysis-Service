@@ -131,7 +131,7 @@ stages:
       - reports/fairness_report.json:
           cache: false
 
-  export_onnx:
+  export_onnx_sentiment:
     cmd: python3 -m src.scripts.export_onnx --adapter-name sentiment
     deps:
       - src/scripts/export_onnx.py
@@ -140,6 +140,16 @@ stages:
     outs:
       - models/onnx/sentiment_fp32
       - models/onnx/sentiment_int8
+
+  export_onnx_sarcasm:
+    cmd: python3 -m src.scripts.export_onnx --adapter-name sarcasm
+    deps:
+      - src/scripts/export_onnx.py
+      - src/model/onnx_exporter.py
+      - models/adapters/sarcasm
+    outs:
+      - models/onnx/sarcasm_fp32
+      - models/onnx/sarcasm_int8
 
   benchmark_onnx:
     cmd: python3 -m src.scripts.benchmark_onnx --samples 1000 --batch-size 32 --output reports/onnx_benchmark.json
