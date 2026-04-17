@@ -126,44 +126,47 @@ class TestEvaluateOnDataset:
         assert len(cm) == 3
         assert all(len(row) == 3 for row in cm)
 
-def test_evaluate_on_dataset_delegates_chunking_to_predict_batch():
-    """evaluate_on_dataset should call predict_batch once with all texts."""
-    from unittest.mock import MagicMock
-    from src.model.evaluate import evaluate_on_dataset
+    def test_evaluate_on_dataset_delegates_chunking_to_predict_batch(self):
+        """evaluate_on_dataset should call predict_batch once with all texts."""
+        from unittest.mock import MagicMock
+        from src.model.evaluate import evaluate_on_dataset
 
-    texts = [f"text {i}" for i in range(10)]
-    df = pd.DataFrame({
-        "text": texts,
-        "sentiment": ["positive"] * 10,
-        "split": ["test"] * 10,
-    })
+        texts = [f"text {i}" for i in range(12)]
+        df = pd.DataFrame({
+            "text": texts,
+            "sentiment": ["positive"] * 4 + ["negative"] * 4 + ["neutral"] * 4,
+            "split": ["test"] * 12,
+        })
 
-    mock_model = MagicMock()
-    mock_model.predict_batch.return_value = [
-        PredictionResult(sentiment="positive", confidence=0.9)
-        for _ in range(10)
-    ]
+        mock_model = MagicMock()
+        mock_model.predict_batch.return_value = [
+            PredictionResult(sentiment="positive", confidence=0.9) for _ in range(4)
+        ] + [
+            PredictionResult(sentiment="negative", confidence=0.9) for _ in range(4)
+        ] + [
+            PredictionResult(sentiment="neutral", confidence=0.9) for _ in range(4)
+        ]
 
-    evaluate_on_dataset(mock_model, df, split="test")
-
-    mock_model.predict_batch.assert_called_once()
-    call_args = mock_model.predict_batch.call_args
-    assert call_args[0][0] == texts
-
-
-def test_raises_on_prediction_count_mismatch():
-    from src.model.evaluate import evaluate_on_dataset
-
-    df = _make_test_df()
-    mock_model = MagicMock()
-    mock_model.predict_batch.return_value = [
-        PredictionResult(
-            sentiment="positive", confidence=0.9, aspects=[], sarcasm_flag=False
-        )
-    ]
-
-    with pytest.raises(ValueError, match="Prediction count does not match"):
         evaluate_on_dataset(mock_model, df, split="test")
+
+        mock_model.predict_batch.assert_called_once()
+        call_args = mock_model.predict_batch.call_args
+        assert call_args[0][0] == texts
+
+
+    def test_raises_on_prediction_count_mismatch(self):
+        from src.model.evaluate import evaluate_on_dataset
+
+        df = _make_test_df()
+        mock_model = MagicMock()
+        mock_model.predict_batch.return_value = [
+            PredictionResult(
+                sentiment="positive", confidence=0.9, aspects=[], sarcasm_flag=False
+            )
+        ]
+
+        with pytest.raises(ValueError, match="Prediction count does not match"):
+            evaluate_on_dataset(mock_model, df, split="test")
 
 
 # ── _log_reporting_artifacts ───────────────────────────────────

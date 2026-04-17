@@ -22,7 +22,7 @@ def test_sentiment_throughput_meets_target():
     texts = ["The food was absolutely amazing and I loved every bite!"] * 1000
 
     start = time.perf_counter()
-    results = model.predict_batch(texts, batch_size=32, skip_absa=True)
+    results = model.predict_batch(texts, skip_absa=True)
     elapsed = time.perf_counter() - start
 
     throughput = len(texts) / elapsed
@@ -52,7 +52,7 @@ def test_full_pipeline_throughput():
     ] * 10  # 50 texts
 
     start = time.perf_counter()
-    results = model.predict_batch(texts, batch_size=32, skip_absa=False)
+    results = model.predict_batch(texts, skip_absa=False)
     elapsed = time.perf_counter() - start
 
     throughput = len(texts) / elapsed
