@@ -137,14 +137,11 @@ def test_download_sentiment_datasets_writes_english_and_vietnamese_csvs(tmp_path
             return {"train": _FakeSplit(pd.DataFrame([{"text": "great", "label": "positive"}]))}
         if (name, config) == ("uitnlp/vietnamese_students_feedback", None):
             return {
-                "train": _FakeSplit(
-                    pd.DataFrame(
-                        [
-                            {"sentence": "rat hay", "sentiment": 2, "split": "train"},
-                            {"sentence": "te", "sentiment": 0, "split": "test"},
-                        ]
-                    )
-                )
+                "train": _FakeSplit(pd.DataFrame([{"sentence": "rat hay", "sentiment": 2, "topic": 0}])),
+                "validation": _FakeSplit(
+                    pd.DataFrame([{"sentence": "binh thuong", "sentiment": 1, "topic": 1}])
+                ),
+                "test": _FakeSplit(pd.DataFrame([{"sentence": "te", "sentiment": 0, "topic": 2}])),
             }
         raise AssertionError(f"unexpected dataset request: {(name, config)}")
 
@@ -174,6 +171,13 @@ def test_download_sentiment_datasets_writes_english_and_vietnamese_csvs(tmp_path
             "lang": "vi",
             "source": "uit_vsfc",
             "split": "train",
+        },
+        {
+            "text": "binh thuong",
+            "label": "neutral",
+            "lang": "vi",
+            "source": "uit_vsfc",
+            "split": "validation",
         },
         {
             "text": "te",

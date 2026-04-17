@@ -87,11 +87,18 @@ def download_sentiment_datasets(en_out_path: Path, vi_out_path: Path) -> None:
     en_df.to_csv(en_out_path, index=False)
 
     vi_ds = load_dataset("uitnlp/vietnamese_students_feedback")
-    vi_df = vi_ds["train"].to_pandas()
-    vi_df["label"] = vi_df["sentiment"].map(_UIT_SENTIMENT_MAP)
-    vi_df["text"] = vi_df["sentence"]
-    vi_df["lang"] = "vi"
-    vi_df["source"] = "uit_vsfc"
+    vi_frames: list[pd.DataFrame] = []
+    for split, split_ds in vi_ds.items():
+        split_df = split_ds.to_pandas()
+        vi_frames.append(
+            build_uit_vsfc_frame(
+                sentences=split_df["sentence"].tolist(),
+                labels=split_df["sentiment"].tolist(),
+                split=split,
+            )
+        )
+
+    vi_df = pd.concat(vi_frames, ignore_index=True)
     vi_df[["text", "label", "lang", "source", "split"]].to_csv(vi_out_path, index=False)
     print(f"Saved sentiment datasets to {en_out_path} and {vi_out_path}")
 
