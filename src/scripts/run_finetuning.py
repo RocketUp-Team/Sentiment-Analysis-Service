@@ -162,7 +162,12 @@ def _load_training_frame(task, root: Path) -> pd.DataFrame:
 
 
 def _model_num_labels(task) -> int:
-    # Keep both finetuned adapters compatible with the shared 3-logit backbone.
+    # Sarcasm is trained with 3 output logits so that the sarcasm adapter and the
+    # sentiment adapter can be stacked on the *same* xlm-roberta-base backbone (which
+    # has a single shared classification head).  At inference time only logits[:2]
+    # (non_irony / irony) are consumed by `_predict_sarcasm_flag`; the third logit is
+    # intentionally ignored.  This design avoids loading two separate base models.
+    # See also: BaselineModelInference._predict_sarcasm_flag (baseline.py).
     return 3 if task.name == "sarcasm" else task.num_labels
 
 

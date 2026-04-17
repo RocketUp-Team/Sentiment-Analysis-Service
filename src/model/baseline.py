@@ -122,10 +122,18 @@ class BaselineModelInference(ModelInference):
         return torch.softmax(outputs.logits, dim=-1)
 
     def _predict_sarcasm_flag(self, text: str) -> bool:
-        """Predict sarcasm from the dedicated finetuned adapter when available."""
+        """Predict sarcasm from the dedicated finetuned adapter when available.
+
+        Note: The sarcasm adapter is trained with a 3-logit head (to share the same
+        backbone as the sentiment adapter), but only the first two logits correspond
+        to the binary irony task (0 = non_irony, 1 = irony).  The third logit is
+        intentionally discarded here.  See run_finetuning._model_num_labels for the
+        full rationale.
+        """
         if self._config.mode != "finetuned":
             return False
 
+        # Slice [:2] discards the unused third logit — see docstring above.
         probs = self._predict_probabilities(text, adapter_name="sarcasm")[0][:2]
         return bool(probs.argmax().item() == 1)
 
