@@ -62,6 +62,17 @@ class TestModelConfig:
         project_labels = {"positive", "negative", "neutral"}
         assert set(config.label_map.values()) == project_labels
 
+    def test_onnx_config_fields(self):
+        config = ModelConfig()
+        assert config.onnx_model_path == "models/onnx/fp32"
+        assert config.onnx_int8_model_path == "models/onnx/int8"
+
+    def test_onnx_modes(self):
+        config = ModelConfig(mode="onnx")
+        assert config.mode == "onnx"
+        config_int8 = ModelConfig(mode="onnx_int8")
+        assert config_int8.mode == "onnx_int8"
+
 
 class TestModelConfigABSA:
     def test_default_absa_model_name(self):
