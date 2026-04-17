@@ -8,6 +8,7 @@ import shap
 
 from contracts.model_interface import ModelInference
 from src.model.baseline import BaselineModelInference
+from src.model.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +57,6 @@ def generate_plot_for_text(
 
     logger.info("Saved SHAP plot to %s", output_path)
     return output_path
-
-from src.model.config import ModelConfig
 
 def parse_args(args: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate SHAP plots for given texts.")
