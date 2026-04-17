@@ -1308,7 +1308,7 @@ git commit -m "test(model): verify full model test suite passes"
 
 - None (manual verification)
 
-- [ ] **Step 1: Start MLflow tracking server** *(not run in this session — use local `mlflow server` if you need UI)*
+- [x] **Step 1: Start MLflow tracking server** *(verified: `mlflow server` on `127.0.0.1:5000` with sqlite backend + `./mlartifacts`)*
 
 Run (in a separate terminal):
 
@@ -1341,7 +1341,7 @@ Recall:    0.XXXX
 
 F1 Macro should be in the **0.55–0.70** range (zero-shot on restaurant domain).
 
-- [ ] **Step 3: Verify MLflow UI** *(evaluation CLI succeeded; remote tracking URI returned HTTP 403 — verify after pointing `mlflow.tracking_uri` at a reachable server)*
+- [x] **Step 3: Verify MLflow UI** *(verified after local server: `python -m src.model.evaluate` logged run successfully; open `http://127.0.0.1:5000` for UI)*
 
 Open `http://localhost:5000` in browser. Check:
 

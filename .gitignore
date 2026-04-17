@@ -30,3 +30,7 @@ Thumbs.db
 
 graphify-out/
 GEMINI.md
+
+# Local MLflow (from `mlflow server` in repo root)
+mlflow.db
+mlartifacts/

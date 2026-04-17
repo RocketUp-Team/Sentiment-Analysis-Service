@@ -19,6 +19,7 @@ A production-ready NLP service for sentiment analysis and aspect detection.
 - Use a Python 3.11+ environment with dependencies from `requirements.txt` installed (tests and `python -m src.model.evaluate` need **torch**, **transformers**, etc.).
 - For **DVC** (`dvc repro`, `dvc repro evaluate_baseline`), stages invoke `python3`. Activate your project environment first so `python3` resolves to that interpreter (e.g. `conda activate sentiment_analysis_service`), or ensure `python3` on your `PATH` is the env where deps are installed.
 - Optional **real-model ABSA smoke** (downloads HF weights): `ABSA_SCENARIOS_SMOKE=1 python tests/test_absa_scenarios.py` from the repo root after activating the same environment.
+- **Local MLflow** (matches `params.yaml` → `http://localhost:5000`): from the repo root, `mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri sqlite:///mlflow.db --default-artifact-root ./mlartifacts` then run `python -m src.model.evaluate` in another terminal.
 
 ### Running the Service
 ```bash
