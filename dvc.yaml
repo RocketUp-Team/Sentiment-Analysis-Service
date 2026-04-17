@@ -1,6 +1,6 @@
 stages:
   download:
-    cmd: python3 -m src.data.downloader
+    cmd: python3 -m src.data.downloader --task semeval
     deps:
       - src/data/downloader.py
       - data/external/semeval2014/
@@ -49,7 +49,7 @@ stages:
           cache: false
 
   download_sarcasm:
-    cmd: python3 -m src.data.downloader
+    cmd: python3 -m src.data.downloader --task sarcasm
     deps:
       - src/data/downloader.py
     params:
@@ -58,7 +58,7 @@ stages:
       - data/raw/sarcasm.csv
 
   download_sentiment:
-    cmd: python3 -m src.data.downloader
+    cmd: python3 -m src.data.downloader --task sentiment
     deps:
       - src/data/downloader.py
       - data/external/semeval2014/

@@ -5,10 +5,12 @@ This module parses the SemEval-2014 XML datasets directly into structured Pandas
 
 from __future__ import annotations
 
+import argparse
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pandas as pd
+from datasets import load_dataset
 
 from src.data.utils import load_params
 
@@ -60,6 +62,38 @@ def build_uit_vsfc_frame(
             "source": ["uit_vsfc"] * len(labels),
         }
     )
+
+
+def download_sarcasm_dataset(out_path: Path) -> None:
+    """Download the tweet_eval irony training split and persist it as CSV."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    dataset = load_dataset("tweet_eval", "irony")
+    df = dataset["train"].to_pandas()
+    df["lang"] = "en"
+    df["source"] = "tweet_eval_irony"
+    df.to_csv(out_path, index=False)
+    print(f"Saved sarcasm dataset to {out_path}")
+
+
+def download_sentiment_datasets(en_out_path: Path, vi_out_path: Path) -> None:
+    """Download English and Vietnamese sentiment datasets and persist them as CSV."""
+    en_out_path.parent.mkdir(parents=True, exist_ok=True)
+    vi_out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    en_ds = load_dataset("tyqiangz/multilingual-sentiments", "english")
+    en_df = en_ds["train"].to_pandas()
+    en_df["lang"] = "en"
+    en_df["source"] = "multilingual_sentiments"
+    en_df.to_csv(en_out_path, index=False)
+
+    vi_ds = load_dataset("uitnlp/vietnamese_students_feedback")
+    vi_df = vi_ds["train"].to_pandas()
+    vi_df["label"] = vi_df["sentiment"].map(_UIT_SENTIMENT_MAP)
+    vi_df["text"] = vi_df["sentence"]
+    vi_df["lang"] = "vi"
+    vi_df["source"] = "uit_vsfc"
+    vi_df[["text", "label", "lang", "source", "split"]].to_csv(vi_out_path, index=False)
+    print(f"Saved sentiment datasets to {en_out_path} and {vi_out_path}")
 
 
 def validate_raw_schema(sentences_df: pd.DataFrame, aspects_df: pd.DataFrame) -> None:
@@ -200,12 +234,33 @@ def write_placeholder_raw_csvs(
     return sentences_path, aspects_path
 
 
-if __name__ == "__main__":
-    root = Path(__file__).resolve().parents[2]
-    params = load_params(str(root / "params.yaml"))
-    data = params["data"]
-    extract_semeval_xmls(
-        root / "data" / "raw",
-        dataset_name=str(data["dataset_name"]),
-        splits=list(data["splits"]),
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--task",
+        default="semeval",
+        choices=["semeval", "sarcasm", "sentiment"],
     )
+    args = parser.parse_args(argv)
+
+    root = Path(__file__).resolve().parents[2]
+
+    if args.task == "semeval":
+        params = load_params(str(root / "params.yaml"))
+        data = params["data"]
+        extract_semeval_xmls(
+            root / "data" / "raw",
+            dataset_name=str(data["dataset_name"]),
+            splits=list(data["splits"]),
+        )
+    elif args.task == "sarcasm":
+        download_sarcasm_dataset(root / "data" / "raw" / "sarcasm.csv")
+    elif args.task == "sentiment":
+        download_sentiment_datasets(
+            root / "data" / "raw" / "sentiment_en.csv",
+            root / "data" / "raw" / "sentiment_vi.csv",
+        )
+
+
+if __name__ == "__main__":
+    main()
