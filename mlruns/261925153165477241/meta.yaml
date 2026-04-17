@@ -1,0 +1,6 @@
+artifact_location: file:///Users/trungshin/learning/Sentiment-Analysis-Service/.worktrees/absa-sarcasm-phase2/mlruns/261925153165477241
+creation_time: 1776433625556
+experiment_id: '261925153165477241'
+last_update_time: 1776433625556
+lifecycle_stage: active
+name: phase2_finetuning_sarcasm

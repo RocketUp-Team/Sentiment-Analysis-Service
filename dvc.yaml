@@ -1,6 +1,6 @@
 stages:
   download:
-    cmd: python3 -m src.data.downloader
+    cmd: python3 -m src.data.downloader --task semeval
     deps:
       - src/data/downloader.py
       - data/external/semeval2014/
@@ -8,13 +8,17 @@ stages:
       - data.dataset_name
       - data.splits
     outs:
-      - data/raw/
+      # Explicit file outputs instead of data/raw/ directory to avoid overlapping
+      # with download_sarcasm and download_sentiment stage outputs (DVC Issue #4 fix).
+      - data/raw/sentences.csv
+      - data/raw/aspects.csv
 
   preprocess:
     cmd: python3 -m src.data.pipeline
     deps:
       - src/data/pipeline.py
-      - data/raw/
+      - data/raw/sentences.csv
+      - data/raw/aspects.csv
       - src/data/transforms/
     params:
       - preprocessing
@@ -49,7 +53,7 @@ stages:
           cache: false
 
   download_sarcasm:
-    cmd: python3 -m src.data.downloader
+    cmd: python3 -m src.data.downloader --task sarcasm
     deps:
       - src/data/downloader.py
     params:
@@ -58,10 +62,9 @@ stages:
       - data/raw/sarcasm.csv
 
   download_sentiment:
-    cmd: python3 -m src.data.downloader
+    cmd: python3 -m src.data.downloader --task sentiment
     deps:
       - src/data/downloader.py
-      - data/external/semeval2014/
     params:
       - training.sentiment
       - sentiment_derivation
@@ -70,9 +73,13 @@ stages:
       - data/raw/sentiment_vi.csv
 
   prepare_eval:
-    cmd: python3 -m src.scripts.evaluate_finetuned --task sentiment
+    # Issue #3 fix: replaced the incorrect evaluate_finetuned call with the actual
+    # prepare_eval script that creates data/eval/ from raw sentiment test splits.
+    cmd: python3 -m src.scripts.prepare_eval
     deps:
-      - src/scripts/evaluate_finetuned.py
+      - src/scripts/prepare_eval.py
+      - data/raw/sentiment_en.csv
+      - data/raw/sentiment_vi.csv
     params:
       - evaluation
     outs:

@@ -1,12 +1,20 @@
+import builtins
+import importlib.util
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
+import src.data.downloader as downloader
 from src.data.downloader import (
     EXPECTED_RAW_ASPECT_COLUMNS,
     EXPECTED_RAW_SENTENCE_COLUMNS,
     SchemaError,
     build_sarcasm_frame,
     build_uit_vsfc_frame,
+    download_sarcasm_dataset,
+    download_sentiment_datasets,
+    main,
     validate_raw_schema,
     write_placeholder_raw_csvs,
 )
@@ -95,3 +103,239 @@ def test_build_uit_vsfc_frame_maps_numeric_labels_to_project_strings():
     assert result["label"].tolist() == ["positive", "neutral", "negative"]
     assert result["lang"].tolist() == ["vi", "vi", "vi"]
     assert result["split"].tolist() == ["validation", "validation", "validation"]
+
+
+class _FakeSplit:
+    def __init__(self, frame: pd.DataFrame):
+        self._frame = frame
+
+    def to_pandas(self) -> pd.DataFrame:
+        return self._frame.copy()
+
+
+def test_download_sarcasm_dataset_writes_csv_with_metadata(tmp_path, monkeypatch):
+    def fake_load_dataset(name: str, config: str):
+        assert (name, config) == ("tweet_eval", "irony")
+        return {
+            "train": _FakeSplit(pd.DataFrame([{"text": "sure", "label": 1}])),
+            "validation": _FakeSplit(pd.DataFrame([{"text": "right", "label": 0}])),
+            "test": _FakeSplit(pd.DataFrame([{"text": "wow", "label": 1}])),
+        }
+
+    monkeypatch.setattr(downloader, "_load_hf_dataset", fake_load_dataset, raising=False)
+    monkeypatch.setattr(downloader, "load_dataset", fake_load_dataset, raising=False)
+
+    out_path = tmp_path / "raw" / "sarcasm.csv"
+    download_sarcasm_dataset(out_path)
+
+    result = pd.read_csv(out_path)
+    assert result.columns.tolist() == ["text", "label", "lang", "split", "source"]
+    assert result.to_dict("records") == [
+        {
+            "text": "sure",
+            "label": 1,
+            "lang": "en",
+            "split": "train",
+            "source": "tweet_eval_irony",
+        },
+        {
+            "text": "right",
+            "label": 0,
+            "lang": "en",
+            "split": "validation",
+            "source": "tweet_eval_irony",
+        },
+        {
+            "text": "wow",
+            "label": 1,
+            "lang": "en",
+            "split": "test",
+            "source": "tweet_eval_irony",
+        },
+    ]
+
+
+def test_download_sentiment_datasets_writes_english_and_vietnamese_csvs(tmp_path, monkeypatch):
+    english_loader_calls: list[tuple[str, dict[str, str]]] = []
+    vietnamese_loader_calls: list[tuple[str, dict[str, str]]] = []
+    english_data_files = {
+        "train": "hf://datasets/tyqiangz/multilingual-sentiments@refs/convert/parquet/english/train/*.parquet",
+        "validation": "hf://datasets/tyqiangz/multilingual-sentiments@refs/convert/parquet/english/validation/*.parquet",
+        "test": "hf://datasets/tyqiangz/multilingual-sentiments@refs/convert/parquet/english/test/*.parquet",
+    }
+    vietnamese_data_files = {
+        "train": "hf://datasets/uitnlp/vietnamese_students_feedback@refs/convert/parquet/default/train/*.parquet",
+        "validation": "hf://datasets/uitnlp/vietnamese_students_feedback@refs/convert/parquet/default/validation/*.parquet",
+        "test": "hf://datasets/uitnlp/vietnamese_students_feedback@refs/convert/parquet/default/test/*.parquet",
+    }
+
+    def fake_load_dataset(name: str, config: str | None = None, **kwargs):
+        if name == "parquet":
+            assert config is None
+            data_files = kwargs["data_files"]
+            if data_files == english_data_files:
+                english_loader_calls.append((name, data_files))
+                return {
+                    "train": _FakeSplit(pd.DataFrame([{"text": "great", "source": "sem_eval_2017", "label": "positive"}])),
+                    "validation": _FakeSplit(
+                        pd.DataFrame([{"text": "okay", "source": "sem_eval_2017", "label": "neutral"}])
+                    ),
+                    "test": _FakeSplit(pd.DataFrame([{"text": "bad", "source": "sem_eval_2017", "label": "negative"}])),
+                }
+            if data_files == vietnamese_data_files:
+                vietnamese_loader_calls.append((name, data_files))
+                return {
+                    "train": _FakeSplit(pd.DataFrame([{"sentence": "rat hay", "sentiment": 2, "topic": 0}])),
+                    "validation": _FakeSplit(
+                        pd.DataFrame([{"sentence": "binh thuong", "sentiment": 1, "topic": 1}])
+                    ),
+                    "test": _FakeSplit(pd.DataFrame([{"sentence": "te", "sentiment": 0, "topic": 2}])),
+                }
+        raise AssertionError(f"unexpected dataset request: {(name, config)}")
+
+    monkeypatch.setattr(downloader, "_load_hf_dataset", fake_load_dataset, raising=False)
+    monkeypatch.setattr(downloader, "load_dataset", fake_load_dataset, raising=False)
+
+    en_path = tmp_path / "raw" / "sentiment_en.csv"
+    vi_path = tmp_path / "raw" / "sentiment_vi.csv"
+
+    download_sentiment_datasets(en_path, vi_path)
+
+    en_result = pd.read_csv(en_path)
+    vi_result = pd.read_csv(vi_path)
+
+    assert en_result.columns.tolist() == ["text", "label", "lang", "source", "split"]
+    assert en_result.to_dict("records") == [
+        {
+            "text": "great",
+            "label": "positive",
+            "lang": "en",
+            "source": "multilingual_sentiments",
+            "split": "train",
+        },
+        {
+            "text": "okay",
+            "label": "neutral",
+            "lang": "en",
+            "source": "multilingual_sentiments",
+            "split": "validation",
+        },
+        {
+            "text": "bad",
+            "label": "negative",
+            "lang": "en",
+            "source": "multilingual_sentiments",
+            "split": "test",
+        },
+    ]
+    assert english_loader_calls == [
+        ("parquet", english_data_files)
+    ]
+    assert vietnamese_loader_calls == [
+        ("parquet", vietnamese_data_files)
+    ]
+
+    assert vi_result.columns.tolist() == ["text", "label", "lang", "source", "split"]
+    assert vi_result.to_dict("records") == [
+        {
+            "text": "rat hay",
+            "label": "positive",
+            "lang": "vi",
+            "source": "uit_vsfc",
+            "split": "train",
+        },
+        {
+            "text": "binh thuong",
+            "label": "neutral",
+            "lang": "vi",
+            "source": "uit_vsfc",
+            "split": "validation",
+        },
+        {
+            "text": "te",
+            "label": "negative",
+            "lang": "vi",
+            "source": "uit_vsfc",
+            "split": "test",
+        },
+    ]
+
+
+def test_downloader_module_can_load_without_datasets_dependency(monkeypatch):
+    module_path = Path(downloader.__file__)
+    spec = importlib.util.spec_from_file_location("downloader_no_datasets", module_path)
+    assert spec is not None
+    assert spec.loader is not None
+    isolated_module = importlib.util.module_from_spec(spec)
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "datasets":
+            raise ImportError("datasets intentionally unavailable")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    spec.loader.exec_module(isolated_module)
+
+    assert isolated_module.extract_semeval_xmls is not None
+    assert isolated_module.main is not None
+
+
+def test_main_dispatches_semeval_task(monkeypatch):
+    calls: dict[str, object] = {}
+
+    def fake_load_params(path: str):
+        calls["params_path"] = path
+        return {"data": {"dataset_name": "restaurants", "splits": ["train", "test"]}}
+
+    def fake_extract(raw_dir: Path, *, dataset_name: str, splits: list[str]):
+        calls["raw_dir"] = raw_dir
+        calls["dataset_name"] = dataset_name
+        calls["splits"] = splits
+        return raw_dir / "sentences.csv", raw_dir / "aspects.csv"
+
+    monkeypatch.setattr(downloader, "load_params", fake_load_params)
+    monkeypatch.setattr(downloader, "extract_semeval_xmls", fake_extract)
+
+    main(["--task", "semeval"])
+
+    root = Path(downloader.__file__).resolve().parents[2]
+    assert calls == {
+        "params_path": str(root / "params.yaml"),
+        "raw_dir": root / "data" / "raw",
+        "dataset_name": "restaurants",
+        "splits": ["train", "test"],
+    }
+
+
+@pytest.mark.parametrize(
+    ("task", "expected_name"),
+    [("sarcasm", "sarcasm.csv"), ("sentiment", "sentiment_en.csv")],
+)
+def test_main_dispatches_hf_tasks(task, expected_name, monkeypatch):
+    calls: dict[str, tuple[Path, ...]] = {}
+
+    def fake_sarcasm(out_path: Path):
+        calls["sarcasm"] = (out_path,)
+
+    def fake_sentiment(en_out_path: Path, vi_out_path: Path):
+        calls["sentiment"] = (en_out_path, vi_out_path)
+
+    monkeypatch.setattr(downloader, "download_sarcasm_dataset", fake_sarcasm)
+    monkeypatch.setattr(downloader, "download_sentiment_datasets", fake_sentiment)
+
+    main(["--task", task])
+
+    root = Path(downloader.__file__).resolve().parents[2]
+    if task == "sarcasm":
+        assert calls == {"sarcasm": (root / "data" / "raw" / "sarcasm.csv",)}
+    else:
+        assert calls == {
+            "sentiment": (
+                root / "data" / "raw" / "sentiment_en.csv",
+                root / "data" / "raw" / "sentiment_vi.csv",
+            )
+        }
+    assert expected_name in str(next(iter(calls.values()))[0])
