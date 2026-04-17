@@ -197,6 +197,72 @@ def _build_model_with_mocks_absa(
     return model, fake_zero_shot
 
 
+class FakePeftSequenceClassifier:
+    """Simple adapter-aware fake for finetuned mode."""
+
+    def __init__(self):
+        self.active_adapter = "sentiment"
+        self.set_adapter_calls = []
+        self.load_adapter_calls = []
+        self.hf_device_map = None
+
+    def to(self, device):
+        return self
+
+    def eval(self):
+        return self
+
+    def load_adapter(self, path, adapter_name):
+        self.load_adapter_calls.append((path, adapter_name))
+
+    def set_adapter(self, adapter_name):
+        self.active_adapter = adapter_name
+        self.set_adapter_calls.append(adapter_name)
+
+    def __call__(self, **inputs):
+        batch_size = inputs["input_ids"].shape[0]
+
+        @dataclass
+        class FakeOutput:
+            logits: torch.Tensor
+
+        if self.active_adapter == "sarcasm":
+            return FakeOutput(logits=torch.tensor([[0.1, 0.9]] * batch_size))
+        return FakeOutput(logits=_make_mock_logits(batch_size))
+
+
+def _build_finetuned_model_with_mocks(config=None, device=None):
+    """Patch HuggingFace + PEFT and build a finetuned BaselineModelInference."""
+    config = config or ModelConfig(mode="finetuned")
+    device = device or torch.device("cpu")
+
+    def tokenizer_side_effect(texts, **kwargs):
+        batch_size = len(texts) if isinstance(texts, list) else 1
+        return _MockBatchEncoding(
+            {
+                "input_ids": torch.ones((batch_size, 3), dtype=torch.long),
+                "attention_mask": torch.ones((batch_size, 3), dtype=torch.long),
+            }
+        )
+
+    mock_tokenizer = MagicMock(side_effect=tokenizer_side_effect)
+    mock_base_model = MagicMock()
+    mock_base_model.to.return_value = mock_base_model
+    fake_peft_model = FakePeftSequenceClassifier()
+
+    with patch("src.model.baseline.AutoTokenizer") as MockTokenizer, \
+         patch("src.model.baseline.AutoModelForSequenceClassification") as MockModel, \
+         patch("src.model.baseline.PeftModel") as MockPeftModel:
+        MockTokenizer.from_pretrained.return_value = mock_tokenizer
+        MockModel.from_pretrained.return_value = mock_base_model
+        MockPeftModel.from_pretrained.return_value = fake_peft_model
+
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=device)
+
+    return model, mock_tokenizer, mock_base_model, fake_peft_model, MockPeftModel
+
+
 # ── Interface Compliance ───────────────────────────────────────
 
 class TestInterfaceCompliance:
@@ -228,10 +294,41 @@ class TestProperties:
         model, _, _ = _build_model_with_mocks()
         assert "cardiffnlp" in repr(model)
 
+    def test_finetuned_mode_loads_sentiment_and_sarcasm_adapters(self):
+        config = ModelConfig(
+            mode="finetuned",
+            sentiment_adapter_path="models/adapters/sentiment",
+            sarcasm_adapter_path="models/adapters/sarcasm",
+        )
+        _, _, mock_base_model, fake_peft_model, mock_peft_cls = _build_finetuned_model_with_mocks(
+            config=config
+        )
+
+        mock_peft_cls.from_pretrained.assert_called_once_with(
+            mock_base_model,
+            config.sentiment_adapter_path,
+            adapter_name="sentiment",
+        )
+        assert fake_peft_model.load_adapter_calls == [
+            (config.sarcasm_adapter_path, "sarcasm")
+        ]
+
 
 # ── predict_single ─────────────────────────────────────────────
 
 class TestPredictSingle:
+    def test_baseline_mode_no_regression(self):
+        default_model, _, _ = _build_model_with_mocks()
+        explicit_model, _, _ = _build_model_with_mocks(config=ModelConfig(mode="baseline"))
+
+        with patch.object(default_model, "_extract_aspects", return_value=[]), patch.object(
+            explicit_model, "_extract_aspects", return_value=[]
+        ):
+            default_result = default_model.predict_single("Great service")
+            explicit_result = explicit_model.predict_single("Great service")
+
+        assert explicit_result == default_result
+
     def test_returns_prediction_result(self):
         model, _, _ = _build_model_with_mocks()
         result = model.predict_single("The food was great")
@@ -301,6 +398,17 @@ class TestPredictSingle:
             truncation=True,
             max_length=ModelConfig().max_length,
         )
+
+    def test_finetuned_mode_switches_adapters_for_sentiment_and_sarcasm(self):
+        config = ModelConfig(mode="finetuned")
+        model, _, _, fake_peft_model, _ = _build_finetuned_model_with_mocks(config=config)
+
+        with patch.object(model, "_extract_aspects", return_value=[]):
+            result = model.predict_single("The food was great", lang="en")
+
+        assert fake_peft_model.set_adapter_calls[:2] == ["sentiment", "sarcasm"]
+        assert result.sentiment == "positive"
+        assert result.sarcasm_flag is True
 
 
 # ── predict_batch ──────────────────────────────────────────────

@@ -1,5 +1,7 @@
 """Model configuration dataclass."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 from types import MappingProxyType
@@ -24,9 +26,13 @@ class ModelConfig:
     """
 
     model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+    mode: str = "baseline"
+    finetuned_model_name: str = "xlm-roberta-base"
+    sentiment_adapter_path: str = "models/adapters/sentiment"
+    sarcasm_adapter_path: str = "models/adapters/sarcasm"
     max_length: int = 512
     default_lang: str = "en"
-    supported_languages: tuple[str, ...] = ("en",)
+    supported_languages: tuple[str, ...] = ("en", "vi")
     label_map: Mapping[int, str] = field(
         default_factory=lambda: MappingProxyType(
             {

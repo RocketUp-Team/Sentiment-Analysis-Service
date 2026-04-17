@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import torch
+from peft import PeftModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers import pipeline as hf_pipeline
 
@@ -48,10 +49,28 @@ class BaselineModelInference(ModelInference):
     def _load_model(self) -> None:
         """Load tokenizer and model, then move the model to the target device."""
         try:
-            self._tokenizer = AutoTokenizer.from_pretrained(self._config.model_name)
-            self._model = AutoModelForSequenceClassification.from_pretrained(
-                self._config.model_name
-            ).to(self._device)
+            if self._config.mode == "finetuned":
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    self._config.finetuned_model_name
+                )
+                base_model = AutoModelForSequenceClassification.from_pretrained(
+                    self._config.finetuned_model_name,
+                    num_labels=len(self._config.label_map),
+                ).to(self._device)
+                self._model = PeftModel.from_pretrained(
+                    base_model,
+                    self._config.sentiment_adapter_path,
+                    adapter_name="sentiment",
+                )
+                self._model.load_adapter(
+                    self._config.sarcasm_adapter_path,
+                    adapter_name="sarcasm",
+                )
+            else:
+                self._tokenizer = AutoTokenizer.from_pretrained(self._config.model_name)
+                self._model = AutoModelForSequenceClassification.from_pretrained(
+                    self._config.model_name
+                ).to(self._device)
             self._model.eval()
         except Exception as exc:
             raise ModelError(f"Failed to load model: {exc}") from exc
@@ -72,9 +91,16 @@ class BaselineModelInference(ModelInference):
         return inputs
 
     def _predict_probabilities(
-        self, texts: str | list[str], *, padding: bool = False
+        self,
+        texts: str | list[str],
+        *,
+        padding: bool = False,
+        adapter_name: str | None = None,
     ) -> torch.Tensor:
         """Run the tokenizer/model stack and return class probabilities."""
+        if adapter_name is not None and hasattr(self._model, "set_adapter"):
+            self._model.set_adapter(adapter_name)
+
         tokenizer_kwargs = {
             "return_tensors": "pt",
             "truncation": True,
@@ -95,17 +121,26 @@ class BaselineModelInference(ModelInference):
 
         return torch.softmax(outputs.logits, dim=-1)
 
+    def _predict_sarcasm_flag(self, text: str) -> bool:
+        """Predict sarcasm from the dedicated finetuned adapter when available."""
+        if self._config.mode != "finetuned":
+            return False
+
+        probs = self._predict_probabilities(text, adapter_name="sarcasm")[0]
+        return bool(probs.argmax().item() == 1)
+
     def predict_single(self, text: str, lang: str = "en") -> PredictionResult:
         """Predict overall sentiment and extract aspect sentiment when available."""
         self._check_language(lang)
-        probs = self._predict_probabilities(text)[0]
+        adapter_name = "sentiment" if self._config.mode == "finetuned" else None
+        probs = self._predict_probabilities(text, adapter_name=adapter_name)[0]
         pred_idx = probs.argmax().item()
 
         return PredictionResult(
             sentiment=self._config.label_map[pred_idx],
             confidence=round(probs[pred_idx].item(), 4),
             aspects=self._extract_aspects(text),
-            sarcasm_flag=False,
+            sarcasm_flag=self._predict_sarcasm_flag(text),
         )
 
     def predict_batch(
@@ -149,7 +184,11 @@ class BaselineModelInference(ModelInference):
         all_probs: list[torch.Tensor] = []
         for i in range(0, len(texts), resolved_batch_size):
             chunk = texts[i : i + resolved_batch_size]
-            probs = self._predict_probabilities(chunk, padding=True)
+            probs = self._predict_probabilities(
+                chunk,
+                padding=True,
+                adapter_name="sentiment" if self._config.mode == "finetuned" else None,
+            )
             all_probs.append(probs)
 
             chunk_number = i // resolved_batch_size + 1
@@ -166,12 +205,13 @@ class BaselineModelInference(ModelInference):
         for idx in range(len(texts)):
             pred_idx = combined_probs[idx].argmax().item()
             aspects = [] if skip_absa else self._extract_aspects(texts[idx])
+            sarcasm_flag = self._predict_sarcasm_flag(texts[idx])
             results.append(
                 PredictionResult(
                     sentiment=self._config.label_map[pred_idx],
                     confidence=round(combined_probs[idx][pred_idx].item(), 4),
                     aspects=aspects,
-                    sarcasm_flag=False,
+                    sarcasm_flag=sarcasm_flag,
                 )
             )
 

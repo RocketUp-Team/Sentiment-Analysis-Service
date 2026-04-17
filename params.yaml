@@ -31,3 +31,36 @@ mlflow:
   tracking_uri: "http://localhost:5000"
   experiment_name: "data_preprocessing"
   model_experiment_name: "sentiment_baseline"
+
+training:
+  sarcasm:
+    dataset_version: "tweet_eval_irony_v1"
+    model_name: "xlm-roberta-base"
+    adapter_output_dir: "models/adapters/sarcasm"
+    learning_rate: 0.0002
+    epochs: 3
+    batch_size: 16
+    gradient_accumulation_steps: 2
+    max_length: 128
+    seed: 42
+  sentiment:
+    dataset_version: "multilingual_sentiment_v1"
+    model_name: "xlm-roberta-base"
+    adapter_output_dir: "models/adapters/sentiment"
+    learning_rate: 0.0002
+    epochs: 5
+    batch_size: 16
+    gradient_accumulation_steps: 2
+    max_length: 128
+    seed: 42
+
+evaluation:
+  mixed_lang_eval_path: "data/eval/mixed_lang_eval.csv"
+  vi_sarcasm_eval_path: "data/eval/vi_sarcasm_eval.csv"
+  metrics_output_path: "reports/metrics_finetuned.json"
+  per_language_output_path: "reports/per_language_f1.json"
+  fairness_output_path: "reports/fairness_report.json"
+
+adapters:
+  sentiment_path: "models/adapters/sentiment"
+  sarcasm_path: "models/adapters/sarcasm"

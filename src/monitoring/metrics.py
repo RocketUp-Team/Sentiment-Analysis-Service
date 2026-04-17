@@ -17,8 +17,14 @@ REQUEST_LATENCY = Histogram(
 
 MODEL_INFERENCE_LATENCY = Histogram(
     "model_inference_latency_seconds",
-    "Latency of model inference in seconds"
+    "Latency of model inference in seconds",
+    ["lang"],
 )
+
+
+def normalize_language_label(lang: str) -> str:
+    """Collapse free-form language codes into a low-cardinality allowlist."""
+    return lang if lang in {"en", "vi"} else "other"
 
 async def monitor_middleware(request: Request, call_next):
     start_time = time.time()

@@ -15,7 +15,7 @@ class AspectSentimentOut(BaseModel):
 
 class PredictRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
-    lang: str = "en"
+    lang: str | None = None
 
 
 class PredictResponse(BaseModel):
@@ -24,6 +24,8 @@ class PredictResponse(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     aspects: list[AspectSentimentOut] = Field(default_factory=list)
     sarcasm_flag: bool
+    detected_lang: str
+    lang_confidence: float = Field(ge=0.0, le=1.0)
     latency_ms: float
 
 

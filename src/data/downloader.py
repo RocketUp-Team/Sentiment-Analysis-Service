@@ -14,10 +14,52 @@ from src.data.utils import load_params
 
 EXPECTED_RAW_SENTENCE_COLUMNS = {"sentence_id", "text", "split"}
 EXPECTED_RAW_ASPECT_COLUMNS = {"sentence_id", "aspect_category", "sentiment"}
+_UIT_SENTIMENT_MAP = {
+    0: "negative",
+    1: "neutral",
+    2: "positive",
+}
 
 
 class SchemaError(Exception):
     """Raised when raw sentence/aspect frames do not match the expected schema."""
+
+
+def build_sarcasm_frame(split_frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Normalize loaded tweet-eval irony splits into a single training frame."""
+    rows: list[pd.DataFrame] = []
+    for split, frame in split_frames.items():
+        normalized = frame.loc[:, ["text", "label"]].copy()
+        normalized["lang"] = "en"
+        normalized["split"] = split
+        normalized["source"] = "tweet_eval_irony"
+        rows.append(normalized)
+
+    if not rows:
+        return pd.DataFrame(columns=["text", "label", "lang", "split", "source"])
+
+    return pd.concat(rows, ignore_index=True)
+
+
+def build_uit_vsfc_frame(
+    *,
+    sentences: list[str],
+    labels: list[int],
+    split: str,
+) -> pd.DataFrame:
+    """Normalize UIT-VSFC split files into the shared sentiment frame."""
+    if len(sentences) != len(labels):
+        raise ValueError("UIT-VSFC sentence and label counts must match")
+
+    return pd.DataFrame(
+        {
+            "text": sentences,
+            "label": [_UIT_SENTIMENT_MAP[label] for label in labels],
+            "lang": ["vi"] * len(labels),
+            "split": [split] * len(labels),
+            "source": ["uit_vsfc"] * len(labels),
+        }
+    )
 
 
 def validate_raw_schema(sentences_df: pd.DataFrame, aspects_df: pd.DataFrame) -> None:
