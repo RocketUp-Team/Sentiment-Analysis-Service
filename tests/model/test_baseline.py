@@ -884,3 +884,56 @@ class TestABSA:
                 assert aspect.aspect in ModelConfig().absa_categories
                 assert aspect.sentiment in ("positive", "negative", "neutral")
                 assert 0.0 <= aspect.confidence <= 1.0
+
+
+# ── ONNX Mode ──────────────────────────────────────────────────
+
+class TestONNXMode:
+    @patch("src.model.baseline.OnnxInferenceSession")
+    def test_onnx_mode_initialization(self, mock_onnx_cls):
+        config = ModelConfig(mode="onnx", onnx_model_path="fake/path")
+        
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=torch.device("cpu"))
+        
+        mock_onnx_cls.assert_called_once_with(
+            "fake/path", 
+            config.model_name, 
+            config.max_length
+        )
+        assert model._onnx_session is mock_onnx_cls.return_value
+
+    @patch("src.model.baseline.OnnxInferenceSession")
+    def test_onnx_predict_single(self, mock_onnx_cls):
+        import numpy as np
+        # Return fake probs: negative=0.1, neutral=0.2, positive=0.7
+        mock_onnx_cls.return_value.predict_probs.return_value = np.array([[0.1, 0.2, 0.7]])
+        
+        config = ModelConfig(mode="onnx")
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=torch.device("cpu"))
+        
+        with patch.object(model, "_extract_aspects", return_value=[]):
+            result = model.predict_single("test text")
+            
+        assert result.sentiment == "positive"
+        assert result.confidence == 0.7
+
+    @patch("src.model.baseline.OnnxInferenceSession")
+    def test_onnx_predict_batch(self, mock_onnx_cls):
+        import numpy as np
+        mock_onnx_cls.return_value.predict_probs.return_value = np.array([
+            [0.8, 0.1, 0.1], 
+            [0.1, 0.2, 0.7]
+        ])
+        
+        config = ModelConfig(mode="onnx_int8")
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=torch.device("cpu"))
+        
+        results = model.predict_batch(["bad text", "good text"], skip_absa=True)
+        assert len(results) == 2
+        assert results[0].sentiment == "negative"
+        assert results[0].confidence == 0.8
+        assert results[1].sentiment == "positive"
+        assert results[1].confidence == 0.7

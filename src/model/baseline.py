@@ -17,6 +17,7 @@ from contracts.model_interface import (
 )
 from src.model.config import ModelConfig
 from src.model.device import get_device
+from src.model.onnx_inference import OnnxInferenceSession
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,7 @@ class BaselineModelInference(ModelInference):
         self._tokenizer = None
         self._hf_pipeline = None
         self._absa_pipeline = None
+        self._onnx_session = None
         self._load_model()
 
     def preload(self) -> None:
@@ -49,7 +51,18 @@ class BaselineModelInference(ModelInference):
     def _load_model(self) -> None:
         """Load tokenizer and model, then move the model to the target device."""
         try:
-            if self._config.mode == "finetuned":
+            if self._config.mode.startswith("onnx"):
+                path = (
+                    self._config.onnx_int8_model_path
+                    if self._config.mode == "onnx_int8"
+                    else self._config.onnx_model_path
+                )
+                self._onnx_session = OnnxInferenceSession(
+                    path,
+                    self._config.model_name,
+                    self._config.max_length,
+                )
+            elif self._config.mode == "finetuned":
                 self._tokenizer = AutoTokenizer.from_pretrained(
                     self._config.finetuned_model_name
                 )
@@ -71,7 +84,9 @@ class BaselineModelInference(ModelInference):
                 self._model = AutoModelForSequenceClassification.from_pretrained(
                     self._config.model_name
                 ).to(self._device)
-            self._model.eval()
+                
+            if self._model is not None:
+                self._model.eval()
         except Exception as exc:
             raise ModelError(f"Failed to load model: {exc}") from exc
 
@@ -98,6 +113,11 @@ class BaselineModelInference(ModelInference):
         adapter_name: str | None = None,
     ) -> torch.Tensor:
         """Run the tokenizer/model stack and return class probabilities."""
+        if self._onnx_session is not None:
+            texts_list = [texts] if isinstance(texts, str) else texts
+            probs = self._onnx_session.predict_probs(texts_list)
+            return torch.from_numpy(probs)
+
         if adapter_name is not None and hasattr(self._model, "set_adapter"):
             self._model.set_adapter(adapter_name)
 
@@ -324,7 +344,7 @@ class BaselineModelInference(ModelInference):
 
     @property
     def is_loaded(self) -> bool:
-        return self._model is not None
+        return self._model is not None or self._onnx_session is not None
 
     @property
     def device(self) -> torch.device:
