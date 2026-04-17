@@ -10,7 +10,6 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pandas as pd
-from datasets import load_dataset
 
 from src.data.utils import load_params
 
@@ -35,6 +34,12 @@ _UIT_VSFC_FILES = {
 
 class SchemaError(Exception):
     """Raised when raw sentence/aspect frames do not match the expected schema."""
+
+
+def _load_hf_dataset(*args, **kwargs):
+    from datasets import load_dataset
+
+    return load_dataset(*args, **kwargs)
 
 
 def build_sarcasm_frame(split_frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -77,11 +82,11 @@ def build_uit_vsfc_frame(
 def download_sarcasm_dataset(out_path: Path) -> None:
     """Download the tweet_eval irony training split and persist it as CSV."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    dataset = load_dataset("tweet_eval", "irony")
-    df = dataset["train"].to_pandas()
-    df["lang"] = "en"
-    df["source"] = "tweet_eval_irony"
-    df.to_csv(out_path, index=False)
+    dataset = _load_hf_dataset("tweet_eval", "irony")
+    df = build_sarcasm_frame(
+        {split: split_dataset.to_pandas() for split, split_dataset in dataset.items()}
+    )
+    df[["text", "label", "lang", "split", "source"]].to_csv(out_path, index=False)
     print(f"Saved sarcasm dataset to {out_path}")
 
 
@@ -90,13 +95,19 @@ def download_sentiment_datasets(en_out_path: Path, vi_out_path: Path) -> None:
     en_out_path.parent.mkdir(parents=True, exist_ok=True)
     vi_out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    en_ds = load_dataset("parquet", data_files=_MULTILINGUAL_SENTIMENTS_EN_FILES)
-    en_df = en_ds["train"].to_pandas()
-    en_df["lang"] = "en"
-    en_df["source"] = "multilingual_sentiments"
-    en_df[["text", "label", "lang", "source"]].to_csv(en_out_path, index=False)
+    en_ds = _load_hf_dataset("parquet", data_files=_MULTILINGUAL_SENTIMENTS_EN_FILES)
+    en_frames: list[pd.DataFrame] = []
+    for split, split_ds in en_ds.items():
+        split_df = split_ds.to_pandas().loc[:, ["text", "label"]].copy()
+        split_df["lang"] = "en"
+        split_df["source"] = "multilingual_sentiments"
+        split_df["split"] = split
+        en_frames.append(split_df)
 
-    vi_ds = load_dataset("parquet", data_files=_UIT_VSFC_FILES)
+    en_df = pd.concat(en_frames, ignore_index=True)
+    en_df[["text", "label", "lang", "source", "split"]].to_csv(en_out_path, index=False)
+
+    vi_ds = _load_hf_dataset("parquet", data_files=_UIT_VSFC_FILES)
     vi_frames: list[pd.DataFrame] = []
     for split, split_ds in vi_ds.items():
         split_df = split_ds.to_pandas()

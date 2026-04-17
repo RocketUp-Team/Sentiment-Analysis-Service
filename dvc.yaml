@@ -61,7 +61,6 @@ stages:
     cmd: python3 -m src.data.downloader --task sentiment
     deps:
       - src/data/downloader.py
-      - data/external/semeval2014/
     params:
       - training.sentiment
       - sentiment_derivation
