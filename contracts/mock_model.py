@@ -57,7 +57,14 @@ class MockModelInference(ModelInference):
         self._check_language(lang)
         return self._random_prediction()
 
-    def predict_batch(self, texts: list[str], lang: str = "en") -> list[PredictionResult]:
+    def predict_batch(
+        self,
+        texts: list[str],
+        lang: str = "en",
+        *,
+        batch_size: int | None = None,
+        skip_absa: bool = False,
+    ) -> list[PredictionResult]:
         self._check_language(lang)
         return [self._random_prediction() for _ in texts]
 
