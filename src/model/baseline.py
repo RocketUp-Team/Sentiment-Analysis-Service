@@ -177,7 +177,6 @@ class BaselineModelInference(ModelInference):
 
         return results
 
-
     @property
     def _pipeline_device(self):
         """Map the torch device to the format expected by HuggingFace pipelines."""

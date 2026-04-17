@@ -449,6 +449,12 @@ class TestPredictBatch:
         with pytest.raises(ValueError, match="batch_size must be positive"):
             model.predict_batch(["text"], batch_size=0)
 
+    def test_negative_batch_size_raises(self):
+        """batch_size=-1 → ValueError."""
+        model, _, _ = _build_model_with_mocks()
+        with pytest.raises(ValueError, match="batch_size must be positive"):
+            model.predict_batch(["text"], batch_size=-1)
+
     def test_batch_size_larger_than_input(self):
         """5 texts with batch_size=32 → single chunk, 5 results."""
         from unittest.mock import MagicMock
