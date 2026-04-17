@@ -36,7 +36,7 @@
 
 - Modify: `requirements.txt`
 
-- [ ] **Step 1: Add model dependencies to requirements.txt**
+- [x] **Step 1: Add model dependencies to requirements.txt**
 
 Add these lines to the end of `requirements.txt` (before the trailing blank line):
 
@@ -49,7 +49,7 @@ matplotlib>=3.7.0
 
 > `mlflow` is already present (`mlflow>=2.0,<3.0`). `scikit-learn` is already present. `pandas` is already present.
 
-- [ ] **Step 2: Install dependencies**
+- [x] **Step 2: Install dependencies**
 
 Run:
 
@@ -59,7 +59,7 @@ Run:
 
 Expected: all packages install successfully. torch ~2GB download, transformers ~few hundred MB.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add requirements.txt
@@ -77,7 +77,7 @@ git commit -m "chore: add torch, transformers, shap, matplotlib deps"
 - Create: `tests/model/__init__.py`
 - Create: `tests/model/test_device.py`
 
-- [ ] **Step 1: Write failing tests for `get_device()`**
+- [x] **Step 1: Write failing tests for `get_device()`**
 
 Create `tests/model/__init__.py`:
 
@@ -134,7 +134,7 @@ class TestGetDevice:
         assert device == torch.device("cpu")
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -144,7 +144,7 @@ Run:
 
 Expected: FAIL — `ModuleNotFoundError: No module named 'src.model'`
 
-- [ ] **Step 3: Implement `device.py` and `__init__.py`**
+- [x] **Step 3: Implement `device.py` and `__init__.py`**
 
 Create `src/model/__init__.py`:
 
@@ -178,7 +178,7 @@ def get_device() -> torch.device:
     return torch.device("cpu")
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run:
 
@@ -188,7 +188,7 @@ Run:
 
 Expected: 5 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/model/__init__.py src/model/device.py tests/model/__init__.py tests/model/test_device.py
@@ -204,7 +204,7 @@ git commit -m "feat(model): add device auto-detection module"
 - Create: `src/model/config.py`
 - Create: `tests/model/test_config.py`
 
-- [ ] **Step 1: Write failing tests for `ModelConfig`**
+- [x] **Step 1: Write failing tests for `ModelConfig`**
 
 Create `tests/model/test_config.py`:
 
@@ -258,7 +258,7 @@ class TestModelConfig:
         assert set(config.label_map.values()) == project_labels
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -268,7 +268,7 @@ Run:
 
 Expected: FAIL — `ModuleNotFoundError: No module named 'src.model.config'`
 
-- [ ] **Step 3: Implement `config.py`**
+- [x] **Step 3: Implement `config.py`**
 
 Create `src/model/config.py`:
 
@@ -303,7 +303,7 @@ class ModelConfig:
     )
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run:
 
@@ -313,7 +313,7 @@ Run:
 
 Expected: 8 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/model/config.py tests/model/test_config.py
@@ -330,7 +330,7 @@ git commit -m "feat(model): add ModelConfig dataclass"
 - Create: `tests/model/test_baseline.py`
 - Modify: `src/model/__init__.py`
 
-- [ ] **Step 1: Write failing tests for `BaselineModelInference`**
+- [x] **Step 1: Write failing tests for `BaselineModelInference`**
 
 Create `tests/model/test_baseline.py`:
 
@@ -533,7 +533,7 @@ class TestErrorHandling:
                 )
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run:
 
@@ -543,7 +543,7 @@ Run:
 
 Expected: FAIL — `ModuleNotFoundError: No module named 'src.model.baseline'`
 
-- [ ] **Step 3: Implement `baseline.py`**
+- [x] **Step 3: Implement `baseline.py`**
 
 Create `src/model/baseline.py`:
 
@@ -713,7 +713,7 @@ class BaselineModelInference(ModelInference):
         )
 ```
 
-- [ ] **Step 4: Update `src/model/__init__.py` to export `BaselineModelInference`**
+- [x] **Step 4: Update `src/model/__init__.py` to export `BaselineModelInference`**
 
 Replace `src/model/__init__.py` with:
 
@@ -727,7 +727,7 @@ from src.model.device import get_device
 __all__ = ["BaselineModelInference", "ModelConfig", "get_device"]
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run:
 
@@ -737,7 +737,7 @@ Run:
 
 Expected: 16 passed
 
-- [ ] **Step 6: Run all model tests together**
+- [x] **Step 6: Run all model tests together**
 
 Run:
 
@@ -747,7 +747,7 @@ Run:
 
 Expected: all tests pass (device + config + baseline)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/model/baseline.py src/model/__init__.py tests/model/test_baseline.py
@@ -764,7 +764,7 @@ git commit -m "feat(model): add BaselineModelInference with mocked tests"
 - Create: `tests/model/test_evaluate.py`
 - Modify: `params.yaml`
 
-- [ ] **Step 1: Add `model_experiment_name` to `params.yaml`**
+- [x] **Step 1: Add `model_experiment_name` to `params.yaml`**
 
 Add the `model_experiment_name` key under the existing `mlflow` section in `params.yaml`. The `mlflow` section (lines 29-31) should become:
 
@@ -775,7 +775,7 @@ mlflow:
   model_experiment_name: "sentiment_baseline"
 ```
 
-- [ ] **Step 2: Write failing tests for `evaluate_on_dataset`**
+- [x] **Step 2: Write failing tests for `evaluate_on_dataset`**
 
 Create `tests/model/test_evaluate.py`:
 
@@ -991,7 +991,7 @@ class TestLogToMlflow:
         mock_mlflow.set_experiment.assert_called_once_with("sentiment_baseline")
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run:
 
@@ -1001,7 +1001,7 @@ Run:
 
 Expected: FAIL — `ModuleNotFoundError: No module named 'src.model.evaluate'`
 
-- [ ] **Step 4: Implement `evaluate.py`**
+- [x] **Step 4: Implement `evaluate.py`**
 
 Create `src/model/evaluate.py`:
 
@@ -1201,7 +1201,7 @@ if __name__ == "__main__":
         logger.error(f"Evaluation failed: {metrics.get('error')}")
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run:
 
@@ -1211,7 +1211,7 @@ Run:
 
 Expected: 8 passed
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/model/evaluate.py tests/model/test_evaluate.py params.yaml
@@ -1226,13 +1226,13 @@ git commit -m "feat(model): add evaluation functions with MLflow logging"
 
 - Modify: `dvc.yaml`
 
-- [ ] **Step 1: Add `evaluate_baseline` stage to `dvc.yaml`**
+- [x] **Step 1: Add `evaluate_baseline` stage to `dvc.yaml`**
 
 Append this stage at the end of `dvc.yaml` (after the `validate` stage, which ends at line 33):
 
 ```yaml
 evaluate_baseline:
-  cmd: python -m src.model.evaluate
+  cmd: python3 -m src.model.evaluate
   deps:
     - src/model/
     - data/processed/sentences.csv
@@ -1244,7 +1244,7 @@ evaluate_baseline:
         cache: false
 ```
 
-- [ ] **Step 2: Verify DVC recognizes the new stage**
+- [x] **Step 2: Verify DVC recognizes the new stage**
 
 Run:
 
@@ -1254,7 +1254,7 @@ dvc dag
 
 Expected: Output shows `evaluate_baseline` stage depending on `data/processed/sentences.csv` (which depends on upstream `preprocess` stage).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add dvc.yaml
@@ -1269,7 +1269,7 @@ git commit -m "chore: add evaluate_baseline DVC stage"
 
 - All test files in `tests/model/`
 
-- [ ] **Step 1: Run full model test suite with coverage**
+- [x] **Step 1: Run full model test suite with coverage**
 
 Run:
 
@@ -1281,7 +1281,7 @@ Expected: All tests pass, ≥ 80% line coverage for `src/model/`.
 
 > Note: `evaluate.py`'s `if __name__ == "__main__"` block won't be covered by unit tests — this is expected.
 
-- [ ] **Step 2: Run entire project test suite**
+- [x] **Step 2: Run entire project test suite**
 
 Run:
 
@@ -1291,7 +1291,7 @@ Run:
 
 Expected: All existing tests still pass — no regressions.
 
-- [ ] **Step 3: Commit any remaining changes**
+- [x] **Step 3: Commit any remaining changes**
 
 ```bash
 git add tests/model/ src/model/
@@ -1308,7 +1308,7 @@ git commit -m "test(model): verify full model test suite passes"
 
 - None (manual verification)
 
-- [ ] **Step 1: Start MLflow tracking server**
+- [ ] **Step 1: Start MLflow tracking server** *(not run in this session — use local `mlflow server` if you need UI)*
 
 Run (in a separate terminal):
 
@@ -1316,7 +1316,7 @@ Run (in a separate terminal):
 mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlflow.db
 ```
 
-- [ ] **Step 2: Run the evaluation CLI**
+- [x] **Step 2: Run the evaluation CLI**
 
 Run:
 
@@ -1341,7 +1341,7 @@ Recall:    0.XXXX
 
 F1 Macro should be in the **0.55–0.70** range (zero-shot on restaurant domain).
 
-- [ ] **Step 3: Verify MLflow UI**
+- [ ] **Step 3: Verify MLflow UI** *(evaluation CLI succeeded; remote tracking URI returned HTTP 403 — verify after pointing `mlflow.tracking_uri` at a reachable server)*
 
 Open `http://localhost:5000` in browser. Check:
 
@@ -1351,7 +1351,7 @@ Open `http://localhost:5000` in browser. Check:
 - Metrics logged: accuracy, f1_macro, precision_macro, recall_macro, mean_confidence, n_samples, f1_positive, f1_negative, f1_neutral
 - Artifacts: confusion_matrix PNG, classification_report TXT
 
-- [ ] **Step 4: Commit DVC lock file if evaluation stage was run via DVC**
+- [x] **Step 4: Commit DVC lock file if evaluation stage was run via DVC**
 
 ```bash
 git add dvc.lock

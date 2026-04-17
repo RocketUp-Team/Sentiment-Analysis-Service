@@ -67,6 +67,15 @@ scenarios = [
     }
 ]
 
+# Real-model connectivity check only (no aspect assertions). Use:
+#   ABSA_SCENARIOS_SMOKE=1 python tests/test_absa_scenarios.py
+INFRA_SMOKE_SCENARIO = {
+    "category": "0. Infrastructure smoke",
+    "text": "The food was great and the ambiance was pleasant.",
+    "expected": "Load model + run predict_single (expectations not asserted)",
+    "expected_aspects": {},
+}
+
 def evaluate_result(result, expected_aspects):
     if not expected_aspects:
         return True, "No specific aspect expectations."
@@ -98,14 +107,36 @@ def evaluate_result(result, expected_aspects):
         return False, " | ".join(errors)
     return True, "Passed"
 
+
+def _scenarios_to_run():
+    """Full list by default.
+
+    - ABSA_SCENARIOS_SMOKE=1: run a single no-assert scenario (real HF load + inference).
+    - ABSA_SCENARIOS_MAX=N: run only the first N scenarios from the full list.
+    """
+    if os.environ.get("ABSA_SCENARIOS_SMOKE", "").strip().lower() in ("1", "true", "yes"):
+        return [INFRA_SMOKE_SCENARIO]
+    raw = os.environ.get("ABSA_SCENARIOS_MAX", "").strip()
+    if not raw:
+        return scenarios
+    try:
+        n = int(raw)
+    except ValueError:
+        return scenarios
+    if n <= 0:
+        return scenarios
+    return scenarios[:n]
+
+
 def main():
+    to_run = _scenarios_to_run()
     print("⏳ Đang nạp mô hình...")
     model = BaselineModelInference()
     print("✅ Load model thành công. Bắt đầu test kịch bản...\n")
 
     passed_count = 0
 
-    for i, item in enumerate(scenarios, 1):
+    for i, item in enumerate(to_run, 1):
         print("="*80)
         print(f"[{item['category']}] Kịch bản #{i}")
         print(f"📝 Text: \"{item['text']}\"")
@@ -139,7 +170,7 @@ def main():
             
         print("="*80 + "\n")
 
-    print(f"\n🎉 ĐÃ HOÀN THÀNH TOÀN BỘ KỊCH BẢN TEST! ({passed_count}/{len(scenarios)} PASS)")
+    print(f"\n🎉 ĐÃ HOÀN THÀNH TOÀN BỘ KỊCH BẢN TEST! ({passed_count}/{len(to_run)} PASS)")
 
 if __name__ == "__main__":
     main()

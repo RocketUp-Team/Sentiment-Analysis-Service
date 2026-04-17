@@ -1,2 +1,5 @@
 /raw
 /processed
+
+# SemEval-2014 restaurant XML — obtain separately and place here for the download pipeline.
+/external/semeval2014/*.xml

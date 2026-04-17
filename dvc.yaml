@@ -1,6 +1,6 @@
 stages:
   download:
-    cmd: python -m src.data.downloader
+    cmd: python3 -m src.data.downloader
     deps:
       - src/data/downloader.py
       - data/external/semeval2014/
@@ -11,7 +11,7 @@ stages:
       - data/raw/
 
   preprocess:
-    cmd: python -m src.data.pipeline
+    cmd: python3 -m src.data.pipeline
     deps:
       - src/data/pipeline.py
       - data/raw/
@@ -26,7 +26,7 @@ stages:
       - data/processed/
 
   validate:
-    cmd: python -m src.data.validators
+    cmd: python3 -m src.data.validators
     deps:
       - src/data/validators.py
       - data/processed/
@@ -37,7 +37,7 @@ stages:
           cache: false
 
   evaluate_baseline:
-    cmd: python -m src.model.evaluate
+    cmd: python3 -m src.model.evaluate
     deps:
       - src/model/
       - data/processed/sentences.csv
