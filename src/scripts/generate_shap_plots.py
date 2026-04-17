@@ -56,3 +56,50 @@ def generate_plot_for_text(
 
     logger.info("Saved SHAP plot to %s", output_path)
     return output_path
+
+from src.model.config import ModelConfig
+
+def parse_args(args: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate SHAP plots for given texts.")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("reports/shap_plots"),
+        help="Directory to save the plots",
+    )
+    parser.add_argument(
+        "--texts",
+        nargs="+",
+        default=[
+            "The food was incredibly delicious, but the service was terrible and slow.",
+            "I absolutely love this new feature!",
+            "Honestly, this is the worst experience I've ever had."
+        ],
+        help="List of texts to generate plots for",
+    )
+    return parser.parse_args(args)
+
+def main(args: list[str] | None = None) -> int:
+    logging.basicConfig(level=logging.INFO)
+    parsed_args = parse_args(args)
+    
+    logger.info("Initializing model for SHAP explanations...")
+    config = ModelConfig()
+    model = BaselineModelInference(config=config)
+    model.preload()
+    
+    for i, text in enumerate(parsed_args.texts):
+        logger.info("Processing text %d/%d...", i + 1, len(parsed_args.texts))
+        generate_plot_for_text(
+            text=text,
+            model=model,
+            output_dir=parsed_args.output_dir,
+            file_prefix=f"sample_{i+1}"
+        )
+        
+    logger.info("Finished generating all plots in %s", parsed_args.output_dir)
+    return 0
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())
