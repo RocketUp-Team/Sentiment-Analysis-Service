@@ -130,3 +130,24 @@ stages:
           cache: false
       - reports/fairness_report.json:
           cache: false
+
+  export_onnx:
+    cmd: python3 -m src.scripts.export_onnx --adapter-name sentiment
+    deps:
+      - src/scripts/export_onnx.py
+      - src/model/onnx_exporter.py
+      - models/adapters/sentiment
+    outs:
+      - models/onnx/sentiment_fp32
+      - models/onnx/sentiment_int8
+
+  benchmark_onnx:
+    cmd: python3 -m src.scripts.benchmark_onnx --samples 1000 --batch-size 32 --output reports/onnx_benchmark.json
+    deps:
+      - src/scripts/benchmark_onnx.py
+      - src/model/baseline.py
+      - models/onnx/sentiment_fp32
+      - models/onnx/sentiment_int8
+    metrics:
+      - reports/onnx_benchmark.json:
+          cache: false
