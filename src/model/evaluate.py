@@ -45,7 +45,6 @@ def evaluate_on_dataset(
     model: ModelInference,
     sentences_df: pd.DataFrame,
     split: str = "test",
-    batch_size: int = 32,
 ) -> dict:
     """Evaluate a model on a named dataset split."""
     split_df = sentences_df[sentences_df["split"] == split].copy()
@@ -59,13 +58,9 @@ def evaluate_on_dataset(
     texts = split_df["text"].astype(str).tolist()
     true_labels = split_df["sentiment"].astype(str).tolist()
 
-    predictions = []
-    confidences = []
-    for start in range(0, len(texts), batch_size):
-        batch_texts = texts[start : start + batch_size]
-        batch_results = model.predict_batch(batch_texts)
-        predictions.extend(result.sentiment for result in batch_results)
-        confidences.extend(float(result.confidence) for result in batch_results)
+    batch_results = model.predict_batch(texts, skip_absa=True)
+    predictions = [result.sentiment for result in batch_results]
+    confidences = [float(result.confidence) for result in batch_results]
 
     if len(predictions) != len(true_labels):
         raise ValueError(
