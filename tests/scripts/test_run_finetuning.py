@@ -1,3 +1,11 @@
+from __future__ import annotations
+
+from contextlib import nullcontext
+from pathlib import Path
+
+import pandas as pd
+
+from src.scripts import run_finetuning
 from src.scripts.run_finetuning import parse_args
 from src.training.mlflow_callback import REQUIRED_TAGS, build_run_tags, resolve_tracking_uri
 
@@ -36,3 +44,284 @@ def test_build_run_tags_contains_required_schema():
         "user",
     ]
     assert set(REQUIRED_TAGS).issubset(tags)
+
+
+class FakeSplitDataset:
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+        self.split_args: dict | None = None
+        self.map_calls: list[dict] = []
+        self.train = [{"split": "train"}]
+        self.test = [{"split": "test"}]
+
+    def train_test_split(self, test_size: float, seed: int) -> "FakeSplitDataset":
+        self.split_args = {"test_size": test_size, "seed": seed}
+        return self
+
+    def map(self, func, batched: bool):
+        self.map_calls.append({"batched": batched})
+        func({"text": [row["text"] for row in self.rows]})
+        return {"train": self.train, "test": self.test}
+
+
+class FakeDatasetFactory:
+    def __init__(self) -> None:
+        self.rows: list[dict] | None = None
+        self.dataset: FakeSplitDataset | None = None
+
+    def from_list(self, rows: list[dict]) -> FakeSplitDataset:
+        self.rows = rows
+        self.dataset = FakeSplitDataset(rows)
+        return self.dataset
+
+
+class FakeTokenizer:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def __call__(self, texts, truncation: bool, max_length: int):
+        self.calls.append(
+            {
+                "texts": list(texts),
+                "truncation": truncation,
+                "max_length": max_length,
+            }
+        )
+        return {
+            "input_ids": [[101] for _ in texts],
+            "attention_mask": [[1] for _ in texts],
+        }
+
+
+class FakeAutoTokenizer:
+    def __init__(self, tokenizer: FakeTokenizer) -> None:
+        self.tokenizer = tokenizer
+        self.model_name: str | None = None
+
+    def from_pretrained(self, model_name: str) -> FakeTokenizer:
+        self.model_name = model_name
+        return self.tokenizer
+
+
+class FakeAutoModelForSequenceClassification:
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def from_pretrained(self, model_name: str, num_labels: int):
+        call = {"model_name": model_name, "num_labels": num_labels}
+        self.calls.append(call)
+        return call
+
+
+class FakePeftModel:
+    def __init__(self, base_model) -> None:
+        self.base_model = base_model
+        self.print_trainable_parameters_called = False
+        self.saved_paths: list[str] = []
+
+    def print_trainable_parameters(self) -> None:
+        self.print_trainable_parameters_called = True
+
+    def save_pretrained(self, path: str) -> None:
+        self.saved_paths.append(path)
+
+
+class FakeTrainer:
+    instances: list["FakeTrainer"] = []
+
+    def __init__(self, **kwargs) -> None:
+        self.kwargs = kwargs
+        self.train_calls = 0
+        type(self).instances.append(self)
+
+    def train(self) -> None:
+        self.train_calls += 1
+
+
+class FakeTrainingArguments:
+    instances: list["FakeTrainingArguments"] = []
+
+    def __init__(self, **kwargs) -> None:
+        assert "eval_strategy" in kwargs
+        assert "evaluation_strategy" not in kwargs
+        self.kwargs = kwargs
+        type(self).instances.append(self)
+
+
+class FakeMlflow:
+    def __init__(self) -> None:
+        self.tracking_uris: list[str] = []
+        self.experiments: list[str] = []
+        self.tags: list[dict] = []
+        self.start_run_calls = 0
+
+    def set_tracking_uri(self, uri: str) -> None:
+        self.tracking_uris.append(uri)
+
+    def set_experiment(self, experiment_name: str) -> None:
+        self.experiments.append(experiment_name)
+
+    def set_tags(self, tags: dict) -> None:
+        self.tags.append(tags)
+
+    def start_run(self):
+        self.start_run_calls += 1
+        return nullcontext()
+
+
+def _build_rows(count: int, label: str | int, lang: str = "en") -> list[dict]:
+    return [
+        {"text": f"text-{idx}", "label": label, "lang": lang}
+        for idx in range(count)
+    ]
+
+
+def _install_training_fakes(monkeypatch, read_csv_tables: dict[str, pd.DataFrame]):
+    dataset_factory = FakeDatasetFactory()
+    tokenizer = FakeTokenizer()
+    auto_tokenizer = FakeAutoTokenizer(tokenizer)
+    auto_model = FakeAutoModelForSequenceClassification()
+    fake_peft_model: dict[str, FakePeftModel] = {}
+    fake_mlflow = FakeMlflow()
+    dedup_inputs: list[list[dict]] = []
+    collator_calls: list[FakeTokenizer] = []
+    lora_calls: list[str] = []
+
+    def fake_read_csv(path):
+        return read_csv_tables[Path(path).name].copy()
+
+    def fake_dedup_rows(rows: list[dict]) -> list[dict]:
+        dedup_inputs.append(rows)
+        return rows
+
+    def fake_data_collator_with_padding(*, tokenizer):
+        collator_calls.append(tokenizer)
+        return {"tokenizer": tokenizer}
+
+    def fake_build_lora_config(task):
+        lora_calls.append(task.name)
+        return {"task": task.name}
+
+    def fake_get_peft_model(model, lora_config):
+        peft_model = FakePeftModel(model)
+        fake_peft_model["model"] = peft_model
+        fake_peft_model["lora_config"] = lora_config
+        return peft_model
+
+    monkeypatch.setattr(run_finetuning.pd, "read_csv", fake_read_csv)
+    monkeypatch.setattr(run_finetuning, "dedup_rows", fake_dedup_rows)
+    monkeypatch.setattr(run_finetuning, "Dataset", dataset_factory)
+    monkeypatch.setattr(run_finetuning, "AutoTokenizer", auto_tokenizer)
+    monkeypatch.setattr(run_finetuning, "AutoModelForSequenceClassification", auto_model)
+    monkeypatch.setattr(run_finetuning, "DataCollatorWithPadding", fake_data_collator_with_padding)
+    monkeypatch.setattr(run_finetuning, "TrainingArguments", FakeTrainingArguments)
+    monkeypatch.setattr(run_finetuning, "Trainer", FakeTrainer)
+    monkeypatch.setattr(run_finetuning, "build_lora_config", fake_build_lora_config)
+    monkeypatch.setattr(run_finetuning, "get_peft_model", fake_get_peft_model)
+    monkeypatch.setattr(run_finetuning, "mlflow", fake_mlflow)
+    monkeypatch.setattr(run_finetuning, "_git_sha", lambda: "abc1234")
+    monkeypatch.setattr(run_finetuning.getpass, "getuser", lambda: "tester")
+
+    FakeTrainer.instances = []
+    FakeTrainingArguments.instances = []
+
+    return {
+        "dataset_factory": dataset_factory,
+        "tokenizer": tokenizer,
+        "auto_tokenizer": auto_tokenizer,
+        "auto_model": auto_model,
+        "peft_model": fake_peft_model,
+        "mlflow": fake_mlflow,
+        "dedup_inputs": dedup_inputs,
+        "collator_calls": collator_calls,
+        "lora_calls": lora_calls,
+    }
+
+
+def test_main_smoke_runs_short_trainer_loop_without_mlflow_run(monkeypatch):
+    tables = {
+        "sarcasm.csv": pd.DataFrame(_build_rows(40, "1")),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    result = run_finetuning.main(["--task", "sarcasm", "--smoke"])
+
+    assert result == 0
+    assert len(fakes["dedup_inputs"]) == 1
+    assert len(fakes["dedup_inputs"][0]) == 32
+    assert {type(row["label"]) for row in fakes["dedup_inputs"][0]} == {int}
+    assert fakes["dataset_factory"].dataset.split_args == {"test_size": 0.1, "seed": 42}
+    assert fakes["auto_tokenizer"].model_name == "xlm-roberta-base"
+    assert fakes["tokenizer"].calls == [
+        {
+            "texts": [f"text-{idx}" for idx in range(32)],
+            "truncation": True,
+            "max_length": 128,
+        }
+    ]
+    assert fakes["auto_model"].calls == [
+        {"model_name": "xlm-roberta-base", "num_labels": 2}
+    ]
+    assert fakes["lora_calls"] == ["sarcasm"]
+    assert fakes["peft_model"]["lora_config"] == {"task": "sarcasm"}
+    assert fakes["peft_model"]["model"].print_trainable_parameters_called is True
+    assert FakeTrainingArguments.instances[0].kwargs["num_train_epochs"] == 1
+    assert FakeTrainingArguments.instances[0].kwargs["report_to"] == "none"
+    assert FakeTrainingArguments.instances[0].kwargs["eval_strategy"] == "epoch"
+    assert FakeTrainingArguments.instances[0].kwargs["save_strategy"] == "epoch"
+    assert FakeTrainer.instances[0].train_calls == 1
+    assert FakeTrainer.instances[0].kwargs["train_dataset"] == [{"split": "train"}]
+    assert FakeTrainer.instances[0].kwargs["eval_dataset"] == [{"split": "test"}]
+    assert FakeTrainer.instances[0].kwargs["processing_class"] is fakes["tokenizer"]
+    assert fakes["peft_model"]["model"].saved_paths == [
+        str(Path(run_finetuning.__file__).resolve().parents[2] / "models" / "adapters" / "sarcasm")
+    ]
+    assert fakes["mlflow"].tracking_uris == ["file:./mlruns"]
+    assert fakes["mlflow"].experiments == ["phase2_finetuning_sarcasm"]
+    assert fakes["mlflow"].start_run_calls == 0
+    assert fakes["mlflow"].tags == []
+
+
+def test_main_full_sentiment_training_uses_mlflow_and_label_mapping(monkeypatch):
+    tables = {
+        "sentiment_en.csv": pd.DataFrame(
+            [
+                {"text": "bad", "label": "negative", "lang": "en"},
+                {"text": "fine", "label": "neutral", "lang": "en"},
+            ]
+        ),
+        "sentiment_vi.csv": pd.DataFrame(
+            [
+                {"text": "tot", "label": "positive", "lang": "vi"},
+            ]
+        ),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    result = run_finetuning.main(
+        ["--task", "sentiment", "--tracking-uri", "http://mlflow.local"]
+    )
+
+    assert result == 0
+    assert len(fakes["dedup_inputs"]) == 1
+    assert [row["label"] for row in fakes["dedup_inputs"][0]] == [0, 1, 2]
+    assert fakes["auto_model"].calls == [
+        {"model_name": "xlm-roberta-base", "num_labels": 3}
+    ]
+    assert FakeTrainingArguments.instances[0].kwargs["num_train_epochs"] == 5
+    assert FakeTrainingArguments.instances[0].kwargs["report_to"] == ["mlflow"]
+    assert FakeTrainer.instances[0].train_calls == 1
+    assert fakes["mlflow"].tracking_uris == ["http://mlflow.local"]
+    assert fakes["mlflow"].experiments == ["phase2_finetuning_sentiment"]
+    assert fakes["mlflow"].start_run_calls == 1
+    assert fakes["mlflow"].tags == [
+        {
+            "task": "sentiment",
+            "git_sha": "abc1234",
+            "device": "cpu",
+            "environment": "local",
+            "dataset_version": "multilingual_sentiment_v1",
+            "seed": "42",
+            "user": "tester",
+        }
+    ]
