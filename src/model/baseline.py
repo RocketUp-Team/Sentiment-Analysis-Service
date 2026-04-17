@@ -126,7 +126,7 @@ class BaselineModelInference(ModelInference):
         if self._config.mode != "finetuned":
             return False
 
-        probs = self._predict_probabilities(text, adapter_name="sarcasm")[0]
+        probs = self._predict_probabilities(text, adapter_name="sarcasm")[0][:2]
         return bool(probs.argmax().item() == 1)
 
     def predict_single(self, text: str, lang: str = "en") -> PredictionResult:

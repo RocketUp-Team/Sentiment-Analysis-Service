@@ -4,9 +4,12 @@ from contextlib import nullcontext
 from pathlib import Path
 
 import pandas as pd
+import pytest
+from transformers import TrainingArguments
 
 from src.scripts import run_finetuning
 from src.scripts.run_finetuning import parse_args
+from src.training.task_configs import get_task_config
 from src.training.mlflow_callback import REQUIRED_TAGS, build_run_tags, resolve_tracking_uri
 
 
@@ -49,30 +52,34 @@ def test_build_run_tags_contains_required_schema():
 class FakeSplitDataset:
     def __init__(self, rows: list[dict]) -> None:
         self.rows = rows
-        self.split_args: dict | None = None
         self.map_calls: list[dict] = []
         self.train = [{"split": "train"}]
         self.test = [{"split": "test"}]
 
-    def train_test_split(self, test_size: float, seed: int) -> "FakeSplitDataset":
-        self.split_args = {"test_size": test_size, "seed": seed}
-        return self
-
     def map(self, func, batched: bool):
         self.map_calls.append({"batched": batched})
         func({"text": [row["text"] for row in self.rows]})
-        return {"train": self.train, "test": self.test}
+        return self
 
 
 class FakeDatasetFactory:
     def __init__(self) -> None:
-        self.rows: list[dict] | None = None
-        self.dataset: FakeSplitDataset | None = None
+        self.rows_by_split: dict[str, list[dict]] = {}
+        self.datasets_by_split: dict[str, FakeSplitDataset] = {}
 
     def from_list(self, rows: list[dict]) -> FakeSplitDataset:
-        self.rows = rows
-        self.dataset = FakeSplitDataset(rows)
-        return self.dataset
+        split_name = "train" if "train" not in self.rows_by_split else "test"
+        self.rows_by_split[split_name] = rows
+        dataset = FakeSplitDataset(rows)
+        self.datasets_by_split[split_name] = dataset
+        return dataset
+
+
+class FakeDatasetDict(dict):
+    def map(self, func, batched: bool):
+        for dataset in self.values():
+            dataset.map(func, batched=batched)
+        return self
 
 
 class FakeTokenizer:
@@ -211,6 +218,7 @@ def _install_training_fakes(monkeypatch, read_csv_tables: dict[str, pd.DataFrame
     monkeypatch.setattr(run_finetuning.pd, "read_csv", fake_read_csv)
     monkeypatch.setattr(run_finetuning, "dedup_rows", fake_dedup_rows)
     monkeypatch.setattr(run_finetuning, "Dataset", dataset_factory)
+    monkeypatch.setattr(run_finetuning, "DatasetDict", FakeDatasetDict)
     monkeypatch.setattr(run_finetuning, "AutoTokenizer", auto_tokenizer)
     monkeypatch.setattr(run_finetuning, "AutoModelForSequenceClassification", auto_model)
     monkeypatch.setattr(run_finetuning, "DataCollatorWithPadding", fake_data_collator_with_padding)
@@ -250,17 +258,23 @@ def test_main_smoke_runs_short_trainer_loop_without_mlflow_run(monkeypatch):
     assert len(fakes["dedup_inputs"]) == 1
     assert len(fakes["dedup_inputs"][0]) == 32
     assert {type(row["label"]) for row in fakes["dedup_inputs"][0]} == {int}
-    assert fakes["dataset_factory"].dataset.split_args == {"test_size": 0.1, "seed": 42}
+    assert len(fakes["dataset_factory"].rows_by_split["train"]) == 28
+    assert len(fakes["dataset_factory"].rows_by_split["test"]) == 4
     assert fakes["auto_tokenizer"].model_name == "xlm-roberta-base"
     assert fakes["tokenizer"].calls == [
         {
-            "texts": [f"text-{idx}" for idx in range(32)],
+            "texts": [row["text"] for row in fakes["dataset_factory"].rows_by_split["train"]],
+            "truncation": True,
+            "max_length": 128,
+        },
+        {
+            "texts": [row["text"] for row in fakes["dataset_factory"].rows_by_split["test"]],
             "truncation": True,
             "max_length": 128,
         }
     ]
     assert fakes["auto_model"].calls == [
-        {"model_name": "xlm-roberta-base", "num_labels": 2}
+        {"model_name": "xlm-roberta-base", "num_labels": 3}
     ]
     assert fakes["lora_calls"] == ["sarcasm"]
     assert fakes["peft_model"]["lora_config"] == {"task": "sarcasm"}
@@ -270,11 +284,25 @@ def test_main_smoke_runs_short_trainer_loop_without_mlflow_run(monkeypatch):
     assert FakeTrainingArguments.instances[0].kwargs["eval_strategy"] == "epoch"
     assert FakeTrainingArguments.instances[0].kwargs["save_strategy"] == "epoch"
     assert FakeTrainer.instances[0].train_calls == 1
-    assert FakeTrainer.instances[0].kwargs["train_dataset"] == [{"split": "train"}]
-    assert FakeTrainer.instances[0].kwargs["eval_dataset"] == [{"split": "test"}]
+    assert (
+        FakeTrainer.instances[0].kwargs["train_dataset"]
+        is fakes["dataset_factory"].datasets_by_split["train"]
+    )
+    assert (
+        FakeTrainer.instances[0].kwargs["eval_dataset"]
+        is fakes["dataset_factory"].datasets_by_split["test"]
+    )
     assert FakeTrainer.instances[0].kwargs["processing_class"] is fakes["tokenizer"]
+    assert FakeTrainingArguments.instances[0].kwargs["output_dir"].endswith(
+        "models/adapters_smoke/sarcasm"
+    )
     assert fakes["peft_model"]["model"].saved_paths == [
-        str(Path(run_finetuning.__file__).resolve().parents[2] / "models" / "adapters" / "sarcasm")
+        str(
+            Path(run_finetuning.__file__).resolve().parents[2]
+            / "models"
+            / "adapters_smoke"
+            / "sarcasm"
+        )
     ]
     assert fakes["mlflow"].tracking_uris == ["file:./mlruns"]
     assert fakes["mlflow"].experiments == ["phase2_finetuning_sarcasm"]
@@ -283,18 +311,22 @@ def test_main_smoke_runs_short_trainer_loop_without_mlflow_run(monkeypatch):
 
 
 def test_main_full_sentiment_training_uses_mlflow_and_label_mapping(monkeypatch):
+    def build_rows(lang: str) -> list[dict]:
+        rows = []
+        for label_name in ("negative", "neutral", "positive"):
+            for idx in range(10):
+                rows.append(
+                    {
+                        "text": f"{lang}-{label_name}-{idx}",
+                        "label": label_name,
+                        "lang": lang,
+                    }
+                )
+        return rows
+
     tables = {
-        "sentiment_en.csv": pd.DataFrame(
-            [
-                {"text": "bad", "label": "negative", "lang": "en"},
-                {"text": "fine", "label": "neutral", "lang": "en"},
-            ]
-        ),
-        "sentiment_vi.csv": pd.DataFrame(
-            [
-                {"text": "tot", "label": "positive", "lang": "vi"},
-            ]
-        ),
+        "sentiment_en.csv": pd.DataFrame(build_rows("en")),
+        "sentiment_vi.csv": pd.DataFrame(build_rows("vi")),
     }
     fakes = _install_training_fakes(monkeypatch, tables)
     monkeypatch.setattr(run_finetuning.torch.cuda, "is_available", lambda: True)
@@ -306,10 +338,15 @@ def test_main_full_sentiment_training_uses_mlflow_and_label_mapping(monkeypatch)
 
     assert result == 0
     assert len(fakes["dedup_inputs"]) == 1
-    assert [row["label"] for row in fakes["dedup_inputs"][0]] == [0, 1, 2]
+    assert set(row["label"] for row in fakes["dedup_inputs"][0]) == {0, 1, 2}
+    assert len(fakes["dataset_factory"].rows_by_split["train"]) == 54
+    assert len(fakes["dataset_factory"].rows_by_split["test"]) == 6
     assert fakes["auto_model"].calls == [
         {"model_name": "xlm-roberta-base", "num_labels": 3}
     ]
+    assert FakeTrainingArguments.instances[0].kwargs["output_dir"].endswith(
+        "models/adapters/sentiment"
+    )
     assert FakeTrainingArguments.instances[0].kwargs["num_train_epochs"] == 5
     assert FakeTrainingArguments.instances[0].kwargs["report_to"] == ["mlflow"]
     assert FakeTrainer.instances[0].train_calls == 1
@@ -327,3 +364,56 @@ def test_main_full_sentiment_training_uses_mlflow_and_label_mapping(monkeypatch)
             "user": "tester",
         }
     ]
+
+
+def test_main_sentiment_raises_for_unmapped_labels(monkeypatch):
+    tables = {
+        "sentiment_en.csv": pd.DataFrame([{"text": "bad", "label": "mixed", "lang": "en"}]),
+        "sentiment_vi.csv": pd.DataFrame([{"text": "tot", "label": "positive", "lang": "vi"}]),
+    }
+    _install_training_fakes(monkeypatch, tables)
+
+    with pytest.raises(ValueError, match="Unmapped sentiment labels: mixed"):
+        run_finetuning.main(["--task", "sentiment"])
+
+
+def test_split_rows_stratifies_multilingual_sentiment_eval_set():
+    rows: list[dict] = []
+    for lang in ("en", "vi"):
+        for label in (0, 1, 2):
+            for idx in range(10):
+                rows.append(
+                    {
+                        "text": f"{lang}-{label}-{idx}",
+                        "label": label,
+                        "lang": lang,
+                    }
+                )
+
+    split_rows = run_finetuning._split_rows_for_training(get_task_config("sentiment"), rows)
+
+    def group_counts(items):
+        counts: dict[tuple[str, int], int] = {}
+        for row in items:
+            key = (row["lang"], row["label"])
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    assert len(split_rows["train"]) == 54
+    assert len(split_rows["test"]) == 6
+    assert set(group_counts(split_rows["test"]).values()) == {1}
+    assert set(group_counts(split_rows["train"]).values()) == {9}
+
+
+def test_build_training_args_returns_real_transformers_object_for_smoke(tmp_path):
+    args = run_finetuning._build_training_args(
+        get_task_config("sarcasm"),
+        tmp_path / "models" / "adapters_smoke" / "sarcasm",
+        epochs=1,
+        smoke=True,
+    )
+
+    assert isinstance(args, TrainingArguments)
+    assert args.output_dir.endswith("models/adapters_smoke/sarcasm")
+    assert args.eval_strategy.value == "epoch"
+    assert args.report_to == []

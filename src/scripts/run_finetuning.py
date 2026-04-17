@@ -12,8 +12,9 @@ from pathlib import Path
 import mlflow
 import pandas as pd
 import torch
-from datasets import Dataset
+from datasets import Dataset, DatasetDict
 from peft import get_peft_model
+from sklearn.model_selection import train_test_split
 from transformers import (
     AutoModelForSequenceClassification,
     AutoTokenizer,
@@ -22,7 +23,7 @@ from transformers import (
     TrainingArguments,
 )
 
-from src.training.dataset_builder import dedup_rows
+from src.training.dataset_builder import build_stratify_labels, dedup_rows
 from src.training.lora_config import build_lora_config
 from src.training.mlflow_callback import build_run_tags, resolve_tracking_uri
 from src.training.task_configs import get_task_config
@@ -67,6 +68,71 @@ def _detect_device() -> str:
     return "cpu"
 
 
+def _resolve_output_dir(root: Path, task_name: str, smoke: bool) -> Path:
+    parent = "adapters_smoke" if smoke else "adapters"
+    return root / "models" / parent / task_name
+
+
+def _build_training_args(
+    task,
+    output_dir: Path,
+    *,
+    epochs: int,
+    smoke: bool,
+) -> TrainingArguments:
+    return TrainingArguments(
+        output_dir=str(output_dir),
+        learning_rate=task.learning_rate,
+        per_device_train_batch_size=task.batch_size,
+        per_device_eval_batch_size=task.batch_size,
+        gradient_accumulation_steps=task.gradient_accumulation_steps,
+        num_train_epochs=epochs,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        load_best_model_at_end=True,
+        seed=task.seed,
+        report_to=["mlflow"] if not smoke else "none",
+    )
+
+
+def _split_rows_for_training(task, rows: list[dict]) -> dict[str, list[dict]]:
+    stratify = None
+    if task.name == "sentiment":
+        stratify = build_stratify_labels(pd.DataFrame(rows)).tolist()
+
+    train_rows, test_rows = train_test_split(
+        rows,
+        test_size=0.1,
+        random_state=task.seed,
+        stratify=stratify,
+    )
+    return {"train": list(train_rows), "test": list(test_rows)}
+
+
+def _load_training_frame(task, root: Path) -> pd.DataFrame:
+    if task.name == "sarcasm":
+        df = pd.read_csv(root / "data" / "raw" / "sarcasm.csv")
+        df["label"] = df["label"].astype(int)
+        return df
+
+    df_en = pd.read_csv(root / "data" / "raw" / "sentiment_en.csv")
+    df_vi = pd.read_csv(root / "data" / "raw" / "sentiment_vi.csv")
+    df = pd.concat([df_en, df_vi], ignore_index=True)
+    label2id = {name: idx for idx, name in enumerate(task.label_names)}
+    source_labels = df["label"].astype(str)
+    df["label"] = source_labels.map(label2id)
+    if df["label"].isna().any():
+        unmapped = sorted(source_labels[df["label"].isna()].unique().tolist())
+        raise ValueError(f"Unmapped sentiment labels: {', '.join(unmapped)}")
+    df["label"] = df["label"].astype(int)
+    return df
+
+
+def _model_num_labels(task) -> int:
+    # Keep both finetuned adapters compatible with the shared 3-logit backbone.
+    return 3 if task.name == "sarcasm" else task.num_labels
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the requested finetuning workflow."""
     args = parse_args(argv)
@@ -86,15 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.info("Starting %s finetuning run", task.name)
 
     root = Path(__file__).resolve().parents[2]
-    if task.name == "sarcasm":
-        df = pd.read_csv(root / "data" / "raw" / "sarcasm.csv")
-        df["label"] = df["label"].astype(int)
-    else:
-        df_en = pd.read_csv(root / "data" / "raw" / "sentiment_en.csv")
-        df_vi = pd.read_csv(root / "data" / "raw" / "sentiment_vi.csv")
-        df = pd.concat([df_en, df_vi], ignore_index=True)
-        label2id = {name: idx for idx, name in enumerate(task.label_names)}
-        df["label"] = df["label"].map(label2id)
+    df = _load_training_frame(task, root)
 
     epochs = task.epochs
     if args.smoke:
@@ -103,8 +161,13 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = df.to_dict("records")
     clean_rows = dedup_rows(rows)
-    hf_dataset = Dataset.from_list(clean_rows)
-    hf_dataset = hf_dataset.train_test_split(test_size=0.1, seed=task.seed)
+    split_rows = _split_rows_for_training(task, clean_rows)
+    hf_dataset = DatasetDict(
+        {
+            split_name: Dataset.from_list(split_rows[split_name])
+            for split_name in ("train", "test")
+        }
+    )
 
     base_model_name = "xlm-roberta-base"
     tokenizer = AutoTokenizer.from_pretrained(base_model_name)
@@ -117,26 +180,14 @@ def main(argv: list[str] | None = None) -> int:
 
     model = AutoModelForSequenceClassification.from_pretrained(
         base_model_name,
-        num_labels=task.num_labels,
+        num_labels=_model_num_labels(task),
     )
     lora_config = build_lora_config(task)
     peft_model = get_peft_model(model, lora_config)
     peft_model.print_trainable_parameters()
 
-    output_dir = root / "models" / "adapters" / task.name
-    training_args = TrainingArguments(
-        output_dir=str(output_dir),
-        learning_rate=task.learning_rate,
-        per_device_train_batch_size=task.batch_size,
-        per_device_eval_batch_size=task.batch_size,
-        gradient_accumulation_steps=task.gradient_accumulation_steps,
-        num_train_epochs=epochs,
-        eval_strategy="epoch",
-        save_strategy="epoch",
-        load_best_model_at_end=True,
-        seed=task.seed,
-        report_to=["mlflow"] if not args.smoke else "none",
-    )
+    output_dir = _resolve_output_dir(root, task.name, args.smoke)
+    training_args = _build_training_args(task, output_dir, epochs=epochs, smoke=args.smoke)
 
     trainer = Trainer(
         model=peft_model,

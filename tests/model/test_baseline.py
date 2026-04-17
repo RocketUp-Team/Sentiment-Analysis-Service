@@ -227,7 +227,7 @@ class FakePeftSequenceClassifier:
             logits: torch.Tensor
 
         if self.active_adapter == "sarcasm":
-            return FakeOutput(logits=torch.tensor([[0.1, 0.9]] * batch_size))
+            return FakeOutput(logits=torch.tensor([[0.1, 0.9, -1.0]] * batch_size))
         return FakeOutput(logits=_make_mock_logits(batch_size))
 
 
@@ -409,6 +409,20 @@ class TestPredictSingle:
         assert fake_peft_model.set_adapter_calls[:2] == ["sentiment", "sarcasm"]
         assert result.sentiment == "positive"
         assert result.sarcasm_flag is True
+
+    def test_finetuned_sarcasm_flag_ignores_third_logit(self):
+        config = ModelConfig(mode="finetuned")
+        model, _, _, _, _ = _build_finetuned_model_with_mocks(config=config)
+
+        with patch.object(
+            model,
+            "_predict_probabilities",
+            return_value=torch.tensor([[0.1, 0.2, 0.99]]),
+        ) as mock_predict:
+            sarcasm_flag = model._predict_sarcasm_flag("The food was great")
+
+        mock_predict.assert_called_once_with("The food was great", adapter_name="sarcasm")
+        assert sarcasm_flag is True
 
 
 # ── predict_batch ──────────────────────────────────────────────
