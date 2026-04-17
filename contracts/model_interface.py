@@ -34,7 +34,14 @@ class ModelInference(abc.ABC):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def predict_batch(self, texts: list[str], lang: str = "en") -> list[PredictionResult]:
+    def predict_batch(
+        self,
+        texts: list[str],
+        lang: str = "en",
+        *,
+        batch_size: int | None = None,
+        skip_absa: bool = False,
+    ) -> list[PredictionResult]:
         raise NotImplementedError
 
     @abc.abstractmethod
