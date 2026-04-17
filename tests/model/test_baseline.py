@@ -52,7 +52,7 @@ def _assert_aspect_detection_call(call, text):
     """Verify the first zero-shot pass extracts ABSA aspects."""
     assert call["text"] == text
     assert call["candidate_labels"] == list(ModelConfig().absa_categories)
-    assert call["hypothesis_template"] == "This review is about {}."
+    assert call["hypothesis_template"] == ModelConfig().absa_aspect_template
     assert call["multi_label"] is True
 
 
@@ -60,7 +60,8 @@ def _assert_aspect_sentiment_call(call, text, aspect_name):
     """Verify the per-aspect zero-shot pass scores sentiment labels."""
     assert call["text"] == text
     assert call["candidate_labels"] == ["positive", "negative", "neutral"]
-    assert call["hypothesis_template"] == f"The sentiment about {aspect_name} is {{}}."
+    expected_template = ModelConfig().absa_sentiment_template.format(aspect=aspect_name)
+    assert call["hypothesis_template"] == expected_template
     assert call["multi_label"] is False
 
 
@@ -469,7 +470,7 @@ class TestABSA:
         fake_zero_shot = FakeZeroShotPipeline(
             aspect_result={
                 "labels": ["food", "service", "ambiance", "price", "location", "general"],
-                "scores": [0.49, 0.30, 0.12, 0.08, 0.05, 0.10],
+                "scores": [0.44, 0.30, 0.12, 0.08, 0.05, 0.10],
             }
         )
         model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
