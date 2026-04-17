@@ -358,6 +358,123 @@ class TestPredictBatch:
             max_length=ModelConfig().max_length,
         )
 
+    def test_chunking_processes_all_texts(self):
+        """100 texts → 100 results regardless of chunk size."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+
+        def side_effect(*args, **kwargs):
+            batch = mock_tok.call_args[0][0]
+            n = len(batch) if isinstance(batch, list) else 1
+            return MagicMock(logits=_make_mock_logits(n))
+
+        mock_hf.side_effect = side_effect
+
+        texts = [f"text {i}" for i in range(100)]
+        results = model.predict_batch(texts, batch_size=32, skip_absa=True)
+        assert len(results) == 100
+
+    def test_chunking_calls_model_per_chunk(self):
+        """batch_size=32, 100 texts → exactly 4 forward passes."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+
+        def side_effect(*args, **kwargs):
+            batch = mock_tok.call_args[0][0]
+            n = len(batch) if isinstance(batch, list) else 1
+            return MagicMock(logits=_make_mock_logits(n))
+
+        mock_hf.side_effect = side_effect
+
+        texts = [f"text {i}" for i in range(100)]
+        model.predict_batch(texts, batch_size=32, skip_absa=True)
+        assert mock_hf.call_count == 4  # ceil(100/32) = 4
+
+    def test_custom_batch_size_override(self):
+        """batch_size=16, 100 texts → exactly 7 forward passes."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+
+        def side_effect(*args, **kwargs):
+            batch = mock_tok.call_args[0][0]
+            n = len(batch) if isinstance(batch, list) else 1
+            return MagicMock(logits=_make_mock_logits(n))
+
+        mock_hf.side_effect = side_effect
+
+        texts = [f"text {i}" for i in range(100)]
+        model.predict_batch(texts, batch_size=16, skip_absa=True)
+        assert mock_hf.call_count == 7  # ceil(100/16) = 7
+
+    def test_default_batch_size_from_config(self):
+        """batch_size=None → uses config.batch_size."""
+        from unittest.mock import MagicMock
+        config = ModelConfig(batch_size=8)
+        model, mock_tok, mock_hf = _build_model_with_mocks(config=config)
+
+        def side_effect(*args, **kwargs):
+            batch = mock_tok.call_args[0][0]
+            n = len(batch) if isinstance(batch, list) else 1
+            return MagicMock(logits=_make_mock_logits(n))
+
+        mock_hf.side_effect = side_effect
+
+        texts = [f"text {i}" for i in range(16)]
+        model.predict_batch(texts, batch_size=None, skip_absa=True)
+        assert mock_hf.call_count == 2  # ceil(16/8) = 2
+
+    def test_skip_absa_returns_empty_aspects(self):
+        """skip_absa=True → every result has aspects=[]."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+        mock_hf.return_value = MagicMock(logits=_make_mock_logits(3))
+
+        results = model.predict_batch(["a", "b", "c"], skip_absa=True)
+        for r in results:
+            assert r.aspects == []
+
+    def test_skip_absa_does_not_call_extract(self):
+        """skip_absa=True → _extract_aspects is never called."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+        mock_hf.return_value = MagicMock(logits=_make_mock_logits(2))
+
+        with patch.object(model, "_extract_aspects") as mock_extract:
+            model.predict_batch(["a", "b"], skip_absa=True)
+            mock_extract.assert_not_called()
+
+    def test_invalid_batch_size_raises(self):
+        """batch_size=0 → ValueError."""
+        model, _, _ = _build_model_with_mocks()
+        with pytest.raises(ValueError, match="batch_size must be positive"):
+            model.predict_batch(["text"], batch_size=0)
+
+    def test_batch_size_larger_than_input(self):
+        """5 texts with batch_size=32 → single chunk, 5 results."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+        mock_hf.return_value = MagicMock(logits=_make_mock_logits(5))
+
+        results = model.predict_batch(
+            ["a", "b", "c", "d", "e"], batch_size=32, skip_absa=True
+        )
+        assert len(results) == 5
+        assert mock_hf.call_count == 1
+
+    def test_result_order_matches_input(self):
+        """result[i].sentiment corresponds to texts[i]."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+
+        # Class 0 (negative) wins for first text, class 2 (positive) for second
+        mock_hf.return_value = MagicMock(
+            logits=torch.tensor([[0.9, 0.2, 0.1], [0.1, 0.2, 0.9]])
+        )
+
+        results = model.predict_batch(["bad text", "good text"], skip_absa=True)
+        assert results[0].sentiment == "negative"
+        assert results[1].sentiment == "positive"
+
 
 # ── SHAP Explainability ────────────────────────────────────────
 

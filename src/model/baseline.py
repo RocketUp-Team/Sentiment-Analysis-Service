@@ -105,26 +105,74 @@ class BaselineModelInference(ModelInference):
         )
 
     def predict_batch(
-        self, texts: list[str], lang: str = "en"
+        self,
+        texts: list[str],
+        lang: str = "en",
+        *,
+        batch_size: int | None = None,
+        skip_absa: bool = False,
     ) -> list[PredictionResult]:
-        """Predict sentiment for a batch of texts."""
+        """Predict sentiment for a batch of texts using chunked processing.
+
+        Args:
+            texts: Input texts to classify.
+            lang: Language code (must be supported).
+            batch_size: Number of texts per forward pass. None uses config default.
+            skip_absa: When True, skip aspect extraction (aspects=[]).
+        """
         if not texts:
             return []
 
+        if batch_size is not None and batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {batch_size}")
+
         self._check_language(lang)
-        probs = self._predict_probabilities(texts, padding=True)
+
+        resolved_batch_size = batch_size if batch_size is not None else self._config.batch_size
+        if resolved_batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {resolved_batch_size}")
+
+        total_chunks = -(-len(texts) // resolved_batch_size)  # ceiling division
+
+        logger.info(
+            "predict_batch: %d texts, batch_size=%d, chunks=%d, skip_absa=%s",
+            len(texts),
+            resolved_batch_size,
+            total_chunks,
+            skip_absa,
+        )
+
+        all_probs: list[torch.Tensor] = []
+        for i in range(0, len(texts), resolved_batch_size):
+            chunk = texts[i : i + resolved_batch_size]
+            probs = self._predict_probabilities(chunk, padding=True)
+            all_probs.append(probs)
+
+            chunk_number = i // resolved_batch_size + 1
+            if chunk_number % 10 == 0:
+                logger.debug(
+                    "predict_batch: processed chunk %d/%d",
+                    chunk_number,
+                    total_chunks,
+                )
+
+        combined_probs = torch.cat(all_probs, dim=0)
+
         results: list[PredictionResult] = []
-        for index in range(len(texts)):
-            pred_idx = probs[index].argmax().item()
+        for idx in range(len(texts)):
+            pred_idx = combined_probs[idx].argmax().item()
+            aspects = [] if skip_absa else self._extract_aspects(texts[idx])
             results.append(
                 PredictionResult(
                     sentiment=self._config.label_map[pred_idx],
-                    confidence=round(probs[index][pred_idx].item(), 4),
-                    aspects=self._extract_aspects(texts[index]),
+                    confidence=round(combined_probs[idx][pred_idx].item(), 4),
+                    aspects=aspects,
                     sarcasm_flag=False,
                 )
             )
+
         return results
+
 
     @property
     def _pipeline_device(self):
