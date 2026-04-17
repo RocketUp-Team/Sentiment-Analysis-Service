@@ -27,3 +27,6 @@ Thumbs.db
 # Coverage
 .coverage
 .coverage.*
+
+graphify-out/
+GEMINI.md
