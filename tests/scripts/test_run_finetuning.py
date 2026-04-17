@@ -297,6 +297,8 @@ def test_main_full_sentiment_training_uses_mlflow_and_label_mapping(monkeypatch)
         ),
     }
     fakes = _install_training_fakes(monkeypatch, tables)
+    monkeypatch.setattr(run_finetuning.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(run_finetuning.torch.backends.mps, "is_available", lambda: False)
 
     result = run_finetuning.main(
         ["--task", "sentiment", "--tracking-uri", "http://mlflow.local"]
@@ -318,7 +320,7 @@ def test_main_full_sentiment_training_uses_mlflow_and_label_mapping(monkeypatch)
         {
             "task": "sentiment",
             "git_sha": "abc1234",
-            "device": "cpu",
+            "device": "cuda",
             "environment": "local",
             "dataset_version": "multilingual_sentiment_v1",
             "seed": "42",

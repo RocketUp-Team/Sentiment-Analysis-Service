@@ -11,6 +11,7 @@ from pathlib import Path
 
 import mlflow
 import pandas as pd
+import torch
 from datasets import Dataset
 from peft import get_peft_model
 from transformers import (
@@ -58,6 +59,14 @@ def _git_sha() -> str:
         return "unknown"
 
 
+def _detect_device() -> str:
+    if torch.cuda.is_available():
+        return "cuda"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run the requested finetuning workflow."""
     args = parse_args(argv)
@@ -66,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     tags = build_run_tags(
         task=task.name,
         git_sha=_git_sha(),
-        device="cpu",
+        device=_detect_device(),
         environment="local",
         dataset_version=task.dataset_version,
         seed=task.seed,
