@@ -62,7 +62,6 @@ batch_size: int = 32  # default chunk size for predict_batch
 ```
 
 Default of 32 balances throughput and memory for 2-core CPU with 7GB RAM.
-*Note: `ModelConfig` is `@dataclass(frozen=True)`, so this acts only as a default. Runtime overrides are handled via `predict_batch` arguments.*
 
 #### `ModelInference` interface (`contracts/model_interface.py`)
 
@@ -100,12 +99,11 @@ predict_batch(texts, lang, batch_size=32, skip_absa=False)
 ├── 4. Resolve batch_size: None → self._config.batch_size
 │
 ├── 5. CHUNK LOOP (sentiment):
-│   with torch.no_grad():
-│       for i in range(0, len(texts), batch_size):
-│           chunk = texts[i : i + batch_size]
-│           probs = self._predict_probabilities(chunk, padding=True)
-│           all_probs.append(probs)
-│       all_probs = torch.cat(all_probs, dim=0)
+│   for i in range(0, len(texts), batch_size):
+│       chunk = texts[i : i + batch_size]
+│       probs = self._predict_probabilities(chunk, padding=True)
+│       all_probs.append(probs)
+│   all_probs = torch.cat(all_probs, dim=0)
 │
 ├── 6. RESULT ASSEMBLY:
 │   for idx in range(len(texts)):
@@ -152,18 +150,11 @@ Safe for 7GB RAM CI runner with comfortable margin.
 
 ### 4. Logging
 
-Start of batch:
 ```python
 logger.info(
     "predict_batch: %d texts, batch_size=%d, chunks=%d, skip_absa=%s",
     len(texts), batch_size, -(-len(texts) // batch_size), skip_absa,
 )
-```
-
-During chunk loop (for large batches):
-```python
-if (i // batch_size + 1) % 10 == 0:
-    logger.debug("predict_batch: processed chunk %d/%d", i // batch_size + 1, total_chunks)
 ```
 
 ### 5. Files Changed
@@ -174,13 +165,13 @@ if (i // batch_size + 1) % 10 == 0:
 | `contracts/model_interface.py` | Update `predict_batch` signature |
 | `contracts/mock_model.py` | Update `predict_batch` signature |
 | `src/model/baseline.py` | Rewrite `predict_batch` with chunking |
-| `src/model/evaluate.py` | Refactor `evaluate_on_dataset` to delegate chunking to `predict_batch` |
-| `tests/model/test_baseline.py` | Add chunking + skip_absa unit tests; fix pre-existing template bug in `_assert_aspect_detection_call` |
+| `tests/model/test_baseline.py` | Add chunking + skip_absa unit tests |
 | `tests/model/test_batch_throughput.py` | **NEW** — throughput benchmark |
 
 ### 6. Files NOT Changed
 
 - `src/main.py` — endpoint logic untouched
+- `src/model/evaluate.py` — training evaluation untouched
 - `src/data/` — data pipeline untouched
 - `dvc.yaml` / `params.yaml` — pipeline config untouched
 - Model weights — no retraining
@@ -190,8 +181,6 @@ if (i // batch_size + 1) % 10 == 0:
 ## Testing Strategy
 
 ### Unit Tests (mocked, always run in CI)
-
-**Pre-requisite fix**: Fix `_assert_aspect_detection_call` in `tests/model/test_baseline.py` to match `config.absa_aspect_template` (`"The text contains a discussion about {}."`) instead of the hardcoded `"This review is about {}."`
 
 Added to `TestPredictBatch` in `tests/model/test_baseline.py`:
 
@@ -213,7 +202,7 @@ New file `tests/model/test_batch_throughput.py`:
 
 | Test | Target |
 |---|---|
-| `test_sentiment_throughput_meets_target` | skip_absa=True, 1000 texts → ≥ 100 samples/sec (matches local dev environment scale) |
+| `test_sentiment_throughput_meets_target` | skip_absa=True, 200 texts → ≥ 100 samples/sec |
 | `test_full_pipeline_throughput` | skip_absa=False, 50 texts → log throughput (no hard assert) |
 
 Marked with `@pytest.mark.benchmark`, skipped in CI by default:
