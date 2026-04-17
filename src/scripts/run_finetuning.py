@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import inspect
 import logging
 import subprocess
 import sys
@@ -79,25 +80,57 @@ def _build_training_args(
     *,
     epochs: int,
     smoke: bool,
-) -> TrainingArguments:
-    return TrainingArguments(
+    training_arguments_cls=None,
+):
+    training_arguments_cls = training_arguments_cls or TrainingArguments
+    kwargs = dict(
         output_dir=str(output_dir),
         learning_rate=task.learning_rate,
         per_device_train_batch_size=task.batch_size,
         per_device_eval_batch_size=task.batch_size,
         gradient_accumulation_steps=task.gradient_accumulation_steps,
         num_train_epochs=epochs,
-        eval_strategy="epoch",
         save_strategy="epoch",
         load_best_model_at_end=True,
         seed=task.seed,
         report_to=["mlflow"] if not smoke else "none",
     )
+    parameter_names = inspect.signature(training_arguments_cls.__init__).parameters
+    if "eval_strategy" in parameter_names:
+        kwargs["eval_strategy"] = "epoch"
+    else:
+        kwargs["evaluation_strategy"] = "epoch"
+    return training_arguments_cls(**kwargs)
+
+def _build_trainer(
+    *,
+    model,
+    training_args,
+    train_dataset,
+    eval_dataset,
+    tokenizer,
+    data_collator,
+    trainer_cls=None,
+):
+    trainer_cls = trainer_cls or Trainer
+    kwargs = dict(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,
+        data_collator=data_collator,
+    )
+    parameter_names = inspect.signature(trainer_cls.__init__).parameters
+    if "processing_class" in parameter_names:
+        kwargs["processing_class"] = tokenizer
+    else:
+        kwargs["tokenizer"] = tokenizer
+    return trainer_cls(**kwargs)
 
 
-def _split_rows_for_training(task, rows: list[dict]) -> dict[str, list[dict]]:
+def _split_rows_for_training(task, rows: list[dict], *, smoke: bool = False) -> dict[str, list[dict]]:
     stratify = None
-    if task.name == "sentiment":
+    if task.name == "sentiment" and not smoke:
         stratify = build_stratify_labels(pd.DataFrame(rows)).tolist()
 
     train_rows, test_rows = train_test_split(
@@ -161,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
 
     rows = df.to_dict("records")
     clean_rows = dedup_rows(rows)
-    split_rows = _split_rows_for_training(task, clean_rows)
+    split_rows = _split_rows_for_training(task, clean_rows, smoke=args.smoke)
     hf_dataset = DatasetDict(
         {
             split_name: Dataset.from_list(split_rows[split_name])
@@ -189,12 +222,12 @@ def main(argv: list[str] | None = None) -> int:
     output_dir = _resolve_output_dir(root, task.name, args.smoke)
     training_args = _build_training_args(task, output_dir, epochs=epochs, smoke=args.smoke)
 
-    trainer = Trainer(
+    trainer = _build_trainer(
         model=peft_model,
-        args=training_args,
+        training_args=training_args,
         train_dataset=tokenized_ds["train"],
         eval_dataset=tokenized_ds["test"],
-        processing_class=tokenizer,
+        tokenizer=tokenizer,
         data_collator=data_collator,
     )
 

@@ -136,8 +136,24 @@ class FakePeftModel:
 class FakeTrainer:
     instances: list["FakeTrainer"] = []
 
-    def __init__(self, **kwargs) -> None:
-        self.kwargs = kwargs
+    def __init__(
+        self,
+        *,
+        model,
+        args,
+        train_dataset,
+        eval_dataset,
+        processing_class=None,
+        data_collator=None,
+    ) -> None:
+        self.kwargs = {
+            "model": model,
+            "args": args,
+            "train_dataset": train_dataset,
+            "eval_dataset": eval_dataset,
+            "processing_class": processing_class,
+            "data_collator": data_collator,
+        }
         self.train_calls = 0
         type(self).instances.append(self)
 
@@ -148,11 +164,65 @@ class FakeTrainer:
 class FakeTrainingArguments:
     instances: list["FakeTrainingArguments"] = []
 
-    def __init__(self, **kwargs) -> None:
-        assert "eval_strategy" in kwargs
-        assert "evaluation_strategy" not in kwargs
-        self.kwargs = kwargs
+    def __init__(self, *, eval_strategy=None, evaluation_strategy=None, **kwargs) -> None:
+        assert eval_strategy == "epoch"
+        assert evaluation_strategy is None
+        self.kwargs = {"eval_strategy": eval_strategy, **kwargs}
         type(self).instances.append(self)
+
+
+class FakeLegacyTrainingArguments:
+    def __init__(self, *, evaluation_strategy=None, **kwargs) -> None:
+        assert evaluation_strategy == "epoch"
+        self.kwargs = {"evaluation_strategy": evaluation_strategy, **kwargs}
+
+
+class FakeModernTrainingArguments:
+    def __init__(self, *, eval_strategy=None, **kwargs) -> None:
+        assert eval_strategy == "epoch"
+        self.kwargs = {"eval_strategy": eval_strategy, **kwargs}
+
+
+class FakeLegacyTrainer:
+    def __init__(
+        self,
+        *,
+        model,
+        args,
+        train_dataset,
+        eval_dataset,
+        tokenizer=None,
+        data_collator=None,
+    ) -> None:
+        self.kwargs = {
+            "model": model,
+            "args": args,
+            "train_dataset": train_dataset,
+            "eval_dataset": eval_dataset,
+            "tokenizer": tokenizer,
+            "data_collator": data_collator,
+        }
+
+
+class FakeModernTrainer:
+    def __init__(
+        self,
+        *,
+        model,
+        args,
+        train_dataset,
+        eval_dataset,
+        processing_class=None,
+        data_collator=None,
+    ) -> None:
+        self.kwargs = {
+            "model": model,
+            "args": args,
+            "train_dataset": train_dataset,
+            "eval_dataset": eval_dataset,
+            "processing_class": processing_class,
+            "data_collator": data_collator,
+        }
 
 
 class FakeMlflow:
@@ -417,3 +487,85 @@ def test_build_training_args_returns_real_transformers_object_for_smoke(tmp_path
     assert args.output_dir.endswith("models/adapters_smoke/sarcasm")
     assert args.eval_strategy.value == "epoch"
     assert args.report_to == []
+
+
+def test_build_training_args_uses_legacy_evaluation_strategy_name(tmp_path):
+    args = run_finetuning._build_training_args(
+        get_task_config("sarcasm"),
+        tmp_path / "models" / "adapters_smoke" / "sarcasm",
+        epochs=1,
+        smoke=True,
+        training_arguments_cls=FakeLegacyTrainingArguments,
+    )
+
+    assert args.kwargs["evaluation_strategy"] == "epoch"
+
+
+def test_build_trainer_uses_legacy_tokenizer_parameter():
+    trainer = run_finetuning._build_trainer(
+        model="model",
+        training_args="args",
+        train_dataset="train",
+        eval_dataset="eval",
+        tokenizer="tokenizer",
+        data_collator="collator",
+        trainer_cls=FakeLegacyTrainer,
+    )
+
+    assert trainer.kwargs["tokenizer"] == "tokenizer"
+    assert "processing_class" not in trainer.kwargs
+
+
+def test_build_trainer_uses_modern_processing_class_parameter():
+    trainer = run_finetuning._build_trainer(
+        model="model",
+        training_args="args",
+        train_dataset="train",
+        eval_dataset="eval",
+        tokenizer="tokenizer",
+        data_collator="collator",
+        trainer_cls=FakeModernTrainer,
+    )
+
+    assert trainer.kwargs["processing_class"] == "tokenizer"
+    assert "tokenizer" not in trainer.kwargs
+
+
+def test_main_sentiment_smoke_skips_brittle_stratified_split(monkeypatch):
+    def build_en_rows() -> list[dict]:
+        rows = []
+        for label_name in ("negative", "neutral", "positive"):
+            for idx in range(10):
+                rows.append(
+                    {
+                        "text": f"en-{label_name}-{idx}",
+                        "label": label_name,
+                        "lang": "en",
+                    }
+                )
+        return rows
+
+    tables = {
+        "sentiment_en.csv": pd.DataFrame(build_en_rows()),
+        "sentiment_vi.csv": pd.DataFrame(
+            [
+                {"text": "vi-negative-0", "label": "negative", "lang": "vi"},
+                {"text": "vi-neutral-0", "label": "neutral", "lang": "vi"},
+                {"text": "vi-positive-0", "label": "positive", "lang": "vi"},
+                {"text": "vi-positive-1", "label": "positive", "lang": "vi"},
+                {"text": "vi-positive-2", "label": "positive", "lang": "vi"},
+                {"text": "vi-positive-3", "label": "positive", "lang": "vi"},
+                {"text": "vi-positive-4", "label": "positive", "lang": "vi"},
+                {"text": "vi-positive-5", "label": "positive", "lang": "vi"},
+                {"text": "vi-positive-6", "label": "positive", "lang": "vi"},
+                {"text": "vi-positive-7", "label": "positive", "lang": "vi"},
+            ]
+        ),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    result = run_finetuning.main(["--task", "sentiment", "--smoke"])
+
+    assert result == 0
+    assert len(fakes["dataset_factory"].rows_by_split["train"]) == 28
+    assert len(fakes["dataset_factory"].rows_by_split["test"]) == 4
