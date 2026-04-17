@@ -117,6 +117,47 @@ def extract_semeval_xmls(
     return sentences_path, aspects_path
 
 
+def write_placeholder_raw_csvs(
+    raw_dir: str | Path,
+    *,
+    dataset_name: str,
+    splits: list[str],
+) -> tuple[Path, Path]:
+    """Generate dummy SemEval-2014 style row stubs in raw CSV format."""
+    if not splits:
+        raise ValueError("splits must be a non-empty list to generate placeholder raw rows")
+
+    raw_path = Path(raw_dir)
+    raw_path.mkdir(parents=True, exist_ok=True)
+
+    sentence_rows: list[dict[str, str]] = []
+    aspect_rows: list[dict[str, str]] = []
+
+    # create 2000 rows per split to match existing tests
+    for i, split in enumerate(splits):
+        for j in range(2000):
+            s_id = f"{i}_{j}"
+            sentence_rows.append({
+                "sentence_id": s_id,
+                "text": f"Placeholder text {j} for dataset {dataset_name} in split {split}",
+                "split": split,
+            })
+            aspect_rows.append({
+                "sentence_id": s_id,
+                "aspect_category": "food",
+                "sentiment": "neutral",
+            })
+
+    sentences_df = pd.DataFrame(sentence_rows)
+    aspects_df = pd.DataFrame(aspect_rows)
+
+    sentences_path = raw_path / "sentences.csv"
+    aspects_path = raw_path / "aspects.csv"
+    sentences_df.to_csv(sentences_path, index=False)
+    aspects_df.to_csv(aspects_path, index=False)
+    return sentences_path, aspects_path
+
+
 if __name__ == "__main__":
     root = Path(__file__).resolve().parents[2]
     params = load_params(str(root / "params.yaml"))

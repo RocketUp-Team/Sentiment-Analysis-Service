@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Response
+from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import time
 import pandas as pd
@@ -17,10 +18,20 @@ from contracts.model_interface import ModelInference
 from src.monitoring.metrics import REQUEST_COUNT, REQUEST_LATENCY, MODEL_INFERENCE_LATENCY, monitor_middleware
 from contracts.errors import ModelError, UnsupportedLanguageError
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Global model instance initialized at startup
+    global ml_model
+    ml_model = BaselineModelInference()
+    ml_model.preload()
+    yield
+    # Clean up here if needed
+
 app = FastAPI(
     title="Sentiment Analysis Service",
     description="API for sentiment analysis with aspect detection and model explainability.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Exception handlers
@@ -54,11 +65,6 @@ app.middleware("http")(monitor_middleware)
 
 # Global model instance initialized at startup
 ml_model = None
-
-@app.on_event("startup")
-async def startup_event():
-    global ml_model
-    ml_model = BaselineModelInference()
 
 # Dependency to get model inference instance
 def get_model() -> ModelInference:

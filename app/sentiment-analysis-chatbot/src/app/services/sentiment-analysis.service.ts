@@ -19,6 +19,10 @@ export class SentimentAnalysisService {
   private messagesSignal = signal<Message[]>([]);
   public messages = this.messagesSignal.asReadonly();
 
+  public checkHealth(): Observable<any> {
+    return this.http.get('/api/health');
+  }
+
   constructor() {
     this.loadHistory();
   }
@@ -46,12 +50,10 @@ export class SentimentAnalysisService {
     audioFormData.append('file', blob);
     audioFormData.append('lang', lang);
 
-    // Giả định Text mà AI nghe được từ user
-    const transcribedText =
-      '🎤 [Giọng nói]: Chào hệ thống, tôi thấy dịch vụ của bạn thật sự rất tuyệt vời và đáng kinh ngạc!';
+    const userDisplayText = '🎤 [Audio Message]';
     this.addMessageSequence(
-      transcribedText,
-      transcribedText,
+      userDisplayText,
+      '[Audio Content]', 
       lang,
       'upload/audio',
       audioFormData,
@@ -91,17 +93,7 @@ export class SentimentAnalysisService {
       requestOb$ = this.predict(backendText, lang);
     } else {
       // Gọi API Upload
-      requestOb$ = this.http
-        .post<PredictResponse>(`/api/${endpoint}`, payload)
-        .pipe(
-          catchError((err) => {
-            console.warn(
-              `Backend connection failed for ${endpoint}, using mock fallback...`,
-              err,
-            );
-            return this.mockPredict(backendText);
-          }),
-        );
+      requestOb$ = this.http.post<PredictResponse>(`/api/${endpoint}`, payload);
     }
 
     requestOb$.subscribe({
@@ -113,9 +105,10 @@ export class SentimentAnalysisService {
           latency_ms: res.latency_ms,
         });
       },
-      error: () => {
+      error: (err) => {
+        console.error(`API error for ${endpoint}:`, err);
         this.updateBotMessage(botMessageId, {
-          text: 'Rất tiếc, tôi không thể phân tích lúc này. Hãy thử lại sau!',
+          text: 'Rất tiếc, hệ thống không phản hồi. Vui lòng kiểm tra kết nối API!',
           sentiment: 'ERROR',
         });
       },
@@ -126,47 +119,7 @@ export class SentimentAnalysisService {
     text: string,
     lang: 'vi' | 'en',
   ): Observable<PredictResponse> {
-    return this.http
-      .post<PredictResponse>(this.apiUrl, { text, lang } as PredictRequest)
-      .pipe(
-        catchError((err) => {
-          console.warn(
-            'Backend connection failed, using mock fallback...',
-            err,
-          );
-          return this.mockPredict(text);
-        }),
-      );
-  }
-
-  private mockPredict(text: string): Observable<PredictResponse> {
-    const positiveWords = [
-      'ngon',
-      'tốt',
-      'tuyệt',
-      'hay',
-      'good',
-      'great',
-      'awesome',
-    ];
-    const negativeWords = ['tệ', 'dở', 'kém', 'xấu', 'bad', 'horrible', 'hate'];
-
-    let sentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
-    const lowerText = text.toLowerCase();
-
-    if (positiveWords.some((w) => lowerText.includes(w)))
-      sentiment = 'positive';
-    else if (negativeWords.some((w) => lowerText.includes(w)))
-      sentiment = 'negative';
-
-    return of({
-      text,
-      sentiment,
-      confidence: 0.85 + Math.random() * 0.1,
-      aspects: [],
-      sarcasm_flag: false,
-      latency_ms: 120,
-    }).pipe(delay(1000));
+    return this.http.post<PredictResponse>(this.apiUrl, { text, lang } as PredictRequest);
   }
 
   private updateBotMessage(id: string, partial: Partial<Message>): void {

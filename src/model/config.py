@@ -36,7 +36,7 @@ class ModelConfig:
         )
     )
     absa_model_name: str = "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
-    absa_threshold: float = 0.45
+    absa_threshold: float = 0.5
     absa_categories: tuple[str, ...] = (
         "food",
         "service",
@@ -45,5 +45,5 @@ class ModelConfig:
         "location",
         "general",
     )
-    absa_aspect_template: str = "The text contains a discussion about {}."
-    absa_sentiment_template: str = "The sentiment expressed towards {aspect} is {{}}."
+    absa_aspect_template: str = "This review is about {}."
+    absa_sentiment_template: str = "The sentiment about {aspect} is {{}}."

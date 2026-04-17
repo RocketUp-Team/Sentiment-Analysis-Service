@@ -41,6 +41,10 @@ class BaselineModelInference(ModelInference):
         self._absa_pipeline = None
         self._load_model()
 
+    def preload(self) -> None:
+        """Eagerly load heavy sub-models (like ABSA) to avoid runtime delay."""
+        self._get_absa_pipeline()
+
     def _load_model(self) -> None:
         """Load tokenizer and model, then move the model to the target device."""
         try:

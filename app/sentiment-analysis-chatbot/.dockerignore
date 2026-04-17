@@ -1,6 +1,8 @@
+.git
+.github
+Dockerfile
+README.md
 node_modules
 dist
-.angular
-*.log
-.vscode
-.git
+test.ts
+tsconfig.spec.json
