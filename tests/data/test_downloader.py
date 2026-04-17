@@ -132,17 +132,39 @@ def test_download_sarcasm_dataset_writes_csv_with_metadata(tmp_path, monkeypatch
 
 
 def test_download_sentiment_datasets_writes_english_and_vietnamese_csvs(tmp_path, monkeypatch):
-    def fake_load_dataset(name: str, config: str | None = None):
-        if (name, config) == ("tyqiangz/multilingual-sentiments", "english"):
-            return {"train": _FakeSplit(pd.DataFrame([{"text": "great", "label": "positive"}]))}
-        if (name, config) == ("uitnlp/vietnamese_students_feedback", None):
-            return {
-                "train": _FakeSplit(pd.DataFrame([{"sentence": "rat hay", "sentiment": 2, "topic": 0}])),
-                "validation": _FakeSplit(
-                    pd.DataFrame([{"sentence": "binh thuong", "sentiment": 1, "topic": 1}])
-                ),
-                "test": _FakeSplit(pd.DataFrame([{"sentence": "te", "sentiment": 0, "topic": 2}])),
-            }
+    english_loader_calls: list[tuple[str, dict[str, str]]] = []
+    vietnamese_loader_calls: list[tuple[str, dict[str, str]]] = []
+    english_data_files = {
+        "train": "hf://datasets/tyqiangz/multilingual-sentiments@refs/convert/parquet/english/train/*.parquet",
+        "validation": "hf://datasets/tyqiangz/multilingual-sentiments@refs/convert/parquet/english/validation/*.parquet",
+        "test": "hf://datasets/tyqiangz/multilingual-sentiments@refs/convert/parquet/english/test/*.parquet",
+    }
+    vietnamese_data_files = {
+        "train": "hf://datasets/uitnlp/vietnamese_students_feedback@refs/convert/parquet/default/train/*.parquet",
+        "validation": "hf://datasets/uitnlp/vietnamese_students_feedback@refs/convert/parquet/default/validation/*.parquet",
+        "test": "hf://datasets/uitnlp/vietnamese_students_feedback@refs/convert/parquet/default/test/*.parquet",
+    }
+
+    def fake_load_dataset(name: str, config: str | None = None, **kwargs):
+        if name == "parquet":
+            assert config is None
+            data_files = kwargs["data_files"]
+            if data_files == english_data_files:
+                english_loader_calls.append((name, data_files))
+                return {
+                    "train": _FakeSplit(
+                        pd.DataFrame([{"text": "great", "source": "sem_eval_2017", "label": "positive"}])
+                    )
+                }
+            if data_files == vietnamese_data_files:
+                vietnamese_loader_calls.append((name, data_files))
+                return {
+                    "train": _FakeSplit(pd.DataFrame([{"sentence": "rat hay", "sentiment": 2, "topic": 0}])),
+                    "validation": _FakeSplit(
+                        pd.DataFrame([{"sentence": "binh thuong", "sentiment": 1, "topic": 1}])
+                    ),
+                    "test": _FakeSplit(pd.DataFrame([{"sentence": "te", "sentiment": 0, "topic": 2}])),
+                }
         raise AssertionError(f"unexpected dataset request: {(name, config)}")
 
     monkeypatch.setattr(downloader, "load_dataset", fake_load_dataset)
@@ -162,6 +184,12 @@ def test_download_sentiment_datasets_writes_english_and_vietnamese_csvs(tmp_path
         "lang": "en",
         "source": "multilingual_sentiments",
     }
+    assert english_loader_calls == [
+        ("parquet", english_data_files)
+    ]
+    assert vietnamese_loader_calls == [
+        ("parquet", vietnamese_data_files)
+    ]
 
     assert vi_result.columns.tolist() == ["text", "label", "lang", "source", "split"]
     assert vi_result.to_dict("records") == [

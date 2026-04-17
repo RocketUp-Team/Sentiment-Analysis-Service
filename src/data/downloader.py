@@ -21,6 +21,16 @@ _UIT_SENTIMENT_MAP = {
     1: "neutral",
     2: "positive",
 }
+_MULTILINGUAL_SENTIMENTS_EN_FILES = {
+    "train": "hf://datasets/tyqiangz/multilingual-sentiments@refs/convert/parquet/english/train/*.parquet",
+    "validation": "hf://datasets/tyqiangz/multilingual-sentiments@refs/convert/parquet/english/validation/*.parquet",
+    "test": "hf://datasets/tyqiangz/multilingual-sentiments@refs/convert/parquet/english/test/*.parquet",
+}
+_UIT_VSFC_FILES = {
+    "train": "hf://datasets/uitnlp/vietnamese_students_feedback@refs/convert/parquet/default/train/*.parquet",
+    "validation": "hf://datasets/uitnlp/vietnamese_students_feedback@refs/convert/parquet/default/validation/*.parquet",
+    "test": "hf://datasets/uitnlp/vietnamese_students_feedback@refs/convert/parquet/default/test/*.parquet",
+}
 
 
 class SchemaError(Exception):
@@ -80,13 +90,13 @@ def download_sentiment_datasets(en_out_path: Path, vi_out_path: Path) -> None:
     en_out_path.parent.mkdir(parents=True, exist_ok=True)
     vi_out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    en_ds = load_dataset("tyqiangz/multilingual-sentiments", "english")
+    en_ds = load_dataset("parquet", data_files=_MULTILINGUAL_SENTIMENTS_EN_FILES)
     en_df = en_ds["train"].to_pandas()
     en_df["lang"] = "en"
     en_df["source"] = "multilingual_sentiments"
-    en_df.to_csv(en_out_path, index=False)
+    en_df[["text", "label", "lang", "source"]].to_csv(en_out_path, index=False)
 
-    vi_ds = load_dataset("uitnlp/vietnamese_students_feedback")
+    vi_ds = load_dataset("parquet", data_files=_UIT_VSFC_FILES)
     vi_frames: list[pd.DataFrame] = []
     for split, split_ds in vi_ds.items():
         split_df = split_ds.to_pandas()
