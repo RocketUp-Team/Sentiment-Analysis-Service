@@ -244,7 +244,7 @@ export class AppComponent implements OnInit, OnDestroy {
       if (res) {
         this.isBackendReady.set(true);
         if (this.messages().length === 0) {
-           this.sentimentService.sendMessage('Hệ thống Phân tích Cảm xúc đã sẵn sàng! Hãy nhập nội dung bạn muốn phân tích.');
+           this.sentimentService.addWelcomeMessage();
         }
         this.healthSub?.unsubscribe();
       }
