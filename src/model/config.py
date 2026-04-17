@@ -20,6 +20,7 @@ class ModelConfig:
         absa_categories: Tuple of supported ABSA aspect categories.
         absa_aspect_template: Template for aspect extraction.
         absa_sentiment_template: Template for per-aspect sentiment.
+        batch_size: Default chunk size for predict_batch. Overridable at call time.
     """
 
     model_name: str = "cardiffnlp/twitter-roberta-base-sentiment-latest"
@@ -47,3 +48,4 @@ class ModelConfig:
     )
     absa_aspect_template: str = "The text contains a discussion about {}."
     absa_sentiment_template: str = "The sentiment expressed towards {aspect} is {{}}."
+    batch_size: int = 32
