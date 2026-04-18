@@ -56,6 +56,9 @@ os.environ['DAGSHUB_TOKEN'] = userdata.get('DAGSHUB_TOKEN')
 os.environ['GITHUB_TOKEN'] = userdata.get('GITHUB_TOKEN')
 os.environ['MODEL_VERSION'] = userdata.get('MODEL_VERSION')
 
+os.environ['MLFLOW_TRACKING_USERNAME'] = os.environ['DAGSHUB_USER']
+os.environ['MLFLOW_TRACKING_PASSWORD'] = os.environ['DAGSHUB_TOKEN']
+
 # Add pre-flight checks here if needed
 print("Secrets loaded.")
 """)
