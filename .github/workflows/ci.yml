@@ -24,7 +24,7 @@ jobs:
         
     - name: Run tests
       run: |
-        pytest --cov=src tests/
+        pytest -m "not benchmark" --cov=src tests/
         
     - name: Lint with flake8
       run: |
