@@ -256,3 +256,60 @@ def test_evaluate_finetuned_main_uses_multilingual_sentiment_dataset(tmp_path, m
             "vi": [[0, 0, 0], [0, 0, 0], [0, 1, 0]],
         },
     }
+
+
+def test_evaluate_returns_metrics_payload_dict(tmp_path, monkeypatch):
+    """evaluate() returns the full metrics payload without writing files."""
+    inference_calls: list[dict] = []
+
+    def fake_read_csv(path):
+        filename = Path(path).name
+        if filename == "sentiment_en.csv":
+            return pd.DataFrame(
+                [
+                    {"text": "great", "label": 2, "lang": "en"},
+                    {"text": "bad", "label": 0, "lang": "en"},
+                ]
+            )
+        return pd.DataFrame([{"text": "tot", "label": 2, "lang": "vi"}])
+
+    class FakeInference:
+        def __init__(self, config) -> None:
+            self.config = config
+
+        def predict_batch(self, texts, lang: str, skip_absa: bool):
+            inference_calls.append({"texts": list(texts), "lang": lang})
+            return [
+                SimpleNamespace(sentiment="positive", sarcasm_flag=False),
+                SimpleNamespace(sentiment="negative", sarcasm_flag=False),
+                SimpleNamespace(sentiment="neutral", sarcasm_flag=False),
+            ]
+
+    expected_payload = {
+        "overall_f1": 0.8,
+        "per_lang_f1": {"en": 1.0, "vi": 0.0},
+        "per_lang_gap": 1.0,
+        "sample_counts": {"en": 2, "vi": 1},
+        "confusion_matrix": [[1, 0, 0], [0, 0, 0], [0, 0, 1]],
+        "per_lang_confusion_matrices": {
+            "en": [[1, 0, 0], [0, 0, 0], [0, 0, 1]],
+            "vi": [[0, 0, 0], [0, 0, 0], [0, 1, 0]],
+        },
+    }
+
+    def fake_build_metrics_payload(*, y_true, y_pred, languages, label_names):
+        return expected_payload
+
+    monkeypatch.setattr(evaluate_finetuned.pd, "read_csv", fake_read_csv)
+    monkeypatch.setattr(evaluate_finetuned, "BaselineModelInference", FakeInference)
+    monkeypatch.setattr(evaluate_finetuned, "build_metrics_payload", fake_build_metrics_payload)
+
+    from src.scripts.evaluate_finetuned import evaluate
+
+    result = evaluate("sentiment", root=tmp_path, max_samples=None)
+
+    assert result["overall_f1"] == 0.8
+    assert result["per_lang_f1"] == {"en": 1.0, "vi": 0.0}
+    assert result["per_lang_gap"] == 1.0
+    assert "y_true" in result
+    assert "y_pred" in result

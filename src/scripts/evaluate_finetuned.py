@@ -58,12 +58,22 @@ def _resolve_true_label(label_value, label_names: tuple[str, ...]) -> str:
     return label_names[int(label_value)]
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Run finetuned adapter evaluation for a supported task."""
-    args = parse_args(argv)
-    root = Path(__file__).resolve().parents[2]
-    task = get_task_config(args.task)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+def evaluate(
+    task_name: str,
+    *,
+    root: Path | None = None,
+    max_samples: int | None = None,
+) -> dict:
+    """Run evaluation and return full metrics payload.
+
+    MLflow context is managed by the CALLER if logging is desired.
+
+    Returns dict with keys from build_metrics_payload() plus:
+    - y_true: list[str] — ground truth labels
+    - y_pred: list[str] — predicted labels
+    """
+    root = root or Path(__file__).resolve().parents[2]
+    task = get_task_config(task_name)
 
     config = ModelConfig(
         mode="finetuned",
@@ -71,22 +81,20 @@ def main(argv: list[str] | None = None) -> int:
         sarcasm_adapter_path=str(root / "models" / "adapters" / "sarcasm"),
     )
     inference = BaselineModelInference(config=config)
-    df = _select_evaluation_rows(_load_evaluation_frame(args.task, root))
-    df = df.sample(n=min(100, len(df)), random_state=42)
+    df = _select_evaluation_rows(_load_evaluation_frame(task_name, root))
+
+    if max_samples is not None:
+        df = df.sample(n=min(max_samples, len(df)), random_state=42)
+
     texts = df["text"].tolist()
     languages = _resolve_languages(df)
 
-    # predict_batch accepts a single `lang` for the entire batch (used only for
-    # allowlist validation today).  We pass "en" because en is always in the
-    # supported-languages allowlist and the model sees raw text regardless of this
-    # parameter.  Per-row language information is captured in `languages` below and
-    # is used for per-language metric computation, which is what matters here.
     results = inference.predict_batch(texts, lang="en", skip_absa=True)
 
     y_pred: list[str] = []
     y_true: list[str] = []
     for row, result in zip(df.itertuples(index=False), results, strict=True):
-        if args.task == "sarcasm":
+        if task_name == "sarcasm":
             y_pred.append(task.label_names[1] if result.sarcasm_flag else task.label_names[0])
         else:
             y_pred.append(result.sentiment)
@@ -98,13 +106,25 @@ def main(argv: list[str] | None = None) -> int:
         languages=languages,
         label_names=task.label_names,
     )
+    metrics_payload["y_true"] = y_true
+    metrics_payload["y_pred"] = y_pred
+    return metrics_payload
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI wrapper — writes JSON reports. Backwards-compatible with DVC."""
+    args = parse_args(argv)
+    root = Path(__file__).resolve().parents[2]
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+
+    metrics_payload = evaluate(args.task, root=root, max_samples=100)
 
     args.output.write_text(
         json.dumps(
             {
                 "task": args.task,
                 "overall_f1": metrics_payload["overall_f1"],
-                "n_samples": len(texts),
+                "n_samples": len(metrics_payload["y_true"]),
             },
             indent=2,
         ),
