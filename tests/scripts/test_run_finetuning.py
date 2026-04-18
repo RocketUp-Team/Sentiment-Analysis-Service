@@ -10,13 +10,48 @@ from transformers import TrainingArguments
 from src.scripts import run_finetuning
 from src.scripts.run_finetuning import parse_args
 from src.training.task_configs import get_task_config
-from src.training.mlflow_callback import REQUIRED_TAGS, build_run_tags, resolve_tracking_uri
+from src.training.mlflow_callback import (
+    REQUIRED_TAGS,
+    build_run_tags,
+    resolve_pipeline_tracking_uri,
+    resolve_tracking_uri,
+)
 
 
 def test_run_finetuning_uses_local_mlflow_when_env_missing(monkeypatch):
     monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
 
     assert resolve_tracking_uri() == "file:./mlruns"
+
+
+def test_resolve_pipeline_tracking_uri_prefers_env(monkeypatch):
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://dagshub.com/u/r.mlflow")
+
+    assert (
+        resolve_pipeline_tracking_uri({"tracking_uri": "http://localhost:5000"})
+        == "https://dagshub.com/u/r.mlflow"
+    )
+
+
+def test_resolve_pipeline_tracking_uri_uses_yaml_when_env_missing(monkeypatch):
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+
+    assert (
+        resolve_pipeline_tracking_uri({"tracking_uri": "http://mlflow:5000"})
+        == "http://mlflow:5000"
+    )
+
+
+def test_resolve_pipeline_tracking_uri_fallback_default(monkeypatch):
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+
+    assert resolve_pipeline_tracking_uri({}) == "http://localhost:5000"
+
+
+def test_resolve_pipeline_tracking_uri_no_fallback_when_disabled(monkeypatch):
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+
+    assert resolve_pipeline_tracking_uri({}, fallback=None) == ""
 
 
 def test_parse_args_accepts_supported_tasks():
