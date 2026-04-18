@@ -18,7 +18,6 @@ export interface Message {
 
 export interface PredictRequest {
   text: string;
-  lang: 'vi' | 'en';
 }
 
 export interface PredictResponse {
@@ -27,6 +26,25 @@ export interface PredictResponse {
   confidence: number;
   aspects: AspectSentiment[];
   sarcasm_flag: boolean;
+  detected_lang: string;
+  lang_confidence: number;
   latency_ms: number;
+}
+
+export interface BatchItemResult {
+  row: number;
+  text: string;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  confidence: number;
+  aspects: AspectSentiment[];
+  error?: string;
+}
+
+export interface BatchPredictResponse {
+  total_items: number;
+  processed_items: number;
+  failed_items: number;
+  latency_ms: number;
+  results: BatchItemResult[];
 }
 
