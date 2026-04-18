@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Response
+from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Response, BackgroundTasks
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
@@ -7,6 +7,7 @@ import pandas as pd
 import io
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from contracts.schemas import (
     PredictRequest, PredictResponse, AspectSentimentOut,
@@ -226,6 +227,68 @@ async def batch_status(job_id: str):
         created_at=datetime.now().isoformat(),
         completed_at=datetime.now().isoformat()
     )
+
+
+# ── Evaluation state ────────────────────────────────────────────────────────
+_evaluate_state: dict = {"running": False, "last_run": None, "last_error": None}
+
+
+@app.post("/evaluate")
+async def run_evaluate(background_tasks: BackgroundTasks, model: ModelInference = Depends(get_model)):
+    """Trigger async model evaluation and log metrics to local MLflow.
+    
+    Runs evaluate.py logic in a background thread so the endpoint returns
+    immediately. Check /evaluate/status for progress.
+    """
+    if _evaluate_state["running"]:
+        raise HTTPException(status_code=409, detail="Evaluation already in progress.")
+
+    def _do_evaluate():
+        import sys
+        from pathlib import Path
+        _evaluate_state["running"] = True
+        _evaluate_state["last_error"] = None
+        try:
+            # Run main() from evaluate.py
+            sys.path.insert(0, str(Path("/app")))
+            from src.model.evaluate import evaluate_on_dataset, log_to_mlflow, _project_root
+            from src.data.utils import load_params
+            from src.model.config import ModelConfig
+
+            root = _project_root()
+            params = load_params(str(root / "params.yaml"))
+            sentences_path = root / "data" / "processed" / "sentences.csv"
+
+            if not sentences_path.exists():
+                raise FileNotFoundError(f"Processed data not found at {sentences_path}")
+
+            config = ModelConfig()
+            sentences_df = pd.read_csv(sentences_path)
+            metrics = evaluate_on_dataset(model, sentences_df, split="test")
+            if metrics.get("n_samples", 0) == 0:
+                raise RuntimeError(metrics.get("error", "No evaluation samples found."))
+
+            metrics["device"] = str(model.device)
+            log_to_mlflow(config, metrics, params)
+            _evaluate_state["last_run"] = datetime.now().isoformat()
+        except Exception as exc:
+            _evaluate_state["last_error"] = str(exc)
+        finally:
+            _evaluate_state["running"] = False
+
+    background_tasks.add_task(_do_evaluate)
+    return {"status": "started", "message": "Evaluation running in background. Check /evaluate/status."}
+
+
+
+@app.get("/evaluate/status")
+async def evaluate_status():
+    return {
+        "running": _evaluate_state["running"],
+        "last_run": _evaluate_state["last_run"],
+        "last_error": _evaluate_state["last_error"],
+    }
+
 
 # Metrics endpoint for Prometheus
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
