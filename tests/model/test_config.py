@@ -64,8 +64,8 @@ class TestModelConfig:
 
     def test_onnx_config_fields(self):
         config = ModelConfig()
-        assert config.onnx_model_path == "models/onnx/fp32"
-        assert config.onnx_int8_model_path == "models/onnx/int8"
+        assert config.onnx_model_path == "models/onnx/sentiment_fp32/model.onnx"
+        assert config.onnx_int8_model_path == "models/onnx/sentiment_int8/model_quantized.onnx"
 
     def test_onnx_modes(self):
         config = ModelConfig(mode="onnx")

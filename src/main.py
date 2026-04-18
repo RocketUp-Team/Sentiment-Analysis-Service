@@ -29,7 +29,9 @@ from contracts.errors import ModelError, UnsupportedLanguageError
 async def lifespan(app: FastAPI):
     # Global model instance initialized at startup
     global ml_model
-    ml_model = BaselineModelInference()
+    from src.model.config import ModelConfig
+    config = ModelConfig(mode="onnx")
+    ml_model = BaselineModelInference(config)
     ml_model.preload()
     yield
     # Clean up here if needed

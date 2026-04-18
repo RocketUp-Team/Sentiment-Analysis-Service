@@ -176,11 +176,11 @@ def test_download_sentiment_datasets_writes_english_and_vietnamese_csvs(tmp_path
             if data_files == english_data_files:
                 english_loader_calls.append((name, data_files))
                 return {
-                    "train": _FakeSplit(pd.DataFrame([{"text": "great", "source": "sem_eval_2017", "label": "positive"}])),
+                    "train": _FakeSplit(pd.DataFrame([{"text": "great", "source": "sem_eval_2017", "label": 0}])),
                     "validation": _FakeSplit(
-                        pd.DataFrame([{"text": "okay", "source": "sem_eval_2017", "label": "neutral"}])
+                        pd.DataFrame([{"text": "okay", "source": "sem_eval_2017", "label": 1}])
                     ),
-                    "test": _FakeSplit(pd.DataFrame([{"text": "bad", "source": "sem_eval_2017", "label": "negative"}])),
+                    "test": _FakeSplit(pd.DataFrame([{"text": "bad", "source": "sem_eval_2017", "label": 2}])),
                 }
             if data_files == vietnamese_data_files:
                 vietnamese_loader_calls.append((name, data_files))

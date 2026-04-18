@@ -25,9 +25,10 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy source code
+# Copy source code and models
 COPY src/ ./src/
 COPY contracts/ ./contracts/
+COPY models/onnx/ ./models/onnx/
 
 # Environment variables for build & runtime
 ENV PYTHONPATH=/app
