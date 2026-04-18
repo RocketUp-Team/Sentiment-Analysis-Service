@@ -167,6 +167,17 @@ class FakePeftModel:
     def save_pretrained(self, path: str) -> None:
         self.saved_paths.append(path)
 
+    def get_nb_trainable_parameters(self) -> tuple[int, int]:
+        return (1000, 100000)
+
+
+class FakeTrainerState:
+    def __init__(self) -> None:
+        self.log_history: list[dict] = [
+            {"loss": 0.5, "epoch": 1},
+            {"eval_loss": 0.4, "epoch": 1},
+        ]
+
 
 class FakeTrainer:
     instances: list["FakeTrainer"] = []
@@ -190,10 +201,14 @@ class FakeTrainer:
             "data_collator": data_collator,
         }
         self.train_calls = 0
+        self.state = FakeTrainerState()
         type(self).instances.append(self)
 
     def train(self) -> None:
         self.train_calls += 1
+
+    def evaluate(self) -> dict:
+        return {"eval_loss": 0.4, "eval_f1": 0.85}
 
 
 class FakeTrainingArguments:
@@ -604,3 +619,22 @@ def test_main_sentiment_smoke_skips_brittle_stratified_split(monkeypatch):
     assert result == 0
     assert len(fakes["dataset_factory"].rows_by_split["train"]) == 28
     assert len(fakes["dataset_factory"].rows_by_split["test"]) == 4
+
+
+def test_train_returns_result_dict_with_expected_keys(monkeypatch):
+    tables = {
+        "sarcasm.csv": pd.DataFrame(_build_rows(40, "1")),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    from src.scripts.run_finetuning import train
+
+    result = train("sarcasm", smoke=True)
+
+    assert isinstance(result, dict)
+    assert result["adapter_path"].endswith("models/adapters_smoke/sarcasm")
+    assert result["eval_metrics"] == {"eval_loss": 0.4, "eval_f1": 0.85}
+    assert result["trainable_params"] == (1000, 100000)
+    assert isinstance(result["log_history"], list)
+    assert result["log_history"][0]["loss"] == 0.5
+    assert result["peft_model"] is fakes["peft_model"]["model"]
