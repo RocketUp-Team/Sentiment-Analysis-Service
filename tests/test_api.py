@@ -1,4 +1,6 @@
 import pytest
+import os
+os.environ["MODEL_MODE"] = "baseline"
 from fastapi.testclient import TestClient
 from src.main import app
 

@@ -30,7 +30,9 @@ async def lifespan(app: FastAPI):
     # Global model instance initialized at startup
     global ml_model
     from src.model.config import ModelConfig
-    config = ModelConfig(mode="onnx")
+    import os
+    mode = os.getenv("MODEL_MODE", "onnx")
+    config = ModelConfig(mode=mode)
     ml_model = BaselineModelInference(config)
     ml_model.preload()
     yield
