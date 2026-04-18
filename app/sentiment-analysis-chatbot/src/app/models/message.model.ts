@@ -1,3 +1,9 @@
+export interface AspectSentiment {
+  aspect: string;
+  sentiment: 'positive' | 'negative' | 'neutral';
+  confidence: number;
+}
+
 export interface Message {
   id: string;
   text: string;
@@ -5,7 +11,8 @@ export interface Message {
   timestamp: Date;
   sentiment: 'POSITIVE' | 'NEGATIVE' | 'NEUTRAL' | 'LOADING' | 'ERROR' | null;
   confidenceScore?: number;
-  aspects?: any[];
+  aspects?: AspectSentiment[];
+  sarcasm_flag?: boolean;
   latency_ms?: number;
 }
 
@@ -18,7 +25,8 @@ export interface PredictResponse {
   text: string;
   sentiment: 'positive' | 'negative' | 'neutral';
   confidence: number;
-  aspects: any[];
+  aspects: AspectSentiment[];
   sarcasm_flag: boolean;
   latency_ms: number;
 }
+

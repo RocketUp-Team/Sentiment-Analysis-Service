@@ -6,7 +6,7 @@ import { MessageBubbleComponent } from './components/message-bubble/message-bubb
 import { ChatInputComponent } from './components/chat-input/chat-input.component';
 import { LucideAngularModule, Search, Menu, MoreVertical, Moon, Sun, Trash2, BrainCircuit, Sparkles, User, Settings, Archive, Star, Bookmark, X, Loader2, Zap } from 'lucide-angular';
 import { trigger, transition, style, animate, state } from '@angular/animations';
-import { interval, takeWhile, switchMap, catchError, of, Subscription } from 'rxjs';
+import { interval, timer, takeWhile, switchMap, catchError, of, Subscription } from 'rxjs';
 
 interface ChatItem {
   id: string;
@@ -208,7 +208,7 @@ export class AppComponent implements OnInit, OnDestroy {
   isMenuOpen = signal(false);
   isSidebarMobileOpen = signal(false);
   isBackendReady = signal(false);
-  
+
   private healthSub?: Subscription;
 
   constructor() {
@@ -221,6 +221,13 @@ export class AppComponent implements OnInit, OnDestroy {
         }, 100);
       }
     });
+
+    // Optimistically mark ready if user already has chat history,
+    // so the loading overlay never blocks on F5 refresh.
+    // The health poll will still run and correct the value if needed.
+    if (localStorage.getItem('sentiment_chat_history')) {
+      this.isBackendReady.set(true);
+    }
   }
 
   ngOnInit() {
@@ -232,19 +239,17 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   private pollHealth() {
-    this.healthSub = interval(3000).pipe(
+    // timer(0, 3000): fires immediately at 0ms, then every 3s
+    this.healthSub = timer(0, 3000).pipe(
       switchMap(() => this.sentimentService.checkHealth().pipe(
-        catchError(err => {
-          console.log('Backend not ready yet...');
-          return of(null);
-        })
+        catchError(() => of(null))
       )),
       takeWhile(res => !res, true)
     ).subscribe(res => {
       if (res) {
         this.isBackendReady.set(true);
         if (this.messages().length === 0) {
-           this.sentimentService.sendMessage('Hệ thống Phân tích Cảm xúc đã sẵn sàng! Hãy nhập nội dung bạn muốn phân tích.');
+          this.sentimentService.addWelcomeMessage();
         }
         this.healthSub?.unsubscribe();
       }

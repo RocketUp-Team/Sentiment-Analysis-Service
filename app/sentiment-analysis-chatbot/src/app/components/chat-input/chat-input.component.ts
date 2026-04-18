@@ -82,9 +82,9 @@ import {
           *ngIf="!selectedFile && !isRecording"
           type="text"
           [(ngModel)]="text"
-          (keydown.enter)="send()"
+          (keyup.enter)="send()"
           [disabled]="disabled"
-          placeholder="Deep analyze sentiment..."
+          placeholder="Type text to analyse sentiment..."
           class="flex-1 bg-transparent border-none focus:ring-0 text-[15px] md:text-[15.5px] py-4 md:py-5 outline-none dark:text-white placeholder:text-slate-400 font-medium min-w-0"
         />
 

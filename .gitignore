@@ -34,3 +34,11 @@ GEMINI.md
 # Local MLflow (from `mlflow server` in repo root)
 mlflow.db
 mlartifacts/
+# LaTeX build artifacts (keep .tex source and .pdf, ignore compiler output)
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.synctex.gz

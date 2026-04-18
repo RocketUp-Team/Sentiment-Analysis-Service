@@ -1,0 +1,1042 @@
+% ============================================================
+%  DDM501 – AI in Production: From Models to Systems
+%  Final Project Report – Sentiment Analysis Service
+%  Team: Dương Hồng Quân · Phạm Đức Long · Đỗ Quốc Trung
+% ============================================================
+\documentclass[12pt, a4paper]{article}
+
+% ---- Encoding & Language (XeLaTeX) ----
+\usepackage{fontspec}
+\usepackage{polyglossia}
+\setmainlanguage{english}
+
+% ---- Global overflow prevention ----
+\sloppy
+\setlength{\emergencystretch}{3em}
+\hfuzz=5pt
+\usepackage[hyphens]{url}
+\usepackage{xurl}
+
+% ---- Layout ----
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.8cm, right=2.8cm, headheight=15pt]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% ---- Typography ----
+\usepackage{microtype}
+\usepackage{parskip}
+
+% ---- Mathematics ----
+\usepackage{amsmath, amssymb}
+
+% ---- Graphics & Colour ----
+\usepackage{graphicx}
+\usepackage[dvipsnames, svgnames, x11names]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, backgrounds, calc, shadows}
+
+% ---- Tables ----
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{array}
+% New column type: P{width} = centered fixed-width; R = right-aligned X
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+% All tables get small font by default
+\AtBeginEnvironment{tabularx}{\small}
+\AtBeginEnvironment{tabular}{\small}
+
+% ---- Code listings ----
+\usepackage{listings}
+\definecolor{codegreen}{rgb}{0.2,0.6,0.2}
+\definecolor{codegray}{rgb}{0.45,0.45,0.45}
+\definecolor{codepurple}{rgb}{0.5,0,0.65}
+\definecolor{backcolour}{RGB}{248,248,248}
+\lstdefinestyle{pythonstyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegray}\itshape,
+    keywordstyle=\color{NavyBlue}\bfseries,
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codegreen},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,
+    breaklines=true,
+    breakindent=0pt,
+    captionpos=b,
+    keepspaces=true,
+    numbers=left,
+    numbersep=6pt,
+    showspaces=false,
+    showstringspaces=false,
+    tabsize=4,
+    frame=single,
+    rulecolor=\color{gray!40},
+    xleftmargin=1.5em,
+    columns=fullflexible,
+}
+\lstdefinestyle{yamlstyle}{
+    backgroundcolor=\color{backcolour},
+    commentstyle=\color{codegray}\itshape,
+    keywordstyle=\color{DarkOrchid},
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    captionpos=b,
+    frame=single,
+    rulecolor=\color{gray!40},
+    xleftmargin=0.5em,
+}
+\lstset{style=pythonstyle}
+
+% ---- Hyperlinks ----
+\usepackage[hidelinks, colorlinks=true, linkcolor=NavyBlue,
+            urlcolor=NavyBlue, citecolor=NavyBlue]{hyperref}
+
+% ---- Header & Footer ----
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small DDM501 -- Sentiment Analysis Service}
+\lhead{\small Final Project Report}
+\rfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ---- Section styling ----
+\usepackage{titlesec}
+\titleformat{\section}[block]{\Large\bfseries\color{NavyBlue}}{{\thesection}}{1em}{}[\vspace{0.1em}\titlerule]
+\titleformat{\subsection}[block]{\large\bfseries\color{MidnightBlue}}{{\thesubsection}}{1em}{}
+\titleformat{\subsubsection}[block]{\normalsize\bfseries}{{\thesubsubsection}}{1em}{}
+
+% ---- Misc ----
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+
+% ============================================================
+%  Begin Document
+% ============================================================
+\begin{document}
+
+% ============================================================
+%  COVER PAGE
+% ============================================================
+\begin{titlepage}
+\thispagestyle{empty}
+\centering
+
+% ---- Top decorative bar ----
+{\color{NavyBlue}\rule{\linewidth}{3pt}}\\[0.3em]
+{\color{SteelBlue}\rule{\linewidth}{1pt}}\\[1.6cm]
+
+% ---- Institution ----
+{\Large\bfseries\color{NavyBlue} FPT UNIVERSITY}\\[0.3em]
+{\large\bfseries\color{MidnightBlue} FSB Institute of Management and Technology}\\[0.2em]
+{\small\color{gray} (Vien Quan tri \& Cong nghe FSB, Truong Dai hoc FPT)}\\[1.5cm]
+
+% ---- Course badge ----
+\fbox{%
+  \begin{minipage}{0.55\textwidth}\centering
+    {\small\bfseries\color{NavyBlue} COURSE}\\[0.3em]
+    {\normalsize\bfseries DDM501}\\[0.2em]
+    {\small AI in Production: From Models to Systems}\\[0.2em]
+    {\footnotesize Duration: 4 weeks $\cdot$ Weight: 40\%}
+  \end{minipage}
+}\\[1.4cm]
+
+% ---- Report label ----
+{\Large\bfseries\color{NavyBlue} FINAL PROJECT REPORT}\\[0.6em]
+{\color{SteelBlue}\rule{0.6\linewidth}{0.8pt}}\\[0.8cm]
+
+% ---- Project title ----
+{\Huge\bfseries\color{NavyBlue} Sentiment Analysis Service}\\[0.5em]
+{\large\itshape\color{MidnightBlue} End-to-End ML System: From Problem Definition to Production Deployment}\\[1.2cm]
+
+% ---- Topic tag ----
+\colorbox{NavyBlue!15}{%
+  \begin{minipage}{0.7\textwidth}\centering\vspace{0.4em}
+    {\small\bfseries Topic:} {\small NLP -- Topic 8 -- Sentiment Analysis Service}\\[0.2em]
+    {\small\bfseries Dataset:} {\small SemEval-2014 Task 4 Restaurant Reviews}\\[0.2em]
+    {\small\bfseries ML Model:} {\small RoBERTa + DeBERTa v3 Zero-Shot ABSA}\\[0.4em]
+  \end{minipage}
+}\\[1.4cm]
+
+% ---- Team members table ----
+{\large\bfseries\color{NavyBlue} TEAM MEMBERS}\\[0.6em]
+\begin{tabular}{@{} c l l l @{}}
+  \toprule
+  \textbf{\#} & \textbf{Full Name} & \textbf{Student ID} & \textbf{Responsibility} \\
+  \midrule
+  1 & Duong Hong Quan & --- & ML Pipeline \& Experiment Tracking \\
+  2 & Pham Duc Long   & --- & Backend API \& DevOps / CI-CD \\
+  3 & Do Quoc Trung   & --- & Monitoring \& Data Validation \\
+  \bottomrule
+\end{tabular}\\[1.5cm]
+
+% ---- Supervisor & submission info ----
+\begin{tabular}{@{} r l @{}}
+  \textbf{Instructor:}    & Huynh Cong Viet Ngu \\[0.3em]
+  \textbf{Submission:}    & April 2026 \\[0.3em]
+  \textbf{Academic Year:} & 2025 -- 2026 \\
+\end{tabular}
+
+% ---- Bottom decorative bar ----
+\vfill
+{\color{SteelBlue}\rule{\linewidth}{1pt}}\\[0.25em]
+{\color{NavyBlue}\rule{\linewidth}{3pt}}
+
+\end{titlepage}
+\newpage
+
+% ============================================================
+%  Abstract
+% ============================================================
+\begin{abstract}
+This report documents the complete lifecycle of the \textbf{Sentiment Analysis Service}, a production-grade ML system developed as the capstone project for the DDM501 course.
+The system performs real-time sentence-level sentiment classification (positive / negative / neutral) as well as Aspect-Based Sentiment Analysis (ABSA) using a pre-trained RoBERTa transformer evaluated on restaurant-domain reviews.
+
+The service is exposed through a RESTful FastAPI application, containerised with Docker, orchestrated via Docker Compose, and equipped with a full observability stack (Prometheus + Grafana), experiment tracking (MLflow), automated data validation (DVC), a robust test suite, and a GitHub Actions CI/CD pipeline.
+A dedicated \texttt{/explain} endpoint delivers token-level SHAP attributions, fulfilling the Responsible AI explainability requirement.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+% ============================================================
+\section{Problem Definition \& Requirements (10\%)}
+% ============================================================
+
+\subsection{Problem Statement \& Business Context}
+
+Customer feedback represents one of the most valuable yet under-utilised assets of any business.
+Manual review of large volumes of reviews, social-media posts, and support tickets is both expensive and slow.
+
+The \textbf{Sentiment Analysis Service} addresses this gap by providing an automated, REST-accessible system that:
+\begin{enumerate}[label=\alph*)]
+  \item classifies the \emph{overall} sentiment of a text snippet (positive · negative · neutral);
+  \item extracts \emph{aspect-level} sentiments (food, service, ambiance, price, location, general) for fine-grained business insight;
+  \item provides \emph{SHAP-based token explanations} so that end-users can trust and audit model decisions.
+\end{enumerate}
+
+The primary dataset used for offline evaluation is the \textbf{SemEval-2014 Task 4 Restaurant Reviews} corpus, which provides sentence-level and aspect-level sentiment annotations.
+
+\subsection{User Requirements \& Use Cases}
+
+\begin{table}[H]
+\centering
+\caption{Functional Requirements}
+\begin{tabularx}{\textwidth}{@{} l l X @{}}
+\toprule
+\textbf{ID} & \textbf{Priority} & \textbf{Requirement} \\
+\midrule
+FR-01 & Must Have   & Single-text sentiment prediction via \texttt{POST /predict} endpoint. \\
+FR-02 & Must Have   & Aspect-Based Sentiment Analysis (ABSA) returned alongside overall prediction. \\
+FR-03 & Must Have   & Batch processing of CSV files via \texttt{POST /batch\_predict}. \\
+FR-04 & Must Have   & Model explainability (SHAP values) via \texttt{POST /explain} endpoint. \\
+FR-05 & Must Have   & Health-check endpoint for load-balancer liveness probes. \\
+FR-06 & Should Have & Language guard: reject non-English inputs with HTTP 400. \\
+FR-07 & Should Have & Prometheus metrics endpoint \texttt{GET /metrics} for observability. \\
+FR-08 & Could Have  & Angular-based frontend chatbot interface. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Non-Functional Requirements}
+\begin{tabularx}{\textwidth}{@{} l l X @{}}
+\toprule
+\textbf{ID} & \textbf{Category} & \textbf{Requirement} \\
+\midrule
+NFR-01 & Performance    & P95 end-to-end latency $<$ 200\,ms for single-text prediction. \\
+NFR-02 & Reliability    & Service uptime $\geq 99.9\%$. \\
+NFR-03 & Scalability    & Stateless API; horizontally scalable via Docker replicas. \\
+NFR-04 & Security       & No secrets in Docker images; model weights baked in at build time. \\
+NFR-05 & Maintainability & Typed Python 3.11 codebase, \texttt{flake8} clean, full docstrings. \\
+NFR-06 & Observability  & All API calls and inference latencies tracked in Prometheus. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Success Metrics}
+
+\begin{table}[H]
+\centering
+\caption{Success Metrics at Business, Model, and System Levels}
+\begin{tabularx}{\textwidth}{@{} l X X l @{}}
+\toprule
+\textbf{Level} & \textbf{Metric} & \textbf{Target} & \textbf{Tool} \\
+\midrule
+Business & Prediction Throughput          & ${>}\,100$ req/s                         & Locust / Grafana \\
+Business & ABSA Coverage                  & Aspects on ${>}\,80\%$ of inputs         & Prometheus \\
+Model    & Accuracy (test set)            & ${>}\,0.85$                              & \texttt{src.model.evaluate} \\
+Model    & F1 Macro (test set)            & ${>}\,0.80$                              & MLflow \\
+System   & P95 Latency                    & ${<}\,200$\,ms                           & Prometheus histogram \\
+System   & 5xx Error Rate                 & ${<}\,1\%$                               & Prometheus counter \\
+System   & Avg Inference Latency          & ${<}\,500$\,ms                           & Prometheus histogram \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Scope \& Constraints}
+\begin{itemize}[noitemsep]
+  \item \textbf{In Scope:} Real-time sentiment + ABSA inference, SHAP explainability, batch CSV processing, full observability stack, data quality validation, MLflow experiment tracking.
+  \item \textbf{Out of Scope:} Fine-tuning on custom data, multi-language support, user authentication / rate limiting.
+  \item \textbf{Constraints:} CPU-only Docker image; offline model serving (weights cached at build time); Python~3.11.
+\end{itemize}
+
+% ============================================================
+\section{System Design \& Architecture (15\%)}
+% ============================================================
+
+\subsection{High-Level Architecture}
+
+The system consists of five containerised services orchestrated by Docker Compose on a shared bridge network (\texttt{sentiment-network}).
+Figure~\ref{fig:arch} shows the component diagram.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=1.4cm and 2.2cm,
+  box/.style={
+    draw, rounded corners=4pt, minimum width=2.8cm, minimum height=0.85cm,
+    font=\small\bfseries, align=center, fill=blue!8, drop shadow
+  },
+  ext/.style={box, fill=green!10},
+  warn/.style={box, fill=orange!15},
+  arr/.style={-Stealth, thick, gray!70},
+]
+\node[ext]  (user)   {User / Browser};
+\node[box]  (fe)     [right=of user]             {Angular\\ Frontend\\ (:80)};
+\node[box]  (api)    [right=of fe]               {FastAPI\\ App\\ (:8000)};
+\node[box]  (model)  [above right=1cm and 1.4cm of api] {RoBERTa\\ Inference};
+\node[box]  (prom)   [below=1.5cm of api]        {Prometheus\\ (:9091)};
+\node[box]  (grafana)[right=of prom]             {Grafana\\ (:3000)};
+\node[warn] (mlflow) [below=1.5cm of model]      {MLflow\\ (:5005)};
+
+\draw[arr] (user)  -- (fe);
+\draw[arr] (fe)    -- (api);
+\draw[arr] (api)   -- (model);
+\draw[arr] (api)   -- node[left,  font=\scriptsize]{/metrics} (prom);
+\draw[arr] (prom)  -- (grafana);
+\draw[arr] (api)   -- node[right, font=\scriptsize]{log runs} (mlflow);
+\end{tikzpicture}
+\caption{High-level component diagram -- Sentiment Analysis Service.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Component Design \& Responsibilities}
+
+\begin{table}[H]
+\centering
+\caption{Service Responsibilities}
+\begin{tabularx}{\textwidth}{@{} l l X @{}}
+\toprule
+\textbf{Service} & \textbf{Image} & \textbf{Responsibility} \\
+\midrule
+\texttt{fastapi\_app} & python:3.11-slim (custom) & Core ML inference, REST API, metrics exposure \\
+\texttt{frontend}     & Angular/Nginx             & Chatbot-style web UI for sentiment queries \\
+\texttt{prometheus}   & prom/prometheus:v2.45.0   & Time-series metrics scraping, alerting rules \\
+\texttt{grafana}      & grafana/grafana:10.0.0    & Dashboard visualisation, alert notification \\
+\texttt{mlflow}       & ghcr.io/mlflow:v2.4.1     & Experiment run tracking, artifacts storage \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Resource Limits per Service (Docker Compose)}
+\begin{tabularx}{\textwidth}{@{} l X X @{}}
+\toprule
+\textbf{Service} & \textbf{CPU Limit} & \textbf{Memory Limit} \\
+\midrule
+fastapi\_app & 1.50 vCPU & 4\,GB \\
+frontend     & 0.25 vCPU & 512\,MB \\
+prometheus   & --        & 256\,MB \\
+grafana      & --        & 512\,MB \\
+mlflow       & 0.50 vCPU & 1\,GB \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Data Flow}
+
+\begin{enumerate}
+  \item User submits text to \texttt{POST /predict} (or \texttt{/explain}) via the Angular frontend or any HTTP client.
+  \item FastAPI validates the request body through Pydantic schemas (\texttt{PredictRequest}).
+  \item Validated text is forwarded to \texttt{BaselineModelInference\allowbreak.predict\_single()}.
+  \item The RoBERTa tokenizer encodes the text; softmax output gives sentiment label and confidence.
+  \item The DeBERTa zero-shot ABSA pipeline extracts aspect sentiments above a 0.5 threshold.
+  \item For \texttt{/explain}, a SHAP \texttt{Explainer} returns per-token attribution scores.
+  \item The response is serialised by \texttt{PredictResponse} and returned to the client.
+  \item The monitoring middleware records request counts and latencies for Prometheus.
+\end{enumerate}
+
+\subsection{Technology Stack Justification}
+
+\begin{table}[H]
+\centering
+\caption{Technology Decisions and Trade-off Analysis}
+\begin{tabularx}{\textwidth}{@{} >{}l >{}l X X @{}}
+\toprule
+\textbf{Layer} & \textbf{Choice} & \textbf{Justification} & \textbf{Trade-off} \\
+\midrule
+API
+  & FastAPI
+  & Async-native, auto-generates OpenAPI/Swagger, Pydantic integration
+  & Node.js higher throughput for pure I/O \\
+ML Model
+  & RoBERTa
+  & Pre-trained on 58M tweets; strong zero-shot sentiment accuracy
+  & Larger than DistilBERT; slower inference \\
+ABSA
+  & DeBERTa v3
+  & No labelled ABSA data needed; flexible candidate category set
+  & Higher latency than a fine-tuned model \\
+Container
+  & Docker multi-stage
+  & Smaller image: builder installs deps, runtime copies site-packages only
+  & Longer initial build time \\
+Tracking
+  & MLflow
+  & Open-source, self-hosted, native DVC integration
+  & W\&B has a richer hosted UI \\
+Observability
+  & Prometheus + Grafana
+  & Industry standard, battle-tested, no vendor lock-in
+  & Higher operational complexity vs.\ SaaS \\
+Data Versioning
+  & DVC
+  & Git-native, reproducible pipelines, remote storage
+  & Steeper learning curve than plain scripts \\
+CI/CD
+  & GitHub Actions
+  & Free for public repos, tight GitHub integration
+  & Jenkins more flexible for complex pipelines \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ============================================================
+\section{Implementation (40\%)}
+% ============================================================
+
+\subsection{ML Pipeline (15\%)}
+
+\subsubsection{Dataset: SemEval-2014 Restaurant Reviews}
+
+The raw corpus is sourced from \texttt{data/external/semeval2014/} and ingested by \texttt{src.data.downloader}.
+After ingestion the corpus is managed through a four-stage DVC pipeline defined in \texttt{dvc.yaml}:
+
+\begin{lstlisting}[style=yamlstyle, caption={DVC pipeline stages (dvc.yaml)}]
+stages:
+  download:           # Downloads raw XML -> sentences.csv + aspects.csv
+  preprocess:         # Ordered transform chain (see Section 3.1.2)
+  validate:           # DataQualityValidator -> quality_report.json
+  evaluate_baseline:  # RoBERTa evaluation -> baseline_metrics.json + MLflow
+\end{lstlisting}
+
+\subsubsection{Preprocessing Pipeline}
+
+The \texttt{PreprocessingPipeline} class in \texttt{src/data/pipeline.py} applies a configurable, ordered chain of transforms.
+Each transform implements the \texttt{BaseTransform} interface operating on a pair of DataFrames.
+After every step, orphan aspect rows are automatically cascaded out.
+
+\begin{lstlisting}[language=Python, caption={Transform chain built from params.yaml}]
+transforms = [
+    LabelMapper(aspect_categories=params["label_mapping"]["aspect_categories"]),
+    SentimentDeriver(mixed_strategy="negative_priority"),
+    TextCleaner(lowercase=True, strip_whitespace=True),
+    DuplicateRemover(),
+    LengthFilter(min_length=3, max_length=2000),
+    Splitter(validation_ratio=0.1, seed=42),
+]
+\end{lstlisting}
+
+Key configuration parameters (\texttt{params.yaml}):
+
+\begin{table}[H]
+\centering
+\caption{Preprocessing Hyperparameters}
+\begin{tabularx}{\textwidth}{@{} l l X @{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Effect} \\
+\midrule
+\texttt{lowercase}            & \texttt{true}  & Normalises casing for better tokenisation \\
+\texttt{strip\_whitespace}    & \texttt{true}  & Removes leading/trailing whitespace \\
+\texttt{remove\_duplicates}   & \texttt{true}  & Eliminates exact duplicate sentences \\
+\texttt{drop\_conflict\_labels} & \texttt{true} & Removes sentences with conflicting aspect sentiments \\
+\texttt{min\_text\_length}    & 3 chars        & Filters trivially short texts \\
+\texttt{max\_text\_length}    & 2\,000 chars   & Prevents tokeniser overflow \\
+\texttt{validation\_ratio}    & 0.10           & 10\% of training data held for validation \\
+\texttt{split\_seed}          & 42             & Ensures reproducibility \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Mixed Sentiment Strategy.}~When a sentence contains aspects with conflicting sentiments, the \texttt{SentimentDeriver} uses the \texttt{negative\_priority} strategy: a sentence is labelled \textit{negative} if any aspect is negative, overriding neutral or positive aspects.
+
+\subsubsection{Data Quality Validation}
+
+The \texttt{DataQualityValidator} (\texttt{src/data/validators.py}) enforces a comprehensive set of checks:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Schema checks:} required columns (\texttt{sentence\_id}, \texttt{text}, \texttt{sentiment}, \texttt{split} for sentences; \texttt{sentence\_id}, \texttt{aspect\_category}, \texttt{sentiment} for aspects).
+  \item \textbf{Minimum samples:} each split must have $\geq 100$ records.
+  \item \textbf{Null ratio:} no column may exceed a 1\% null rate.
+  \item \textbf{Label validity:} sentiment restricted to \{positive, negative, neutral\}; aspect categories to \{food, service, ambiance, price, location, general\}.
+  \item \textbf{Referential integrity:} no orphan aspect rows.
+  \item \textbf{Distribution warnings:} any class below $5\%$ representation triggers a warning logged to MLflow.
+\end{itemize}
+
+The quality report (\texttt{data/reports/quality\_report.json}) is automatically logged as an MLflow artifact with per-split sample counts, null ratios, and label distributions.
+
+\subsubsection{Model: BaselineModelInference}
+
+The core inference engine is \texttt{BaselineModelInference} (\texttt{src/model/baseline.py}), implementing the \texttt{ModelInference} abstract interface.
+
+\begin{table}[H]
+\centering
+\caption{Model Configuration (ModelConfig)}
+\begin{tabularx}{\textwidth}{@{} l X X @{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Description} \\
+\midrule
+\texttt{model\_name}
+  & \texttt{cardiffnlp/} \texttt{twitter-roberta-base-sentiment-latest}
+  & Sentiment HuggingFace checkpoint \\
+\texttt{max\_length}
+  & 512 tokens
+  & Tokeniser truncation limit \\
+\texttt{label\_map}
+  & \{0: negative, 1: neutral, 2: positive\}
+  & Logit index to label mapping \\
+\texttt{absa\_model\_name}
+  & \texttt{MoritzLaurer/} \texttt{deberta-v3-base-zeroshot-v2.0}
+  & Zero-shot ABSA classifier \\
+\texttt{absa\_threshold}
+  & 0.5
+  & Minimum confidence to include an aspect \\
+\texttt{absa\_categories}
+  & food, service, ambiance, price, location, general
+  & Candidate aspect labels \\
+\texttt{supported\_languages}
+  & \texttt{("en",)}
+  & English only \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Inference flow for \texttt{predict\_single}:}
+\begin{enumerate}[noitemsep]
+  \item Language guard: raises \texttt{UnsupportedLanguageError} for non-English inputs.
+  \item Tokenise with \texttt{AutoTokenizer} (no padding for single inputs).
+  \item Move tensors to target device (CPU or CUDA).
+  \item Forward pass under \texttt{torch.no\_grad()}; apply Softmax over logits.
+  \item Identify argmax class; round confidence to 4 decimal places.
+  \item Call \texttt{\_extract\_aspects()} with the DeBERTa zero-shot pipeline.
+  \item Return \texttt{PredictionResult(sentiment, confidence,\allowbreak\ aspects, sarcasm\_flag=False)}.
+\end{enumerate}
+
+\textbf{Batch inference (\texttt{predict\_batch}):}~Uses \texttt{padding=True} to process multiple texts in a single forward pass, reducing latency for batch workloads.
+
+\subsubsection{Experiment Tracking with MLflow}
+
+The \texttt{log\_to\_mlflow} function in \texttt{src/model/evaluate.py} logs the following at each evaluation run:
+
+\begin{lstlisting}[language=Python, caption={MLflow run parameters and metrics}]
+run_params = {
+    "model_name":   "cardiffnlp/twitter-roberta-base-sentiment-latest",
+    "model_type":   "baseline_pretrained",
+    "max_length":   512,
+    "fine_tuned":   False,
+    "absa_enabled": False,
+}
+run_metrics = {
+    "accuracy", "f1_macro", "precision_macro",
+    "recall_macro", "mean_confidence", "n_samples",
+    # plus per-class: f1_positive, f1_negative, f1_neutral
+}
+# Artifacts: confusion_matrix.png, classification_report.txt,
+#            metrics_summary.json
+\end{lstlisting}
+
+The experiment name is \texttt{sentiment\_baseline}; data-preprocessing runs use \texttt{data\_preprocessing}.
+Both tracking URI and experiment names are configurable via \texttt{params.yaml}.
+
+\subsection{Deployment (15\%)}
+
+\subsubsection{REST API Design}
+
+The FastAPI application (\texttt{src/main.py}) provides a self-documenting REST interface:
+
+\begin{table}[H]
+\centering
+\caption{API Endpoint Reference}
+\begin{tabularx}{\textwidth}{@{} l l X @{}}
+\toprule
+\textbf{Method} & \textbf{Endpoint} & \textbf{Description} \\
+\midrule
+GET  & \texttt{/health}                   & Liveness probe; returns model load status and supported languages \\
+POST & \texttt{/predict}                  & Single-text sentiment + ABSA inference \\
+POST & \texttt{/explain}                  & SHAP token-level attributions for a single text \\
+POST & \texttt{/batch\_predict}           & CSV upload (\texttt{multipart/form-data}); returns job ID \\
+GET  & \texttt{/batch\_status/\{job\_id\}} & Polls processing status of a batch job \\
+GET  & \texttt{/metrics}                  & Prometheus-compatible plain-text metric exposition \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\textbf{Error Handling:}~Custom exception handlers return appropriate HTTP status codes:
+\begin{itemize}[noitemsep]
+  \item \texttt{UnsupportedLanguageError} $\rightarrow$ HTTP 400 plain-text message.
+  \item \texttt{ModelError} $\rightarrow$ HTTP 500 plain-text message.
+  \item Model not yet loaded $\rightarrow$ HTTP 503 via the \texttt{get\_model} dependency.
+\end{itemize}
+
+Request and response schemas are enforced via Pydantic v2 with field-level validation:
+
+\begin{lstlisting}[language=Python, caption={Core Pydantic schemas (contracts/schemas.py)}]
+class PredictRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    lang: str = "en"
+
+class PredictResponse(BaseModel):
+    text: str
+    sentiment: Literal["positive", "negative", "neutral"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    aspects: list[AspectSentimentOut] = Field(default_factory=list)
+    sarcasm_flag: bool
+    latency_ms: float
+
+class ExplainResponse(BaseModel):
+    tokens: list[str]
+    shap_values: list[float]
+    base_value: float
+    latency_ms: float
+
+    @model_validator(mode="after")
+    def validate_lengths(self):
+        if len(self.tokens) != len(self.shap_values):
+            raise ValueError("tokens and shap_values must match in length")
+        return self
+\end{lstlisting}
+
+\subsubsection{Docker Containerisation}
+
+The Dockerfile employs a \textbf{multi-stage build} to minimise the final image size:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Stage 1 (builder):} \texttt{python:3.11-slim} with \texttt{build-essential}; installs PyTorch (CPU wheel) and all \texttt{requirements.txt} packages.
+  \item \textbf{Stage 2 (runtime):} copies only \texttt{site-packages} and \texttt{bin} from the builder, plus application source.
+  \item \textbf{Model caching:} \texttt{RUN python src/model/download\_models.py} bakes the HuggingFace weights into the image at build time.
+  \item \textbf{Offline enforcement:} \texttt{TRANSFORMERS\_OFFLINE=1} and \texttt{HF\_DATASETS\_OFFLINE=1} eliminate network calls at runtime.
+\end{itemize}
+
+\begin{lstlisting}[language=bash, caption={Dockerfile multi-stage build summary}]
+# Stage 1: build
+FROM python:3.11-slim AS builder
+RUN pip install torch --index-url https://download.pytorch.org/whl/cpu \
+ && pip install -r requirements.txt
+
+# Stage 2: lean runtime
+FROM python:3.11-slim
+COPY --from=builder /usr/local/lib/python3.11/site-packages ...
+COPY src/ contracts/
+RUN python src/model/download_models.py
+ENV TRANSFORMERS_OFFLINE=1
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+\end{lstlisting}
+
+\subsubsection{Docker Compose Orchestration}
+
+Five services are co-orchestrated in \texttt{docker-compose.yml} on the \texttt{sentiment-network} bridge:
+
+\begin{lstlisting}[style=yamlstyle, caption={Service graph in docker-compose.yml}]
+services:
+  fastapi_app:   # depends_on: mlflow
+  frontend:      # depends_on: fastapi_app
+  prometheus:    # mounts alert_rules.yml + prometheus.yml
+  grafana:       # depends_on: prometheus; mounts provisioning/
+  mlflow:        # standalone; experiment tracking UI
+\end{lstlisting}
+
+All services share \texttt{sentiment-network}; inter-service DNS allows e.g.\ \texttt{http://mlflow:5000}.
+
+\subsection{Monitoring (10\%)}
+
+\subsubsection{Prometheus Metrics}
+
+Three Prometheus metric families are defined in \texttt{src/monitoring/metrics.py}:
+
+\begin{table}[H]
+\centering
+\caption{Prometheus Metric Definitions}
+\begin{tabularx}{\textwidth}{@{} p{4.8cm} l X p{3cm} @{}}
+\toprule
+\textbf{Metric Name} & \textbf{Type} & \textbf{Description} & \textbf{Labels} \\
+\midrule
+\texttt{api\_requests\_total}
+  & Counter
+  & Total number of API requests
+  & method, endpoint, http\_status \\
+\texttt{api\_request\_latency\_seconds}
+  & Histogram
+  & End-to-end request latency
+  & method, endpoint \\
+\texttt{model\_inference\_latency\_seconds}
+  & Histogram
+  & Model forward-pass duration
+  & -- \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The \texttt{monitor\_middleware} ASGI middleware wraps every request, computing wall-clock duration and incrementing both counters before returning the response.
+
+\subsubsection{Grafana Dashboards}
+
+Grafana is provisioned automatically via the \texttt{infra/grafana/provisioning/} volume mount, with:
+\begin{itemize}[noitemsep]
+  \item Datasource provisioning pointing to the internal Prometheus service.
+  \item Pre-built dashboard JSON files visualising request rate, latency percentiles, and error-rate time series.
+\end{itemize}
+
+\subsubsection{Alerting Rules}
+
+Two alert rules are defined in \texttt{infra/prometheus/alert\_rules.yml}:
+
+\begin{lstlisting}[style=yamlstyle, caption={Prometheus alerting rules}]
+- alert: HighErrorRate
+  expr: rate(api_requests_total{http_status=~"5.."}[5m])
+      / rate(api_requests_total[5m]) > 0.1
+  for: 1m
+  labels: { severity: critical }
+  annotations:
+    summary: "High HTTP 5xx error rate on {{ $labels.endpoint }}"
+    description: "Error rate above 10% for 1 minute."
+
+- alert: HighInferenceLatency
+  expr: model_inference_latency_seconds_sum
+      / model_inference_latency_seconds_count > 0.5
+  for: 5m
+  labels: { severity: warning }
+  annotations:
+    summary: "High model inference latency"
+    description: "Average inference latency above 500ms for 5 minutes."
+\end{lstlisting}
+
+% ============================================================
+\section{Testing \& CI/CD (15\%)}
+% ============================================================
+
+\subsection{Test Strategy}
+
+The test suite in \texttt{tests/} is structured around three tiers:
+
+\begin{table}[H]
+\centering
+\caption{Test Coverage Summary}
+\begin{tabularx}{\textwidth}{@{} p{3.8cm} p{3.2cm} X @{}}
+\toprule
+\textbf{Test Type} & \textbf{Location} & \textbf{Coverage} \\
+\midrule
+Unit -- Data Transforms
+  & \texttt{tests/data/}
+  & Each transform (TextCleaner, LengthFilter, DuplicateRemover,
+    Splitter, SentimentDeriver) tested in isolation with mock DataFrames \\
+Unit -- Model / Contracts
+  & \texttt{tests/model/},\newline \texttt{tests/contracts/}
+  & ModelConfig defaults, schema field constraints, model\_validator logic \\
+Integration -- API
+  & \texttt{tests/test\_api.py}
+  & All five endpoints tested via FastAPI TestClient \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Integration Test Examples}
+
+\begin{lstlisting}[language=Python, caption={Integration tests (tests/test\_api.py)}]
+def test_predict(client):
+    response = client.post(
+        "/predict",
+        json={"text": "I love this product!", "lang": "en"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "sentiment" in data   # overall sentiment label
+    assert "confidence" in data  # float in [0, 1]
+    assert "aspects" in data     # ABSA aspect list
+
+def test_explain(client):
+    response = client.post(
+        "/explain",
+        json={"text": "I love this product!", "lang": "en"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "tokens" in data
+    assert "shap_values" in data
+    # Schema invariant enforced by Pydantic model_validator
+    assert len(data["tokens"]) == len(data["shap_values"])
+\end{lstlisting}
+
+\subsection{CI/CD Pipeline}
+
+The GitHub Actions workflow (\texttt{.github/workflows/ci.yml}) triggers on every push to \texttt{main}/\texttt{develop} and on pull-request to \texttt{main}:
+
+\begin{lstlisting}[style=yamlstyle, caption={GitHub Actions CI/CD configuration}]
+on:
+  push:         { branches: [main, develop] }
+  pull_request: { branches: [main] }
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with: { python-version: '3.11' }
+      - run: pip install -r requirements.txt
+      - run: pytest --cov=src tests/
+      - run: pip install flake8
+      - run: flake8 . --select=E9,F63,F7,F82
+      - run: flake8 . --exit-zero --max-complexity=10
+\end{lstlisting}
+
+\textbf{Pipeline stages:}
+\begin{enumerate}[noitemsep]
+  \item \textbf{Checkout} -- fetches source code on \texttt{ubuntu-latest}.
+  \item \textbf{Dependency Install} -- installs all packages including \texttt{pytest}, \texttt{pytest-cov}, \texttt{httpx}.
+  \item \textbf{Test \& Coverage} -- runs full suite; \texttt{pytest-cov} measures line coverage across \texttt{src/}.
+  \item \textbf{Lint (hard)} -- \texttt{flake8} fails the build on syntax errors and undefined names.
+  \item \textbf{Lint (soft)} -- \texttt{flake8} in warning mode for complexity and line-length metrics.
+\end{enumerate}
+
+% ============================================================
+\section{Responsible AI (10\%)}
+% ============================================================
+
+\subsection{Model Explainability with SHAP}
+
+The \texttt{/explain} endpoint exposes token-level feature attributions using the \textbf{SHAP} library (\texttt{shap\,$\geq$\,0.42.0}).
+
+\subsubsection{Technical Implementation}
+
+\begin{lstlisting}[language=Python, caption={SHAP explanation in BaselineModelInference}]
+def get_shap_explanation(self, text: str, lang: str = "en") -> SHAPResult:
+    import shap
+    self._check_language(lang)
+    # Identify the predicted class index
+    predicted_probs     = self._predict_probabilities(text)[0]
+    predicted_class_idx = int(predicted_probs.argmax().item())
+    # Wrap HuggingFace pipeline in SHAP Explainer
+    pipe        = self._get_classification_pipeline()
+    explainer   = shap.Explainer(pipe)
+    shap_values = explainer([text])
+    # Extract token strings and SHAP scores for the predicted class
+    raw_tokens = shap_values.data[0]
+    tokens = raw_tokens.tolist() if hasattr(raw_tokens, "tolist") else list(raw_tokens)
+    values = shap_values.values[0][:, predicted_class_idx].tolist()
+    base   = float(shap_values.base_values[0][predicted_class_idx])
+    return SHAPResult(tokens=tokens, shap_values=values, base_value=base)
+\end{lstlisting}
+
+The explanation workflow:
+\begin{enumerate}[noitemsep]
+  \item The text is classified to determine the predicted class index.
+  \item \texttt{shap.Explainer} computes Shapley values by marginalising over permutations of input tokens.
+  \item Per-token SHAP scores for the predicted class are extracted alongside the base value.
+  \item The \texttt{ExplainResponse} schema enforces \texttt{len(tokens) == len(shap\_values)} via \texttt{model\_validator}.
+\end{enumerate}
+
+\subsection{Fairness Analysis}
+
+\textbf{Known Biases.}~The \texttt{cardiffnlp/twitter-roberta-base-sentiment-latest} model was pre-trained on Twitter data, introducing:
+\begin{itemize}[noitemsep]
+  \item \textbf{Domain bias:} informal/social-media language is better handled than formal text.
+  \item \textbf{Language bias:} English only; non-English inputs are blocked by the language guard.
+  \item \textbf{Sarcasm:} The \texttt{sarcasm\_flag} field is reserved but not yet populated -- a known limitation.
+\end{itemize}
+
+\textbf{Dataset Bias Mitigation.}~The \texttt{DataQualityValidator} emits distribution warnings when any class falls below 5\% in a split, enabling early detection of imbalance before evaluation.
+
+\subsection{Data Privacy Considerations}
+
+\begin{itemize}[noitemsep]
+  \item No user input data is persisted; the service is \textbf{stateless} -- all processing is in-memory per request.
+  \item No PII is logged by the monitoring middleware; only HTTP method, path, status code, and timing are recorded.
+  \item Model weights are stored inside the Docker image; no external registry calls occur at runtime.
+\end{itemize}
+
+\subsection{Ethical Implications}
+
+\begin{table}[H]
+\centering
+\caption{Ethical Risk Register}
+\begin{tabularx}{\textwidth}{@{} l X l @{}}
+\toprule
+\textbf{Risk} & \textbf{Implication \& Mitigation} & \textbf{Status} \\
+\midrule
+Biased training data
+  & RoBERTa pre-trained on Twitter; may disadvantage formal text.
+    Future fine-tuning on diverse corpora recommended.
+  & Acknowledged \\
+Misclassification harm
+  & Incorrect label could negatively influence business decisions.
+    SHAP explanations and human-in-the-loop review are recommended.
+  & SHAP done \\
+Sarcasm detection
+  & Missed sarcasm leads to reversed polarity. \texttt{sarcasm\_flag}
+    reserved; dedicated sarcasm model planned.
+  & Planned \\
+Job displacement
+  & May reduce manual review roles. System is positioned as
+    decision-support, not a replacement.
+  & Discussed \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+% ============================================================
+\section{Documentation (10\%)}
+% ============================================================
+
+\subsection{Repository Structure}
+
+\begin{lstlisting}[language=bash, caption={Top-level repository layout}]
+Sentiment-Analysis-Service/
+  .github/workflows/ci.yml    # GitHub Actions CI pipeline
+  app/                        # Angular frontend + Dockerfile
+  contracts/                  # Shared interfaces, schemas, errors
+    model_interface.py        # Abstract ModelInference base class
+    schemas.py                # Pydantic API schemas
+    errors.py                 # Custom exceptions
+  data/                       # DVC-managed data artefacts
+    external/, raw/, processed/, reports/
+  infra/
+    prometheus/               # prometheus.yml, alert_rules.yml
+    grafana/provisioning/     # Datasource + dashboard JSON
+  src/
+    main.py                   # FastAPI app entrypoint
+    api/, core/, services/    # Routers, logic, helpers
+    data/                     # Data pipeline & transforms
+    model/                    # Baseline model, config, evaluate
+    monitoring/metrics.py     # Prometheus metrics + middleware
+  tests/                      # Pytest test suite
+  Dockerfile                  # Multi-stage Docker build
+  docker-compose.yml          # Five-service orchestration
+  dvc.yaml                    # Reproducible ML pipeline stages
+  params.yaml                 # Experiment & pipeline parameters
+  requirements.txt            # Python dependencies (pinned ranges)
+  README.md                   # Setup & usage guide
+  ARCHITECTURE.md             # System design documentation
+\end{lstlisting}
+
+\subsection{API Documentation}
+
+FastAPI auto-generates a fully interactive \textbf{Swagger UI} at \path{http://localhost:8000/docs} and a \textbf{ReDoc} interface at \path{http://localhost:8000/redoc} from the Pydantic schemas and endpoint decorators, satisfying the OpenAPI/Swagger documentation requirement without additional tooling.
+
+\subsection{Setup \& Deployment Guide}
+
+\begin{lstlisting}[language=bash, caption={Quick-start commands}]
+# Clone the repository
+git clone <repo-url>
+cd Sentiment-Analysis-Service
+
+# Launch full stack
+docker-compose up --build
+
+# Services:
+#   API         http://localhost:8000/docs
+#   Grafana     http://localhost:3000    (admin / admin)
+#   MLflow      http://localhost:5005
+#   Prometheus  http://localhost:9091
+
+# Run tests locally (Python 3.11 environment required)
+pip install -r requirements.txt
+pytest --cov=src tests/
+
+# Re-run DVC pipeline (data + preprocess + validate + evaluate)
+dvc repro
+\end{lstlisting}
+
+\subsection{Code Quality}
+
+\begin{itemize}[noitemsep]
+  \item All public functions and classes carry \textbf{docstrings}.
+  \item \textbf{Type hints} throughout (\texttt{from \_\_future\_\_ import annotations}).
+  \item Immutable configuration via \texttt{@dataclass(frozen=True)} in \texttt{ModelConfig}.
+  \item Separation of concerns: \texttt{contracts/} holds shared interfaces; business logic in \texttt{src/}; infrastructure in \texttt{infra/}.
+  \item All modules are \textbf{flake8-clean} (E9/F-series hard errors pass in CI).
+\end{itemize}
+
+% ============================================================
+\section{Conclusion}
+% ============================================================
+
+The Sentiment Analysis Service successfully demonstrates a complete, production-grade ML system lifecycle:
+
+\begin{enumerate}
+  \item \textbf{Problem Definition:} Clearly motivated by business need; success metrics defined at business, model, and system levels.
+  \item \textbf{Architecture:} Microservices design with full observability and experiment tracking, all resource-limited via Docker Compose.
+  \item \textbf{ML Pipeline:} Reproducible data pipeline (DVC) with data-quality validation, configurable preprocessing transforms, and MLflow-tracked evaluations of the RoBERTa baseline.
+  \item \textbf{Deployment:} Multi-stage Docker image with offline model serving; REST API with Pydantic schemas; health checks and CORS middleware.
+  \item \textbf{Monitoring:} Three Prometheus metrics via ASGI middleware; Grafana dashboards auto-provisioned; two alerting rules for error rate and inference latency.
+  \item \textbf{Testing \& CI/CD:} Three test layers (unit, integration, data quality); GitHub Actions lints and tests on every commit.
+  \item \textbf{Responsible AI:} SHAP token attributions via \texttt{/explain}; bias acknowledgment; privacy-preserving stateless design; ethical risk register.
+\end{enumerate}
+
+% ============================================================
+%  Appendix
+% ============================================================
+\appendix
+
+\section{Full Dependency List}
+
+\begin{lstlisting}[language=bash, caption={requirements.txt}]
+dvc>=3.0,<4.0
+mlflow>=2.0,<3.0
+pydantic>=2.0,<3.0
+fastapi>=0.110.0
+uvicorn>=0.27.0
+prometheus-client>=0.20.0
+python-multipart>=0.0.9
+PyYAML>=6.0,<7.0
+scikit-learn>=1.0,<2.0
+pytest>=8.0
+pytest-cov>=5.0
+httpx>=0.27.0
+pandas>=2.2.0
+python-dotenv>=1.0.1
+torch>=2.0.0
+transformers>=4.30.0
+shap>=0.42.0
+matplotlib>=3.7.0
+\end{lstlisting}
+
+\section{Individual Contribution}
+
+\begin{table}[H]
+\centering
+\caption{Team Member Responsibilities}
+\begin{tabularx}{\textwidth}{@{} l X @{}}
+\toprule
+\textbf{Member} & \textbf{Primary Contributions} \\
+\midrule
+Dương Hồng Quân
+  & ML pipeline design, model evaluation (\texttt{src/model/}),
+    MLflow integration, DVC pipeline configuration \\
+Phạm Đức Long
+  & FastAPI application, Pydantic schemas, Docker containerisation,
+    CI/CD pipeline (GitHub Actions) \\
+Đỗ Quốc Trung
+  & Monitoring stack (Prometheus + Grafana), alerting rules,
+    data validation (\texttt{src/data/validators.py}), testing \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\end{document}

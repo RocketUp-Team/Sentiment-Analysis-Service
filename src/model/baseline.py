@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import torch
 from peft import PeftModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -18,6 +19,7 @@ from contracts.model_interface import (
 from src.model.config import ModelConfig
 from src.model.device import get_device
 from src.model.onnx_inference import OnnxInferenceSession
+from src.monitoring.metrics import MODEL_INFERENCE_LATENCY
 
 logger = logging.getLogger(__name__)
 
@@ -152,8 +154,10 @@ class BaselineModelInference(ModelInference):
             )
         )
 
+        _t0 = time.perf_counter()
         with torch.no_grad():
             outputs = self._model(**inputs)
+        MODEL_INFERENCE_LATENCY.observe(time.perf_counter() - _t0)
 
         return torch.softmax(outputs.logits, dim=-1)
 
