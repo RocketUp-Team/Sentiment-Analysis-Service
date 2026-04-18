@@ -5,7 +5,7 @@ import { ThemeService } from './services/theme.service';
 import { MessageBubbleComponent } from './components/message-bubble/message-bubble.component';
 import { ChatInputComponent } from './components/chat-input/chat-input.component';
 import { BatchUploadComponent } from './components/batch-upload/batch-upload.component';
-import { LucideAngularModule, Search, Menu, MoreVertical, Moon, Sun, Trash2, BrainCircuit, Sparkles, User, Settings, Archive, Star, Bookmark, X, Loader2, Zap, Upload } from 'lucide-angular';
+import { LucideAngularModule, Search, Menu, MoreVertical, Moon, Sun, Trash2, BrainCircuit, Sparkles, User, Settings, Archive, Star, Bookmark, X, Loader2, Zap, Upload, Mic, MicOff, Globe } from 'lucide-angular';
 import { trigger, transition, style, animate, state } from '@angular/animations';
 import { interval, timer, takeWhile, switchMap, catchError, of, Subscription } from 'rxjs';
 
@@ -274,7 +274,7 @@ export class AppComponent implements OnInit, OnDestroy {
     return msgs.length > 0 && msgs[msgs.length - 1].sentiment === 'LOADING';
   }
 
-  handleSendText(event: { text: string }) {
+  handleSendText(event: { text: string; lang?: string }) {
     this.sentimentService.sendMessage(event.text);
   }
 
@@ -282,8 +282,8 @@ export class AppComponent implements OnInit, OnDestroy {
     this.isBatchOpen.set(true);
   }
 
-  handleSendAudio(event: { audio: Blob }) {
-    // Audio-to-text not implemented
+  handleSendAudio(event: { audio: Blob; lang?: string }) {
+    // Audio is now transcribed client-side via Web Speech API and emitted as onSendText
   }
 
   toggleTheme() {
