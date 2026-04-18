@@ -187,8 +187,8 @@ stages:
       size: 9792
     - path: src/training/
       hash: md5
-      md5: 082650d1340c635a27c3cd197541e112.dir
-      size: 18910
+      md5: 5ced74a3392a147bcff56844f5b91597.dir
+      size: 18950
       nfiles: 12
     params:
       params.yaml:
@@ -212,8 +212,8 @@ stages:
     outs:
     - path: models/adapters/sarcasm
       hash: md5
-      md5: 50748eaa4353910583f3edf259bdfb77.dir
-      size: 102226582
+      md5: fafb2c5e54ee32acfb731e6d8bd39244.dir
+      size: 102226594
       nfiles: 39
   finetune_sentiment:
     cmd: python3 -m src.scripts.run_finetuning --task sentiment
@@ -232,8 +232,8 @@ stages:
       size: 9792
     - path: src/training/
       hash: md5
-      md5: 082650d1340c635a27c3cd197541e112.dir
-      size: 18910
+      md5: 5ced74a3392a147bcff56844f5b91597.dir
+      size: 18950
       nfiles: 12
     params:
       params.yaml:
@@ -257,21 +257,21 @@ stages:
     outs:
     - path: models/adapters/sentiment
       hash: md5
-      md5: 13acd6510384a3807438dffa404af7b0.dir
-      size: 168002568
+      md5: 1870b7225813170d18772022f9d6806b.dir
+      size: 168004810
       nfiles: 63
   export_onnx_sarcasm:
     cmd: python3 -m src.scripts.export_onnx --adapter-name sarcasm
     deps:
     - path: models/adapters/sarcasm
       hash: md5
-      md5: d940bdbabe4af979f1e8fbf3f1b26cf6.dir
-      size: 130046247
-      nfiles: 49
+      md5: fafb2c5e54ee32acfb731e6d8bd39244.dir
+      size: 102226594
+      nfiles: 39
     - path: src/model/onnx_exporter.py
       hash: md5
-      md5: 433bc01e2d1f4dc389e5af40550f502e
-      size: 2971
+      md5: 35f884f99bb3b2b79f9aa0827482a45c
+      size: 3061
     - path: src/scripts/export_onnx.py
       hash: md5
       md5: 3145e0d0f656f1b4d4ee145d838067ee
@@ -279,12 +279,12 @@ stages:
     outs:
     - path: models/onnx/sarcasm_fp32
       hash: md5
-      md5: 86534e3bb3210e1f4f5cc91eec275233.dir
+      md5: ab931a078de36688f21257889f8f1788.dir
       size: 1134657337
       nfiles: 6
     - path: models/onnx/sarcasm_int8
       hash: md5
-      md5: 861bd50b8dfeee3e386689dc353db9f5.dir
+      md5: e8c431a37a80476d9ce1ff60cb8cfea9.dir
       size: 301572920
       nfiles: 7
   export_onnx_sentiment:
@@ -292,13 +292,13 @@ stages:
     deps:
     - path: models/adapters/sentiment
       hash: md5
-      md5: c0b8aa318d0eb09d42a6bb9ad2fdc115.dir
-      size: 168001307
+      md5: 1870b7225813170d18772022f9d6806b.dir
+      size: 168004810
       nfiles: 63
     - path: src/model/onnx_exporter.py
       hash: md5
-      md5: 433bc01e2d1f4dc389e5af40550f502e
-      size: 2971
+      md5: 35f884f99bb3b2b79f9aa0827482a45c
+      size: 3061
     - path: src/scripts/export_onnx.py
       hash: md5
       md5: 3145e0d0f656f1b4d4ee145d838067ee
@@ -306,12 +306,12 @@ stages:
     outs:
     - path: models/onnx/sentiment_fp32
       hash: md5
-      md5: fcd38a8ad6d5dfe25296a002a441efc0.dir
+      md5: fb6dafc260dc6d7671494e5151766115.dir
       size: 1134657337
       nfiles: 6
     - path: models/onnx/sentiment_int8
       hash: md5
-      md5: 97a7d4a811bad79506e56b4b3d373086.dir
+      md5: ad74e40ba17f0278aed116bd93a174ac.dir
       size: 301572920
       nfiles: 7
   benchmark_onnx:
@@ -320,27 +320,27 @@ stages:
     deps:
     - path: models/onnx/sentiment_fp32
       hash: md5
-      md5: fcd38a8ad6d5dfe25296a002a441efc0.dir
+      md5: fb6dafc260dc6d7671494e5151766115.dir
       size: 1134657337
       nfiles: 6
     - path: models/onnx/sentiment_int8
       hash: md5
-      md5: 97a7d4a811bad79506e56b4b3d373086.dir
+      md5: ad74e40ba17f0278aed116bd93a174ac.dir
       size: 301572920
       nfiles: 7
     - path: src/model/baseline.py
       hash: md5
-      md5: 899d63860b6df037db9f2cc55dcb0cef
-      size: 13472
+      md5: fae00f6a53c996967750b13ae49bface
+      size: 15912
     - path: src/scripts/benchmark_onnx.py
       hash: md5
-      md5: c7b61043f10bfe1138b297dd39681042
-      size: 2744
+      md5: 7cf3c88bdd96a9069098ea8c75207fdc
+      size: 3152
     outs:
     - path: reports/onnx_benchmark.json
       hash: md5
-      md5: 00949d2b673120182c74e8522dc4fa00
-      size: 396
+      md5: 9aaa2c600583d8bf24a55166a3b29fa7
+      size: 397
   prepare_eval:
     cmd: python3 -m src.scripts.prepare_eval
     deps:
