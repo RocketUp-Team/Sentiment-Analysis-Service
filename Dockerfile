@@ -38,7 +38,7 @@ RUN dvc config core.no_scm true && \
     dvc remote modify origin --local auth basic && \
     dvc remote modify origin --local user ${DAGSHUB_USERNAME} && \
     dvc remote modify origin --local password ${DAGSHUB_TOKEN} && \
-    dvc pull models/onnx/sentiment_fp32 models/onnx/sarcasm_fp32 && \
+    dvc pull models/onnx/sentiment_fp32 models/onnx/sarcasm_fp32 data/processed/sentences.csv && \
     rm -f .dvc/config.local
 
 # ── Stage 3: Final runtime image ───────────────────────────────
@@ -50,12 +50,14 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy source code and contracts
+# Copy source code, contracts, and evaluation config
 COPY src/ ./src/
 COPY contracts/ ./contracts/
+COPY params.yaml ./
 
-# Copy models from model-puller
+# Copy models and data from model-puller
 COPY --from=model-puller /app/models/onnx/ ./models/onnx/
+COPY --from=model-puller /app/data/processed/sentences.csv ./data/processed/sentences.csv
 
 # Environment variables for build & runtime
 ENV PYTHONPATH=/app

@@ -46,6 +46,23 @@ class ExplainResponse(BaseModel):
         return self
 
 
+class BatchItemResult(BaseModel):
+    row: int
+    text: str
+    sentiment: Literal["positive", "negative", "neutral"]
+    confidence: float = Field(ge=0.0, le=1.0)
+    aspects: list[AspectSentimentOut] = Field(default_factory=list)
+    error: str | None = None
+
+
+class BatchPredictResponse(BaseModel):
+    total_items: int
+    processed_items: int
+    failed_items: int
+    latency_ms: float
+    results: list[BatchItemResult]
+
+
 class BatchSubmitResponse(BaseModel):
     job_id: str
     status: Literal["pending", "processing", "completed", "failed"]
@@ -70,4 +87,4 @@ class HealthResponse(BaseModel):
     supported_languages: list[str] = Field(default_factory=list)
 
 
-# Multipart upload for POST /api/v1/batch is handled by FastAPI UploadFile rather than a Pydantic request model.
+# Multipart upload for POST /batch_predict is handled by FastAPI UploadFile.

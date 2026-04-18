@@ -155,7 +155,15 @@ def _log_reporting_artifacts(mlflow_client, metrics: dict) -> None:
 
 
 def log_to_mlflow(config: ModelConfig, metrics: dict, params_yaml: dict) -> None:
-    """Log baseline-model evaluation params, metrics, and artifacts to MLflow."""
+    """Log baseline-model evaluation params, metrics, and artifacts to MLflow.
+
+    URI priority:
+      1. MLFLOW_TRACKING_URI env var  (docker-compose sets http://mlflow:5000,
+                                       local .env sets DagsHub URL)
+      2. params.yaml  mlflow.tracking_uri
+      3. hardcoded fallback http://localhost:5000
+    """
+    import os
     mlflow_client = importlib.import_module("mlflow")
     mlflow_config = params_yaml.get("mlflow", {})
     tracking_uri = resolve_pipeline_tracking_uri(mlflow_config)

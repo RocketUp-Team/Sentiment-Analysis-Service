@@ -21,21 +21,15 @@ import {
       <div
         class="flex-1 glass-panel !bg-white/40 dark:!bg-slate-900/40 rounded-3xl flex items-center px-3 md:px-6 gap-2 md:gap-4 border border-white/20 dark:border-white/5 focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:bg-white dark:focus-within:bg-slate-900 transition-all duration-300 relative overflow-hidden"
       >
+        <!-- Paperclip: opens batch CSV upload modal in parent -->
         <button
           class="text-slate-400 hover:text-indigo-500 transition-all duration-300 active:scale-95"
-          (click)="fileInput.click()"
+          (click)="onOpenBatch.emit()"
           [disabled]="disabled || isRecording"
+          title="Upload CSV for batch analysis"
         >
           <lucide-angular name="paperclip" [size]="22"></lucide-angular>
         </button>
-        <input
-          type="file"
-          #fileInput
-          hidden
-          (change)="onFileSelected($event)"
-          accept=".pdf,.doc,.docx"
-          [disabled]="disabled || isRecording"
-        />
 
         <!-- Language Switcher -->
         <button
@@ -47,23 +41,7 @@ import {
           <span class="text-[10px] font-black uppercase tracking-widest">{{ lang }}</span>
         </button>
 
-        <!-- File Badge -->
-        <div
-          *ngIf="selectedFile"
-          class="flex-1 flex items-center bg-indigo-50/50 dark:bg-indigo-900/40 px-3 py-2 rounded-xl my-2"
-        >
-          <div
-            class="flex-1 truncate text-sm text-indigo-700 dark:text-indigo-300 font-medium whitespace-nowrap overflow-hidden text-ellipsis mr-2"
-          >
-            📄 {{ selectedFile.name }}
-          </div>
-          <button
-            (click)="removeFile()"
-            class="text-slate-400 hover:text-red-500 transition-colors"
-          >
-            <lucide-angular name="x" [size]="16"></lucide-angular>
-          </button>
-        </div>
+
 
         <!-- Recording Pulse -->
         <div
@@ -79,7 +57,7 @@ import {
 
         <!-- Normal Input -->
         <input
-          *ngIf="!selectedFile && !isRecording"
+          *ngIf="!isRecording"
           type="text"
           [(ngModel)]="text"
           (keyup.enter)="send()"
@@ -116,14 +94,14 @@ import {
             isRecording
               ? 'bg-red-500 shadow-red-500/50 text-white w-14 h-14 scale-110'
               : 'bg-gradient-to-br from-indigo-500 to-violet-600 shadow-indigo-500/30 text-white ' +
-                (text.trim() || selectedFile
+                (text.trim()
                   ? 'w-12 h-12 md:h-14 md:w-auto px-6 md:px-8'
                   : 'w-12 h-12 md:w-14 md:h-14')
           "
           class="relative flex items-center justify-center text-white rounded-[24px] md:rounded-3xl transition-all duration-500 transform active:scale-95 shadow-xl select-none z-10"
         >
           <lucide-angular
-            *ngIf="!isRecording && !text.trim() && !selectedFile"
+            *ngIf="!isRecording && !text.trim()"
             name="mic"
             [size]="24"
           ></lucide-angular>
@@ -133,7 +111,7 @@ import {
             [size]="28"
           ></lucide-angular>
           <div
-            *ngIf="(text.trim() || selectedFile) && !isRecording"
+            *ngIf="text.trim() && !isRecording"
             class="flex items-center gap-2.5"
           >
             <span class="text-xs font-black uppercase tracking-[0.2em] hidden md:inline">Send</span>
@@ -146,20 +124,15 @@ import {
 })
 export class ChatInputComponent {
   @Input() disabled = false;
-  @Output() onSendText = new EventEmitter<{
-    text: string;
-    lang: 'vi' | 'en';
-  }>();
-  @Output() onSendFile = new EventEmitter<{ file: File; lang: 'vi' | 'en' }>();
-  @Output() onSendAudio = new EventEmitter<{
-    audio: Blob;
-    lang: 'vi' | 'en';
-  }>();
+  @Output() onSendText = new EventEmitter<{ text: string; lang: 'vi' | 'en' }>();
+  @Output() onSendAudio = new EventEmitter<{ audio: Blob; lang: 'vi' | 'en' }>();
+  @Output() onOpenBatch = new EventEmitter<void>();  // paperclip → open batch modal
 
   text = '';
   lang: 'vi' | 'en' = 'en';
 
-  selectedFile: File | null = null;
+  // no selectedFile — file handling moved to batch-upload component
+
   // Audio state
   isRecording = false;
   recordingTime = 0;
@@ -217,21 +190,8 @@ export class ChatInputComponent {
     }
   }
 
-  onFileSelected(event: Event) {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      this.selectedFile = input.files[0];
-      this.text = '';
-      input.value = '';
-    }
-  }
-
-  removeFile() {
-    this.selectedFile = null;
-  }
-
   isSendMode() {
-    return this.text.trim() || this.selectedFile;
+    return this.text.trim();
   }
 
   handleClick(e?: Event) {
@@ -297,11 +257,7 @@ export class ChatInputComponent {
 
   send() {
     if (this.disabled) return;
-
-    if (this.selectedFile) {
-      this.onSendFile.emit({ file: this.selectedFile, lang: this.lang });
-      this.selectedFile = null;
-    } else if (this.text.trim()) {
+    if (this.text.trim()) {
       this.onSendText.emit({ text: this.text.trim(), lang: this.lang });
       this.text = '';
     }

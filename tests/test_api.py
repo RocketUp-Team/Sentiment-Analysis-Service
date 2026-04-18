@@ -4,10 +4,41 @@ os.environ["MODEL_MODE"] = "baseline"
 from fastapi.testclient import TestClient
 from src.main import app
 
+from unittest.mock import MagicMock
+from contracts.model_interface import PredictionResult, AspectSentiment, SHAPResult
+
 @pytest.fixture
-def client():
-    with TestClient(app) as c:
-        yield c
+def mock_model():
+    mock = MagicMock()
+    mock.is_loaded = True
+    
+    mock.predict_single.return_value = PredictionResult(
+        sentiment="positive",
+        confidence=0.99,
+        aspects=[AspectSentiment(aspect="foo", sentiment="positive", confidence=0.8)],
+        sarcasm_flag=False,
+    )
+    
+    mock.get_shap_explanation.return_value = SHAPResult(
+        tokens=["I", "love", "this"],
+        shap_values=[0.1, 0.8, 0.1],
+        base_value=0.0
+    )
+    
+    return mock
+
+@pytest.fixture
+def client(mock_model):
+    from unittest.mock import patch
+    from src.main import get_model
+    
+    # Mock the lifespan instantiation of the model to prevent massive HF downloads
+    with patch('src.main.BaselineModelInference', return_value=mock_model):
+        app.dependency_overrides[get_model] = lambda: mock_model
+        with TestClient(app) as c:
+            yield c
+        app.dependency_overrides.clear()
+
 
 def test_health_check(client):
     response = client.get("/health")

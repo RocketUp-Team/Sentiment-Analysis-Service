@@ -4,7 +4,8 @@ import { SentimentAnalysisService } from './services/sentiment-analysis.service'
 import { ThemeService } from './services/theme.service';
 import { MessageBubbleComponent } from './components/message-bubble/message-bubble.component';
 import { ChatInputComponent } from './components/chat-input/chat-input.component';
-import { LucideAngularModule, Search, Menu, MoreVertical, Moon, Sun, Trash2, BrainCircuit, Sparkles, User, Settings, Archive, Star, Bookmark, X, Loader2, Zap } from 'lucide-angular';
+import { BatchUploadComponent } from './components/batch-upload/batch-upload.component';
+import { LucideAngularModule, Search, Menu, MoreVertical, Moon, Sun, Trash2, BrainCircuit, Sparkles, User, Settings, Archive, Star, Bookmark, X, Loader2, Zap, Upload } from 'lucide-angular';
 import { trigger, transition, style, animate, state } from '@angular/animations';
 import { interval, timer, takeWhile, switchMap, catchError, of, Subscription } from 'rxjs';
 
@@ -23,9 +24,10 @@ interface ChatItem {
   selector: 'app-root',
   standalone: true,
   imports: [
-    CommonModule, 
-    MessageBubbleComponent, 
-    ChatInputComponent, 
+    CommonModule,
+    MessageBubbleComponent,
+    ChatInputComponent,
+    BatchUploadComponent,
     LucideAngularModule
   ],
   template: `
@@ -169,10 +171,17 @@ interface ChatItem {
            </div>
            
            <div class="flex items-center gap-3">
+              <!-- Batch CSV button -->
+              <button (click)="isBatchOpen.set(true)"
+                      [disabled]="!isBackendReady()"
+                      class="flex items-center gap-1.5 px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
+                <lucide-angular name="upload" [size]="16"></lucide-angular>
+                <span class="hidden sm:inline">Upload CSV</span>
+              </button>
               <button (click)="toggleTheme()" 
                       class="p-3 bg-black/5 dark:bg-white/5 hover:bg-indigo-500/10 rounded-2xl text-slate-500 dark:text-indigo-400 transition-all active:scale-95">
-                 <lucide-angular name="sun" *ngIf="isDarkMode()" [size]="20"></lucide-angular>
-                 <lucide-angular name="moon" *ngIf="!isDarkMode()" [size]="20"></lucide-angular>
+                <lucide-angular name="sun" *ngIf="isDarkMode()" [size]="20"></lucide-angular>
+                <lucide-angular name="moon" *ngIf="!isDarkMode()" [size]="20"></lucide-angular>
               </button>
            </div>
         </header>
@@ -187,13 +196,16 @@ interface ChatItem {
            <div class="max-w-[1000px] mx-auto">
               <app-chat-input 
                 (onSendText)="handleSendText($event)" 
-                (onSendFile)="handleSendFile($event)" 
-                (onSendAudio)="handleSendAudio($event)" 
+                (onOpenBatch)="isBatchOpen.set(true)"
                 [disabled]="!isBackendReady()">
               </app-chat-input>
            </div>
         </footer>
       </section>
+
+      <!-- Batch upload modal -->
+      <app-batch-upload *ngIf="isBatchOpen()" (onClose)="isBatchOpen.set(false)"></app-batch-upload>
+
     </div>
 
   `,
@@ -208,6 +220,7 @@ export class AppComponent implements OnInit, OnDestroy {
   isMenuOpen = signal(false);
   isSidebarMobileOpen = signal(false);
   isBackendReady = signal(false);
+  isBatchOpen = signal(false);
 
   private healthSub?: Subscription;
 
@@ -261,16 +274,16 @@ export class AppComponent implements OnInit, OnDestroy {
     return msgs.length > 0 && msgs[msgs.length - 1].sentiment === 'LOADING';
   }
 
-  handleSendText(event: { text: string, lang: 'vi' | 'en' }) {
-    this.sentimentService.sendMessage(event.text, event.lang);
+  handleSendText(event: { text: string }) {
+    this.sentimentService.sendMessage(event.text);
   }
 
-  handleSendFile(event: { file: File, lang: 'vi' | 'en' }) {
-    this.sentimentService.sendDocument(event.file, event.lang);
+  handleSendFile(event: { file: File }) {
+    this.isBatchOpen.set(true);
   }
 
-  handleSendAudio(event: { audio: Blob, lang: 'vi' | 'en' }) {
-    this.sentimentService.sendAudio(event.audio, event.lang);
+  handleSendAudio(event: { audio: Blob }) {
+    // Audio-to-text not implemented
   }
 
   toggleTheme() {

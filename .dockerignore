@@ -13,7 +13,6 @@ ARCHITECTURE.md
 README.md
 final_project.md
 plan.md
-params.yaml
 .env
 Dockerfile
 docker-compose.yml
