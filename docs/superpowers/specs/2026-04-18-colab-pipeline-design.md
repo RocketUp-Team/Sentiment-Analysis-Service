@@ -35,6 +35,20 @@ Key decisions:
 !git checkout feature/ai-core
 !pip install -r requirements.txt
 !pip install datasets peft accelerate mlflow dvc
+
+# --- GPU Validation (fail fast) ---
+import torch
+if not torch.cuda.is_available():
+    raise RuntimeError(
+        "❌ No GPU detected! Go to Runtime → Change runtime type → GPU.\n"
+        "Training on CPU will take 10-50x longer and may OOM."
+    )
+gpu_name = torch.cuda.get_device_name(0)
+gpu_mem = torch.cuda.get_device_properties(0).total_mem / 1e9
+print(f"✅ GPU: {gpu_name} ({gpu_mem:.1f} GB)")
+
+if gpu_mem < 12:
+    print(f"⚠️ GPU has only {gpu_mem:.1f} GB VRAM. Consider reducing batch_size.")
 ```
 
 ### Section 2: DagsHub & Credentials Config
@@ -64,44 +78,61 @@ Read from Colab Secrets:
 
 Log tag `stage_data_download=complete` on parent run.
 
-### Section 4: Training (Nested MLflow Runs)
+### Section 4 to 7: Pipeline Execution (Inside Parent MLflow Run)
 
 ```python
-from src.scripts.run_finetuning import train  # refactored function
+from pathlib import Path
+from src.scripts.run_finetuning import train
+from src.scripts.evaluate_finetuned import evaluate
+
+root = Path(".")
+
+def _adapter_exists(task_name: str) -> bool:
+    """Check if a trained adapter already exists on disk."""
+    return (root / "models" / "adapters" / task_name / "adapter_config.json").exists()
+
+mlflow.set_tracking_uri(mlflow_uri)
+mlflow.set_experiment("phase2_full_pipeline")
 
 with mlflow.start_run(run_name=f"pipeline_{model_version}") as parent_run:
-    # Train sarcasm
-    with mlflow.start_run(run_name="train_sarcasm", nested=True):
-        sarcasm_result = train("sarcasm")
+    
+    # ============ Section 4: Training ============
+    # Sarcasm
+    if _adapter_exists("sarcasm"):
+        print("⏭️ Skipping sarcasm training — adapter already exists")
+    else:
+        with mlflow.start_run(run_name="train_sarcasm", nested=True):
+            sarcasm_result = train("sarcasm", root=root)
 
-    # Train sentiment
-    with mlflow.start_run(run_name="train_sentiment", nested=True):
-        sentiment_result = train("sentiment")
-```
+    # Sentiment
+    if _adapter_exists("sentiment"):
+        print("⏭️ Skipping sentiment training — adapter already exists")
+    else:
+        with mlflow.start_run(run_name="train_sentiment", nested=True):
+            sentiment_result = train("sentiment", root=root)
+            
+    mlflow.set_tag("stage_training", "complete")
 
-Each nested run logs: training loss/eval curves per epoch, hyperparameters, LoRA config, trainable params.
+    # ============ Section 5: Evaluation ============
+    # ⚠️ Run evaluate AFTER both adapters are trained because
+    # ModelConfig loads both adapters simultaneously.
+    assert _adapter_exists("sarcasm"), "❌ Sarcasm adapter missing"
+    assert _adapter_exists("sentiment"), "❌ Sentiment adapter missing"
 
-### Section 5: Evaluation
+    sarcasm_metrics = evaluate("sarcasm", root=root, max_samples=None)
+    sentiment_metrics = evaluate("sentiment", root=root, max_samples=None)
 
-```python
-from src.scripts.evaluate_finetuned import evaluate  # refactored function
+    # Log summary metrics to parent run
+    mlflow.log_metrics({
+        "sarcasm_f1": sarcasm_metrics["overall_f1"],
+        "sentiment_f1": sentiment_metrics["overall_f1"],
+        "fairness_gap": sentiment_metrics["per_lang_gap"],
+    })
+    mlflow.set_tag("stage_evaluation", "complete")
 
-sarcasm_metrics = evaluate("sarcasm")
-sentiment_metrics = evaluate("sentiment")
-
-# Log summary metrics to parent run
-mlflow.log_metrics({
-    "sarcasm_f1": sarcasm_metrics["overall_f1"],
-    "sentiment_f1": sentiment_metrics["overall_f1"],
-    "fairness_gap": sentiment_metrics["per_lang_gap"],
-})
-mlflow.set_tag("stage_evaluation", "complete")
-```
-
-Also run baseline evaluation for comparison:
-```python
-from src.model.evaluate import evaluate_on_dataset
-baseline_metrics = evaluate_on_dataset(baseline_model, sentences_df, split="test")
+    # Baseline eval for comparison
+    from src.model.evaluate import evaluate_on_dataset
+    baseline_metrics = evaluate_on_dataset(baseline_model, sentences_df, split="test")
 ```
 
 ### Section 6: ONNX Export
@@ -117,7 +148,7 @@ Run ONNX benchmark:
 !python -m src.scripts.benchmark_onnx --samples 1000 --batch-size 32 --output reports/onnx_benchmark.json
 ```
 
-### Section 7: Visualization (11 Outputs)
+### Section 7: Visualization (10 Automated Outputs)
 
 All plots saved as PNG and uploaded to DagsHub MLflow artifacts.
 
@@ -151,50 +182,68 @@ All plots saved as PNG and uploaded to DagsHub MLflow artifacts.
 - Chart: Bar chart comparing latency/throughput — PyTorch vs FP32 vs INT8
 - Format: 1 PNG + table
 
-#### Output 7: MLflow Experiment Screenshots
-- Source: DagsHub MLflow UI (user captures manually after notebook completes)
-- Format: Screenshots for LaTeX report
-
-#### Output 8: Baseline vs Finetuned Comparison
+#### Output 7: Baseline vs Finetuned Comparison
 - Source: `baseline_metrics` vs `sentiment_metrics` from Sections 4-5
 - Chart: Grouped bar chart — metrics comparison
 - Format: 1 PNG
 
-#### Output 9: Dataset Label Distribution
+#### Output 8: Dataset Label Distribution
 - Source: `df["label"].value_counts()` for each task
 - Chart: Bar chart showing label distribution per task
 - Format: 2 PNGs (sarcasm + sentiment)
 
-#### Output 10: LoRA Architecture Summary
+#### Output 9: LoRA Architecture Summary
 - Source: `peft_model.print_trainable_parameters()` captured output
 - Chart: Text table — total params, trainable params, % trainable
 - Format: Inline display + text artifact
 
-#### Output 11: Training Time & GPU Resource Log
+#### Output 10: Training Time & GPU Resource Log
 - Source: `torch.cuda.get_device_name()`, `trainer.state` timestamps
 - Chart: Text summary — GPU type, training time per task, peak memory
 - Format: Inline display + logged as MLflow params
 
-**Artifact upload:**
+**Artifact upload (Still inside parent run):**
 ```python
 plot_dir = Path("reports/plots")
 for png in plot_dir.glob("*.png"):
     mlflow.log_artifact(str(png), artifact_path="report_plots")
+
+mlflow.log_params({
+    "model_version": model_version,
+    "gpu_type": torch.cuda.get_device_name(0),
+    "base_model": "xlm-roberta-base",
+    "branch": "feature/ai-core",
+})
 ```
+
+### Post-Pipeline Manual Steps
+
+After notebook completes, capture the following manually for LaTeX report:
+
+#### Manual Output: MLflow Experiment Screenshots
+- Navigate to DagsHub → Experiments → `pipeline_{version}` run
+- Capture: parent run overview, nested runs comparison, artifact list
+- Save to `reports/plots/mlflow_screenshots/` locally
 
 ### Section 8: DVC Push + Git Push + Versioning
 
 ```python
+import os
 version = get_secret("MODEL_VERSION")  # e.g. "v2.0"
-
-# 1. Push ONNX models to DagsHub storage
-!dvc push models/onnx/sentiment_fp32 models/onnx/sarcasm_fp32
-
-# 2. Configure git with token
 token = get_secret("GITHUB_TOKEN")
-!git remote set-url origin https://{token}@github.com/RocketUp-Team/Sentiment-Analysis-Service.git
-!git config user.email "colab@pipeline"
-!git config user.name "Colab Pipeline"
+
+# 1. Push ALL ONNX models to DagsHub storage
+!dvc push models/onnx/sentiment_fp32 models/onnx/sentiment_int8 \
+          models/onnx/sarcasm_fp32 models/onnx/sarcasm_int8
+
+# 2. Configure git with credential helper
+os.environ["GIT_AUTHOR_NAME"] = "Colab Pipeline"
+os.environ["GIT_AUTHOR_EMAIL"] = "colab@pipeline"
+os.environ["GIT_COMMITTER_NAME"] = "Colab Pipeline"
+os.environ["GIT_COMMITTER_EMAIL"] = "colab@pipeline"
+
+credential_helper = f"!f() {{ echo username=x-access-token; echo password={token}; }}; f"
+!git config credential.helper '{credential_helper}'
 
 # 3. Commit updated dvc.lock
 !git add dvc.lock
@@ -205,7 +254,10 @@ token = get_secret("GITHUB_TOKEN")
 !git tag model-{version}
 !git push origin model-{version}
 
-# 5. Log version to MLflow
+# 5. Clean up
+!git config --unset credential.helper
+
+# 6. Log version to MLflow
 mlflow.log_param("model_version", version)
 mlflow.set_tag("git_tag", f"model-{version}")
 mlflow.set_tag("stage_push", "complete")
@@ -218,26 +270,35 @@ mlflow.set_tag("stage_push", "complete")
 **Change:** Extract `train()` function from `main()`.
 
 ```python
-def train(task_name: str, *, smoke: bool = False) -> dict:
-    """Run training workflow. MLflow run context managed by caller.
+def train(
+    task_name: str,
+    *,
+    smoke: bool = False,
+    root: Path | None = None,
+) -> dict:
+    """Run the full training pipeline for one task.
+
+    Executes the complete workflow: data loading → dedup → stratified split →
+    tokenization → model init → LoRA → training → save adapter.
+
+    MLflow run context is managed by the CALLER — this function does NOT call
+    mlflow.start_run(), mlflow.set_experiment(), or mlflow.set_tracking_uri().
+    The HuggingFace Trainer will log metrics to whichever MLflow run is active
+    in the caller's context via report_to=["mlflow"].
 
     Returns dict with keys:
-    - adapter_path: Path to saved adapter
-    - eval_metrics: dict from trainer evaluation
-    - trainable_params: str summary from peft
-    - log_history: list of training step logs
+    - adapter_path: str — path to saved LoRA adapter
+    - eval_metrics: dict — from trainer.evaluate()
+    - trainable_params: tuple — (trainable, total) from peft
+    - log_history: list[dict] — trainer.state.log_history for plotting
+    - peft_model: PeftModel — reference for downstream SHAP/inspection
     """
+    root = root or Path(__file__).resolve().parents[2]
     task = get_task_config(task_name)
-    # ... existing logic (load data, tokenize, build model, train)
-    # ... but NO mlflow.start_run() — caller manages this
+    # ... full logic: load data, tokenize, build model, build args, trainer ...
     trainer.train()
     peft_model.save_pretrained(str(output_dir))
-    return {
-        "adapter_path": str(output_dir),
-        "eval_metrics": trainer.evaluate(),
-        "trainable_params": peft_model.get_nb_trainable_parameters(),
-        "log_history": trainer.state.log_history,
-    }
+    return { ... }
 
 def main(argv=None) -> int:
     """CLI wrapper — preserves existing DVC pipeline compatibility."""
@@ -245,34 +306,52 @@ def main(argv=None) -> int:
     tracking_uri = resolve_tracking_uri(args.tracking_uri)
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(f"phase2_finetuning_{args.task}")
-    tags = build_run_tags(...)
-    with mlflow.start_run():
-        mlflow.set_tags(tags)
-        train(args.task, smoke=args.smoke)
+    
+    if not args.smoke:
+        with mlflow.start_run():
+            mlflow.set_tags(tags)
+            train(args.task, smoke=False)
+    else:
+        train(args.task, smoke=True)
     return 0
 ```
 
-**Backward compatibility:** `main()` still works for `python -m src.scripts.run_finetuning --task sarcasm` and DVC pipeline.
+> **⚠️ MLflow Contract:**
+> - `train()` **KHÔNG ĐƯỢC** gọi: `mlflow.start_run()`, `mlflow.set_experiment()`, `mlflow.set_tracking_uri()`
+> - `train()` dùng `report_to=["mlflow"]` trong `TrainingArguments` để Trainer tự log vào active run
+> - `evaluate()` **KHÔNG** tự log — caller quyết định log hay không
+> - Tất cả MLflow context do notebook (caller) quản lý
 
 ### 4b. `src/scripts/evaluate_finetuned.py`
 
 **Change:** Extract `evaluate()` function from `main()`.
 
 ```python
-def evaluate(task_name: str) -> dict:
+def evaluate(
+    task_name: str,
+    *,
+    root: Path | None = None,
+    max_samples: int | None = None,
+) -> dict:
     """Run evaluation and return full metrics payload.
+
+    MLflow context is managed by the CALLER if logging is desired.
 
     Returns dict with keys from build_metrics_payload():
     - overall_f1, per_lang_f1, per_lang_gap, sample_counts,
     - confusion_matrix, per_lang_confusion_matrices
+    - y_true, y_pred (raw lists)
     """
-    # ... existing logic (load model, predict, compute metrics)
+    root = root or Path(__file__).resolve().parents[2]
+    # Intelligent adapter loading logic
+    # Select max_samples rows
+    # inference.predict_batch(...)
     return metrics_payload
 
 def main(argv=None) -> int:
-    """CLI wrapper — writes JSON reports."""
+    """CLI wrapper — writes JSON reports. Backwards-compatible with DVC."""
     args = parse_args(argv)
-    metrics = evaluate(args.task)
+    metrics = evaluate(args.task, max_samples=100) # CLI default 100 for speed
     # ... write JSON files (existing code)
     return 0
 ```
@@ -341,8 +420,9 @@ Experiment: "phase2_full_pipeline"
 
 | Scenario | Detection | Recovery |
 |---|---|---|
-| Colab disconnect during training | Parent run stays `RUNNING` on DagsHub | Re-run notebook from beginning |
-| 1 task succeeds, 1 fails | Successful nested run shows `FINISHED` | Re-run failed cell only |
+| Colab disconnect during training | Parent run stays `RUNNING` on DagsHub | Re-run notebook; trained adapters are skipped automatically |
+| 1 task succeeds, 1 fails | `_adapter_exists()` returns True for completed task | Re-run notebook: only failed task retrains |
+| Both tasks complete, disconnect during eval | Both adapters exist on disk | Re-run notebook: both training skipped, jumps to eval |
 | DVC push auth error | Pre-flight check catches in Section 2 | Fix secret, re-run Section 2 |
 | Git push fail | Notebook prints `dvc.lock` content as fallback | Copy to local manually |
 | ONNX export fail | Adapters already saved on Colab disk | Re-run export cell only |
@@ -396,3 +476,21 @@ docker build --build-arg ... -t sentiment-api .
 | `DAGSHUB_TOKEN` | DagsHub access token | MLflow auth + DVC auth |
 | `GITHUB_TOKEN` | GitHub Personal Access Token | `git push` dvc.lock + tags |
 | `MODEL_VERSION` | e.g. `v2.0` | Git tag + MLflow param |
+
+## 9. Naming Conventions
+
+### Model Version Format
+
+| Context | Format | Example |
+|---|---|---|
+| Colab Secret `MODEL_VERSION` | `v{MAJOR}.{MINOR}` | `v2.0` |
+| Git tag | `model-v{MAJOR}.{MINOR}` | `model-v2.0` |
+| MLflow param `model_version` | `v{MAJOR}.{MINOR}` | `v2.0` |
+| MLflow tag `git_tag` | `model-v{MAJOR}.{MINOR}` | `model-v2.0` |
+| Rollback command | `git checkout model-v{X.Y} -- dvc.lock` | `git checkout model-v1.0 -- dvc.lock` |
+
+**Rules:**
+- Secret chỉ chứa `v{X.Y}` — prefix `model-` được thêm tự động bởi notebook
+- Increment MAJOR khi thay đổi architecture/base model
+- Increment MINOR khi retrain với data mới hoặc hyperparams mới
+- Không dùng `v` prefix trong git tag (đã có `model-` prefix)
