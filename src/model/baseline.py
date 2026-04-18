@@ -42,6 +42,7 @@ class BaselineModelInference(ModelInference):
         self._hf_pipeline = None
         self._absa_pipeline = None
         self._onnx_session = None
+        self._sarcasm_onnx_session = None
         self._load_model()
 
     def preload(self) -> None:
@@ -57,11 +58,24 @@ class BaselineModelInference(ModelInference):
                     if self._config.mode == "onnx_int8"
                     else self._config.onnx_model_path
                 )
+                from pathlib import Path
                 self._onnx_session = OnnxInferenceSession(
                     path,
-                    self._config.model_name,
+                    str(Path(path).parent),
                     self._config.max_length,
                 )
+                
+                # Load sarcasm ONNX model if available
+                sarcasm_path = path.replace("sentiment_", "sarcasm_")
+                try:
+                    self._sarcasm_onnx_session = OnnxInferenceSession(
+                        sarcasm_path,
+                        str(Path(sarcasm_path).parent),
+                        self._config.max_length,
+                    )
+                except Exception as exc:
+                    logger.warning(f"Failed to load ONNX sarcasm model: {exc}")
+                    self._sarcasm_onnx_session = None
             elif self._config.mode == "finetuned":
                 self._tokenizer = AutoTokenizer.from_pretrained(
                     self._config.finetuned_model_name
@@ -152,6 +166,13 @@ class BaselineModelInference(ModelInference):
         intentionally discarded here.  See run_finetuning._model_num_labels for the
         full rationale.
         """
+        if self._config.mode.startswith("onnx"):
+            if getattr(self, "_sarcasm_onnx_session", None) is not None:
+                texts_list = [text]
+                probs = self._sarcasm_onnx_session.predict_probs(texts_list)[0][:2]
+                return bool(probs.argmax() == 1)
+            return False
+
         if self._config.mode != "finetuned":
             return False
 
@@ -325,12 +346,31 @@ class BaselineModelInference(ModelInference):
     def get_shap_explanation(self, text: str, lang: str = "en") -> SHAPResult:
         """Return SHAP values per token for explainability."""
         import shap
+        import numpy as np
 
         self._check_language(lang)
         predicted_probs = self._predict_probabilities(text)[0]
         predicted_class_idx = int(predicted_probs.argmax().item())
-        pipe = self._get_classification_pipeline()
-        explainer = shap.Explainer(pipe)
+        
+        def predict_func(texts):
+            if isinstance(texts, np.ndarray):
+                texts = texts.tolist()
+            if isinstance(texts, str):
+                texts = [texts]
+            probs = self._predict_probabilities(texts, padding=True)
+            if hasattr(probs, "cpu"):
+                return probs.cpu().numpy()
+            return probs
+
+        tokenizer = self._tokenizer if self._tokenizer is not None else getattr(self._onnx_session, "tokenizer", None)
+        if tokenizer is None:
+            raise ModelError("No tokenizer available for SHAP explanation")
+
+        # Suppress parallelism warning during SHAP tokenization
+        import os
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        
+        explainer = shap.Explainer(predict_func, tokenizer)
         shap_values = explainer([text])
 
         raw_tokens = shap_values.data[0]

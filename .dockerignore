@@ -1,6 +1,5 @@
 .git
 .github
-.dvc
 .pytest_cache
 .coverage
 __pycache__
@@ -14,8 +13,6 @@ ARCHITECTURE.md
 README.md
 final_project.md
 plan.md
-dvc.yaml
-dvc.lock
 params.yaml
 .env
 Dockerfile

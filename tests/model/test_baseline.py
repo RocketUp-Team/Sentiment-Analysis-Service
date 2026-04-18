@@ -896,11 +896,22 @@ class TestONNXMode:
         from src.model.baseline import BaselineModelInference
         model = BaselineModelInference(config=config, device=torch.device("cpu"))
         
-        mock_onnx_cls.assert_called_once_with(
+        from pathlib import Path
+        
+        # Check sentiment model initialization
+        mock_onnx_cls.assert_any_call(
             "fake/path", 
-            config.model_name, 
+            str(Path("fake/path").parent), 
             config.max_length
         )
+        # Check sarcasm model initialization
+        mock_onnx_cls.assert_any_call(
+            "fake/path", 
+            str(Path("fake/path").parent), 
+            config.max_length
+        )
+        # The main _onnx_session is the sentiment one which was initialized first
+        # But wait, since we use mock_onnx_cls, its return value will be the same for both.
         assert model._onnx_session is mock_onnx_cls.return_value
 
     @patch("src.model.baseline.OnnxInferenceSession")

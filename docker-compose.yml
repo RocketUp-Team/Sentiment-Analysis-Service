@@ -2,7 +2,11 @@ version: '3.8'
 
 services:
   fastapi_app:
-    build: .
+    build:
+      context: .
+      args:
+        - DAGSHUB_USERNAME=${DAGSHUB_USERNAME}
+        - DAGSHUB_TOKEN=${DAGSHUB_TOKEN}
     ports:
       - "8000:8000"
     environment:
