@@ -16,7 +16,7 @@ class TaskConfig:
     languages: tuple[str, ...]
     epochs: int
     learning_rate: float = 2e-4
-    batch_size: int = 64
+    batch_size: int = 128  # Tăng từ 64 → 128: bf16 giảm VRAM ~50%, L4 dư sức chạy.
     gradient_accumulation_steps: int = 1
     max_length: int = 128
     dataset_version: str = "v1"

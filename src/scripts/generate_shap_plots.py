@@ -87,7 +87,8 @@ def main(args: list[str] | None = None) -> int:
     parsed_args = parse_args(args)
     
     logger.info("Initializing model for SHAP explanations...")
-    config = ModelConfig()
+    # mode="finetuned": dùng đúng LoRA adapter đã train thay vì cardiffnlp baseline.
+    config = ModelConfig(mode="finetuned")
     model = BaselineModelInference(config=config)
     model.preload()
     

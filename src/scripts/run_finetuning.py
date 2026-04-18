@@ -83,6 +83,7 @@ def _build_training_args(
     training_arguments_cls=None,
 ):
     training_arguments_cls = training_arguments_cls or TrainingArguments
+    _on_cuda = torch.cuda.is_available()
     kwargs = dict(
         output_dir=str(output_dir),
         learning_rate=task.learning_rate,
@@ -94,6 +95,15 @@ def _build_training_args(
         load_best_model_at_end=True,
         seed=task.seed,
         report_to=["mlflow"] if not smoke else "none",
+        # === GPU performance optimizations ===
+        # bf16: L4 (Ada Lovelace) hỗ trợ native BF16, throughput ~2x so với FP32.
+        bf16=_on_cuda,
+        # num_workers > 0: load data song song với GPU training, tránh GPU idle.
+        dataloader_num_workers=0 if smoke else 4,
+        # pin_memory: dùng pinned (page-locked) RAM để tăng tốc CPU→GPU transfer.
+        dataloader_pin_memory=_on_cuda,
+        # Fused optimizer: gộp các kernel riêng lẻ thành 1 → giảm launch overhead.
+        optim="adamw_torch_fused" if _on_cuda else "adamw_torch",
     )
     parameter_names = inspect.signature(training_arguments_cls.__init__).parameters
     if "eval_strategy" in parameter_names:

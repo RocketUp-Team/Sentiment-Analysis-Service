@@ -11,18 +11,25 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 def benchmark_model(model_inference: BaselineModelInference, texts: list[str], runs: int = 5) -> dict:
-    """Benchmark a loaded model and return metrics."""
+    """Benchmark a loaded model and return metrics.
+
+    skip_absa=True và skip_sarcasm=True là bắt buộc: nếu không, mỗi sample
+    chạy thêm 2+ zero-shot forward passes (ABSA) + 1 sarcasm forward pass
+    tuần tự → sai lệch throughput thực sự của sentiment model 10-50x.
+    """
     # Warmup
     logger.info("Warming up model...")
-    model_inference.predict_batch(texts[:10])
+    model_inference.predict_batch(texts[:10], skip_absa=True, skip_sarcasm=True)
     
     logger.info(f"Running benchmark ({runs} iterations)...")
     latencies = []
     
-    for _ in range(runs):
+    for i in range(runs):
         start = time.perf_counter()
-        model_inference.predict_batch(texts)
-        latencies.append(time.perf_counter() - start)
+        model_inference.predict_batch(texts, skip_absa=True, skip_sarcasm=True)
+        elapsed = time.perf_counter() - start
+        latencies.append(elapsed)
+        logger.info(f"  Run {i+1}/{runs}: {elapsed:.2f}s")
         
     avg_time = sum(latencies) / len(latencies)
     throughput = len(texts) / avg_time
