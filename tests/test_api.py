@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from src.main import app
 
 from unittest.mock import MagicMock
-from contracts.schemas import PredictionResult, AspectSentimentOut, ExplainResult
+from contracts.model_interface import PredictionResult, AspectSentiment, SHAPResult
 
 @pytest.fixture
 def mock_model():
@@ -15,11 +15,11 @@ def mock_model():
     mock.predict_single.return_value = PredictionResult(
         sentiment="positive",
         confidence=0.99,
-        aspects=[AspectSentimentOut(aspect="foo", sentiment="positive", confidence=0.8)],
+        aspects=[AspectSentiment(aspect="foo", sentiment="positive", confidence=0.8)],
         sarcasm_flag=False,
     )
     
-    mock.get_shap_explanation.return_value = ExplainResult(
+    mock.get_shap_explanation.return_value = SHAPResult(
         tokens=["I", "love", "this"],
         shap_values=[0.1, 0.8, 0.1],
         base_value=0.0
