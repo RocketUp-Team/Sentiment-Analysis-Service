@@ -36,6 +36,12 @@ body {
   transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Allow scrolling on slide presentation page */
+body:has(app-slide) {
+  overflow: auto;
+  height: auto;
+}
+
 /* Premium Nebula Background */
 .chat-bg-pattern {
   position: absolute;
@@ -176,4 +182,93 @@ body {
 
 .animate-ripple {
   animation: ripple 1.5s infinite;
+}
+
+/* =================== PRINT STYLES FOR SLIDE EXPORT =================== */
+@media print {
+  /* Reset everything */
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Hide everything except slides */
+  html, body {
+    width: 1280px !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #0b1120 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+  }
+
+  /* Hide navigation buttons */
+  .back-btn, .export-btn {
+    display: none !important;
+  }
+
+  /* Configure page: landscape, exact slide dimensions */
+  @page {
+    size: 1280px 720px landscape;
+    margin: 0;
+  }
+
+  /* Make host fill naturally */
+  app-slide {
+    display: block !important;
+    width: 1280px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+  }
+
+  /* Each slide = one page */
+  .slide-container {
+    width: 1280px !important;
+    height: 720px !important;
+    min-height: 720px !important;
+    max-height: 720px !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    background-color: #0b1120 !important;
+    overflow: hidden !important;
+  }
+
+  /* Preserve pseudo-element backgrounds */
+  .slide-container::before {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .slide-container::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Preserve glassmorphism look (backdrop-filter won't work in print, use solid bg) */
+  .glass-panel {
+    background: rgba(15, 23, 42, 0.85) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Preserve gradient text in print */
+  .gradient-text {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ensure images print */
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid !important;
+  }
 }

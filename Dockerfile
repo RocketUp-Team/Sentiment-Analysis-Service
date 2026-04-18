@@ -63,6 +63,9 @@ COPY --from=model-puller /app/data/processed/sentences.csv ./data/processed/sent
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 
+# Install Playwright browser and system dependencies for PDF export
+RUN playwright install --with-deps chromium
+
 # Step 1: Download HuggingFace base model while online
 RUN python src/model/download_models.py
 

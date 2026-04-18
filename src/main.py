@@ -1,7 +1,13 @@
+import sys
+import asyncio
+
+# Fix lỗi Playwright trên Windows
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Response, BackgroundTasks
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
-import asyncio
 import time
 import pandas as pd
 import io
@@ -34,10 +40,14 @@ async def lifespan(app: FastAPI):
     global ml_model
     from src.model.config import ModelConfig
     import os
-    mode = os.getenv("MODEL_MODE", "onnx")
-    config = ModelConfig(mode=mode)
-    ml_model = BaselineModelInference(config)
-    ml_model.preload()
+    try:
+        mode = os.getenv("MODEL_MODE", "onnx")
+        config = ModelConfig(mode=mode)
+        ml_model = BaselineModelInference(config)
+        ml_model.preload()
+    except Exception as e:
+        print(f"⚠️ Warning: Models could not be loaded: {e}")
+        print("⚠️ Chat functionality will be disabled, but other services (like PDF export) will work.")
     yield
     # Clean up here if needed
 
@@ -297,6 +307,51 @@ from fastapi import Response
 @app.get("/metrics")
 async def metrics():
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+@app.get("/export-pdf")
+async def export_pdf():
+    """
+    Export the slide presentation to PDF using a standalone worker script.
+    This bypasses asyncio loop conflicts on Windows.
+    """
+    import subprocess
+    import os
+    import tempfile
+    import uuid
+    from fastapi.responses import FileResponse
+
+    # The Angular frontend URL
+    slide_url = "http://localhost:4200/present"
+    pdf_path = os.path.join(tempfile.gettempdir(), f"presentation_{uuid.uuid4()}.pdf")
+
+    try:
+        # Run worker script as a separate process
+        print(f"Triggering PDF Worker for {slide_url}...")
+        result = subprocess.run(
+            [sys.executable, "src/export_pdf_worker.py", slide_url, pdf_path],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        
+        if result.returncode != 0:
+            print(f"PDF Worker Error: {result.stderr}")
+            raise HTTPException(status_code=500, detail=f"PDF worker failed: {result.stderr}")
+
+        if not os.path.exists(pdf_path):
+            raise HTTPException(status_code=500, detail="PDF worker completed but file is missing")
+
+        return FileResponse(
+            path=pdf_path,
+            filename="Presentation_Premium.pdf",
+            media_type="application/pdf",
+        )
+
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="PDF generation timed out")
+    except Exception as e:
+        print(f"Export Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

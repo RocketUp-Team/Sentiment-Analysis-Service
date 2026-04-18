@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentiment Analysis Service - Premium Presentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Inter:wght@400;500;600&family=Fira+Code:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        /* ================= GLOBAL SETUP ================= */
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        body {
+            background-color: #040914;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 50px;
+            margin: 0;
+            padding: 40px 0;
+            background-image: radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.1) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.1) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* STRICT SLIDE CONTAINER (1280x720) */
+        .slide-container {
+            width: 1280px;
+            height: 720px;
+            min-height: 720px;
+            max-height: 720px;
+            background-color: #0b1120;
+            color: #f3f4f6;
+            font-family: 'Inter', sans-serif;
+            position: relative;
+            overflow: hidden;
+            /* Cực kỳ quan trọng: chặn tràn viền */
+            display: flex;
+            flex-direction: column;
+            padding: 40px 60px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            page-break-after: always;
+        }
+
+        /* Ambient Glow Effects */
+        .slide-container::before {
+            content: '';
+            position: absolute;
+            top: -200px;
+            right: -200px;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, transparent 60%);
+            border-radius: 50%;
+            z-index: 0;
+            pointer-events: none;
+            filter: blur(50px);
+        }
+
+        .slide-container::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #38bdf8, #818cf8, #c084fc, #38bdf8);
+        }
+
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #38bdf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+
+        /* Typography */
+        h1,
+        h2,
+        h3,
+        h4,
+        p,
+        li {
+            margin: 0;
+            padding: 0;
+            z-index: 2;
+            position: relative;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4 {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+
+        .rubric-tag {
+            position: absolute;
+            top: 30px;
+            right: 60px;
+            background: rgba(56, 189, 248, 0.1);
+            color: #38bdf8;
+            padding: 8px 16px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 700;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            z-index: 10;
+        }
+
+        .slide-number {
+            position: absolute;
+            bottom: 20px;
+            right: 60px;
+            color: #475569;
+            font-size: 14px;
+            font-family: 'Fira Code', monospace;
+            font-weight: 600;
+        }
+
+        .slide-title {
+            font-size: 42px;
+            color: #f8fafc;
+            margin-bottom: 25px;
+            position: relative;
+            z-index: 2;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            flex-shrink: 0;
+        }
+
+        .slide-title::before {
+            content: '';
+            display: block;
+            width: 6px;
+            height: 42px;
+            background: linear-gradient(180deg, #38bdf8, #8b5cf6);
+            border-radius: 6px;
+        }
+
+        p,
+        li {
+            font-size: 17px;
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+
+        strong {
+            color: #f8fafc;
+            font-weight: 600;
+        }
+
+        code {
+            font-family: 'Fira Code', monospace;
+            background: #1e293b;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #a5b4fc;
+            border: 1px solid #334155;
+        }
+
+        /* Layout Framework */
+        .content-area {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            position: relative;
+            z-index: 2;
+            width: 100%;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            align-items: start;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+        }
+
+        .tiled-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            width: 100%;
+        }
+
+        .tile {
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+        }
+
+        .tile .icon {
+            font-size: 32px;
+            color: #38bdf8;
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(139, 92, 246, 0.1));
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            flex-shrink: 0;
+        }
+
+        .tile h3 {
+            font-size: 22px;
+            color: #f8fafc;
+            margin-bottom: 10px;
+        }
+
+        /* STRICT IMAGE CONTAINER FIX */
+        .fit-image-box {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            overflow: hidden;
+            padding: 10px;
+        }
+
+        .fit-image-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Tables & Lists */
+        .table-layout {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .table-layout table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table-layout th {
+            text-align: left;
+            padding: 14px 18px;
+            background: rgba(0, 0, 0, 0.4);
+            color: #38bdf8;
+            font-size: 16px;
+            font-weight: 600;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .table-layout td {
+            padding: 12px 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: #e2e8f0;
+            font-size: 15px;
+        }
+
+        .table-layout tr:last-child td {
+            border-bottom: none;
+        }
+
+        .bullet-list {
+            list-style: none;
+            display: block;
+            padding: 0;
+        }
+
+        .bullet-list li {
+            position: relative;
+            padding-left: 35px;
+            margin-bottom: 15px;
+        }
+
+        .bullet-list i {
+            position: absolute;
+            left: 0;
+            top: 4px;
+            color: #38bdf8;
+            font-size: 18px;
+        }
+
+        /* Code Blocks */
+        .code-block {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            font-family: 'Fira Code', monospace;
+            color: #cbd5e1;
+            font-size: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 18px;
+            overflow-x: auto;
+            margin-bottom: 15px;
+        }
+
+        .keyword {
+            color: #c678dd;
+        }
+
+        .string {
+            color: #98c379;
+        }
+
+        .comment {
+            color: #64748b;
+            font-style: italic;
+        }
+
+        .function {
+            color: #61afef;
+        }
+
+        /* Diagrams */
+        .pipeline-flow {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .pipe-node {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #e0f2fe;
+        }
+
+        .arch-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 25px;
+        }
+
+        .arch-node {
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            color: #fff;
+            font-weight: 600;
+            width: 140px;
+            padding: 18px;
+            font-size: 14px;
+        }
+
+        .arch-node i {
+            display: block;
+            font-size: 28px;
+            color: #38bdf8;
+            margin-bottom: 8px;
+        }
+
+        .arch-node.highlight {
+            border-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.05);
+        }
+
+        .arch-arrow {
+            color: #475569;
+            font-size: 22px;
+        }
+
+        .arch-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Speaker Transition Slide */
+        .speaker-slide {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+
+        .speaker-avatar {
+            width: 180px;
+            height: 180px;
+            background: #0f172a;
+            border-radius: 50%;
+            border: 4px solid;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 70px;
+            margin-bottom: 25px;
+        }
+
+        .speaker-name {
+            font-size: 52px;
+            color: #f8fafc;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .speaker-role {
+            font-size: 22px;
+            font-family: 'Space Grotesk';
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        /* NÚT EXPORT PDF NỔI BẬT */
+        #exportBtn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 10px 25px rgba(220, 38, 38, 0.4);
+            z-index: 9999;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+
+        #exportBtn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 30px rgba(220, 38, 38, 0.6);
+        }
+
+        #exportBtn:disabled {
+            background: #475569;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="slide-container" id="slide1">
+        <div
+            style="display: flex; flex-direction: column; justify-content: flex-start; align-items: center; height: 100%; text-align: center; padding-top: 15px;">
+
+            <div style="margin-bottom: 15px; line-height: 1.3;">
+                <h3
+                    style="color: #f8fafc; font-size: 18px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin: 0;">
+                    FPT UNIVERSITY</h3>
+                <p style="color: #38bdf8; font-size: 15px; font-weight: 600; margin: 4px 0 2px 0;">FSB Institute of
+                    Management and Technology</p>
+                <p style="color: #64748b; font-size: 13px; font-style: italic; margin: 0;">(Viện Quản trị & Công nghệ
+                    FSB, Trường Đại học FPT)</p>
+            </div>
+
+            <div
+                style="background: rgba(31, 41, 55, 0.5); border: 1px solid rgba(56,189,248,0.3); border-radius: 12px; padding: 6px 24px; margin-bottom: 20px; display: inline-block;">
+                <div style="color: #e2e8f0; font-size: 14px; font-weight: 600; margin-bottom: 2px;">
+                    <span style="color: #38bdf8;">COURSE DDM501:</span> AI in Production: From Models to Systems
+                </div>
+            </div>
+
+            <h4
+                style="color: #f59e0b; font-size: 14px; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 8px; font-weight: 700;">
+                Final Project Report</h4>
+            <h1 style="font-size: 54px; line-height: 1.1; margin-bottom: 12px; font-weight: 700;">Sentiment Analysis
+                <span class="gradient-text">Service</span></h1>
+            <p style="font-size: 18px; color: #94a3b8; font-weight: 500; margin-bottom: 25px;">End-to-End ML System:
+                From Problem Definition to Production</p>
+
+            <div class="glass-panel"
+                style="display: flex; flex-direction: row; gap: 50px; padding: 30px 45px; text-align: left; align-items: center; justify-content: center; width: fit-content; margin: 0 auto;">
+
+                <div style="display: flex; flex-direction: column; gap: 20px; min-width: 420px;">
+                    <div>
+                        <h4
+                            style="color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px;">
+                            Instructor</h4>
+                        <p
+                            style="font-size: 22px; color: #f8fafc; font-weight: 600; margin: 0; padding-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.15); display: inline-block; padding-right: 40px;">
+                            Huynh Cong Viet Ngu</p>
+                    </div>
+
+                    <div>
+                        <h4
+                            style="color: #94a3b8; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px;">
+                            Team Members</h4>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 8px;">
+                                <span style="font-size: 18px; color: #f8fafc; font-weight: 600;">1. Đỗ Quốc Trung</span>
+                                <span
+                                    style="font-size: 14px; color: #38bdf8; font-family: 'Fira Code', monospace; background: rgba(56,189,248,0.1); padding: 4px 10px; border-radius: 6px;">ML
+                                    Pipeline & DVC</span>
+                            </div>
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 8px;">
+                                <span style="font-size: 18px; color: #f8fafc; font-weight: 600;">2. Phạm Đức Long</span>
+                                <span
+                                    style="font-size: 14px; color: #10b981; font-family: 'Fira Code', monospace; background: rgba(16,185,129,0.1); padding: 4px 10px; border-radius: 6px;">Backend
+                                    API & CI/CD</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-size: 18px; color: #f8fafc; font-weight: 600;">3. Dương Hồng
+                                    Quân</span>
+                                <span
+                                    style="font-size: 14px; color: #f59e0b; font-family: 'Fira Code', monospace; background: rgba(245,158,11,0.1); padding: 4px 10px; border-radius: 6px;">Monitoring
+                                    & Val</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    style="flex-shrink: 0; width: 440px; height: 280px; border-radius: 12px; border: 2px solid rgba(56, 189, 248, 0.4); overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); background: rgba(0,0,0,0.5);">
+                    <img src="image/Tamtai.jpg"
+                        onerror="this.onerror=null; this.src='https://via.placeholder.com/440x280?text=Loi+Anh'"
+                        alt="Team Photo" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+
+            </div>
+        </div>
+        <div class="slide-number">Slide 1 / 21</div>
+    </div>
+    <div class="slide-container" id="slide2">
+        <div class="rubric-tag">Part 1: Problem Definition (10%)</div>
+        <h2 class="slide-title">Problem Statement & <span class="gradient-text">Context</span></h2>
+        <div class="content-area">
+            <div class="tile glass-panel"
+                style="margin-bottom: 25px; flex-direction: row; align-items: center; gap: 30px;">
+                <div class="icon" style="margin: 0; flex-shrink: 0;"><i class="fa-solid fa-bullseye"></i></div>
+                <div>
+                    <h3>The Business Bottleneck</h3>
+                    <p>Customer feedback is highly valuable but severely under-utilised due to the massive volume of
+                        manual review required. Businesses struggle to extract actionable insights quickly from text
+                        data.</p>
+                </div>
+            </div>
+            <div class="tile glass-panel" style="flex-direction: row; align-items: center; gap: 30px;">
+                <div class="icon"
+                    style="margin: 0; flex-shrink: 0; color: #c084fc; border-color: rgba(192, 132, 252, 0.2);"><i
+                        class="fa-solid fa-lightbulb"></i></div>
+                <div>
+                    <h3>Our Solution</h3>
+                    <p>An automated, production-grade REST service that classifies sentiment and extracts
+                        <strong>Aspect-Based Sentiment Analysis (ABSA)</strong> in real-time, evaluated on the
+                        SemEval-2014 Restaurant Reviews dataset.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 2 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide3">
+        <div class="rubric-tag">Part 1: User Requirements (10%)</div>
+        <h2 class="slide-title">Core Use Cases & <span class="gradient-text">Scope</span></h2>
+        <div class="content-area">
+            <div class="two-column">
+                <div class="glass-panel" style="padding: 35px;">
+                    <h4 style="color: #38bdf8; font-size: 22px; margin-bottom: 25px;"><i
+                            class="fa-solid fa-crosshairs"></i> In Scope</h4>
+                    <ul class="bullet-list">
+                        <li><i class="fa-solid fa-check"></i> <strong>Sentence-level:</strong> Positive, Negative,
+                            Neutral classification.</li>
+                        <li><i class="fa-solid fa-check"></i> <strong>ABSA:</strong> Fine-grained aspects (Food,
+                            Service, Ambiance, Price).</li>
+                        <li><i class="fa-solid fa-check"></i> <strong>Operations:</strong> Real-time API & Batch CSV
+                            processing.</li>
+                        <li><i class="fa-solid fa-check"></i> <strong>Explainability:</strong> Token-level SHAP
+                            attributions.</li>
+                    </ul>
+                </div>
+                <div class="glass-panel" style="padding: 35px;">
+                    <h4 style="color: #f59e0b; font-size: 22px; margin-bottom: 25px;"><i class="fa-solid fa-ban"></i>
+                        Out of Scope / Constraints</h4>
+                    <ul class="bullet-list">
+                        <li><i class="fa-solid fa-xmark" style="color: #f59e0b;"></i> No user authentication or rate
+                            limiting implemented.</li>
+                        <li><i class="fa-solid fa-xmark" style="color: #f59e0b;"></i> English language only (Language
+                            guard active).</li>
+                        <li><i class="fa-solid fa-server" style="color: #94a3b8;"></i> <strong>Constraint:</strong>
+                            CPU-only Docker image. Offline model serving required.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 3 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide4">
+        <div class="rubric-tag">Part 1: Success Metrics (10%)</div>
+        <h2 class="slide-title">Defined <span class="gradient-text">Success Metrics</span></h2>
+        <div class="content-area">
+            <div class="table-layout glass-panel">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">Level</th>
+                            <th style="width: 25%;">Metric</th>
+                            <th style="width: 25%;">Target</th>
+                            <th style="width: 25%;">Monitoring Tool</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong style="color:#38bdf8;">Business</strong></td>
+                            <td>Prediction Throughput</td>
+                            <td>> 100 req/s</td>
+                            <td>Locust / Grafana</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color:#38bdf8;">Business</strong></td>
+                            <td>ABSA Coverage</td>
+                            <td>Aspects on 80% inputs</td>
+                            <td>Prometheus</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color:#c084fc;">Model</strong></td>
+                            <td>Accuracy (test set)</td>
+                            <td>> 0.85</td>
+                            <td><code>src.model.evaluate</code></td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color:#c084fc;">Model</strong></td>
+                            <td>F1 Macro (test set)</td>
+                            <td>> 0.80</td>
+                            <td>MLflow</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color:#10b981;">System</strong> <span
+                                    style="font-size:13px;color:#64748b;">(NFR-01)</span></td>
+                            <td>P95 Latency</td>
+                            <td>
+                                < 200 ms</td>
+                            <td>Prometheus Histogram</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color:#10b981;">System</strong> <span
+                                    style="font-size:13px;color:#64748b;">(NFR-02)</span></td>
+                            <td>Service Uptime</td>
+                            <td>≥ 99.9%</td>
+                            <td>Prometheus Alerting</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="slide-number">Slide 4 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide5">
+        <div class="content-area speaker-slide">
+            <div class="speaker-avatar"
+                style="color: #38bdf8; border-color: #38bdf8; box-shadow: inset 0 0 20px rgba(56,189,248,0.2), 0 0 40px rgba(56,189,248,0.4);">
+                <i class="fa-solid fa-code-branch"></i>
+            </div>
+            <h2 class="speaker-name">Đỗ Quốc Trung</h2>
+            <p class="speaker-role" style="color: #38bdf8;">ML Pipeline & DVC</p>
+            <div
+                style="max-width: 750px; margin-top: 30px; padding: 20px; background: rgba(56,189,248,0.05); border-radius: 8px; border: 1px solid rgba(56,189,248,0.2);">
+                <p style="font-size: 18px; font-style: italic; margin: 0;">"Responsible for ML pipeline design, model
+                    evaluation, MLflow integration, and reproducible DVC pipeline configuration."</p>
+            </div>
+        </div>
+        <div class="slide-number">Slide 5 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide6">
+        <div class="rubric-tag">Part 2: Technical Deep Dive (ML)</div>
+        <h2 class="slide-title">Dataset & <span class="gradient-text">Machine Learning Models</span></h2>
+        <div class="content-area">
+            <div class="tiled-grid">
+                <div class="tile glass-panel">
+                    <div class="icon"><i class="fa-solid fa-database"></i></div>
+                    <h3>SemEval-2014</h3>
+                    <p>Evaluated on the Restaurant Reviews corpus. Data contains both sentence-level and aspect-level
+                        sentiment annotations.</p>
+                </div>
+                <div class="tile glass-panel">
+                    <div class="icon" style="color: #c084fc; border-color: rgba(192, 132, 252, 0.2);"><i
+                            class="fa-solid fa-brain"></i></div>
+                    <h3>RoBERTa Base</h3>
+                    <p><code>twitter-roberta-base</code> pre-trained on 58M tweets. Acts as the primary model for robust
+                        baseline sentence sentiment prediction.</p>
+                </div>
+                <div class="tile glass-panel">
+                    <div class="icon" style="color: #10b981; border-color: rgba(16, 185, 129, 0.2);"><i
+                            class="fa-solid fa-magnifying-glass-chart"></i></div>
+                    <h3>DeBERTa v3 ABSA</h3>
+                    <p>Zero-shot pipeline extracting aspect sentiments (threshold > 0.5) dynamically without custom
+                        fine-tuning data.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 6 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide7">
+        <div class="rubric-tag">Part 2: Technical Deep Dive (ML)</div>
+        <h2 class="slide-title">Reproducible <span class="gradient-text">DVC Pipeline</span></h2>
+        <div class="content-area">
+            <div class="two-column">
+                <div class="glass-panel" style="padding: 25px;">
+                    <h4 style="color: #38bdf8; font-size: 20px; margin-bottom: 15px;"><i
+                            class="fa-solid fa-file-code"></i> dvc.yaml Stages</h4>
+                    <div class="code-block" style="box-shadow: none; margin: 0; padding: 15px;">
+                        <span class="keyword">stages</span>:
+                        <span class="function">download</span>: <span class="comment"># Raw XML -> CSV</span>
+                        <span class="function">preprocess</span>: <span class="comment"># Transform chain</span>
+                        <span class="function">validate</span>: <span class="comment"># QualityReport -> JSON</span>
+                        <span class="function">evaluate_baseline</span>: <span class="comment"># -> MLflow</span>
+                    </div>
+                </div>
+                <div class="glass-panel" style="padding: 25px;">
+                    <h4 style="color: #38bdf8; font-size: 20px; margin-bottom: 15px;"><i class="fa-solid fa-link"></i>
+                        Transform Chain</h4>
+                    <div class="pipeline-flow">
+                        <div class="pipe-node">LabelMapper</div><i class="fa-solid fa-arrow-right arch-arrow"
+                            style="font-size:16px"></i>
+                        <div class="pipe-node"
+                            style="border-color: #f59e0b; color: #fef3c7; background: rgba(245, 158, 11, 0.1);">
+                            SentimentDeriver</div><i class="fa-solid fa-arrow-right arch-arrow"
+                            style="font-size:16px"></i>
+                        <div class="pipe-node">TextCleaner</div><i class="fa-solid fa-arrow-right arch-arrow"
+                            style="font-size:16px"></i>
+                        <div class="pipe-node">DuplicateRemover</div><i class="fa-solid fa-arrow-right arch-arrow"
+                            style="font-size:16px"></i>
+                        <div class="pipe-node">LengthFilter</div><i class="fa-solid fa-arrow-right arch-arrow"
+                            style="font-size:16px"></i>
+                        <div class="pipe-node">Splitter</div>
+                    </div>
+                </div>
+            </div>
+            <div class="glass-panel"
+                style="margin-top: 25px; padding: 25px 35px; width: 100%; display: flex; align-items: center; gap: 25px; border-left: 4px solid #f59e0b !important;">
+                <i class="fa-solid fa-code-compare" style="font-size: 32px; color:#f59e0b; flex-shrink: 0;"></i>
+                <div>
+                    <h3 style="font-size: 20px; margin-bottom: 8px;">The "Negative Priority" Strategy</h3>
+                    <p style="font-size: 16px; margin: 0;">Implemented in <code>SentimentDeriver</code>: When a sentence
+                        contains aspects with conflicting sentiments, it is labelled NEGATIVE if <em>any</em> aspect is
+                        negative, prioritizing the identification of customer pain points.</p>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 7 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide8">
+        <div class="rubric-tag">Part 2: Technical Deep Dive (ML)</div>
+        <h2 class="slide-title">Experiment Tracking <span class="gradient-text">(MLflow)</span></h2>
+        <div class="content-area">
+            <div class="two-column">
+                <div class="glass-panel" style="padding: 35px;">
+                    <p style="font-size: 18px; margin-bottom: 25px;">The <code>log_to_mlflow</code> function logs
+                        parameters and metrics at each evaluation run to an internal MLflow server (Port 5005).</p>
+                    <ul class="bullet-list">
+                        <li><i class="fa-solid fa-sliders"></i> <strong>Parameters Logged:</strong>
+                            <br><code>model_name</code>, <code>max_length: 512</code></li>
+                        <li><i class="fa-solid fa-chart-simple"></i> <strong>Metrics Logged:</strong>
+                            <br><code>accuracy</code>, <code>f1_macro</code></li>
+                        <li><i class="fa-solid fa-folder-open"></i> <strong>Artifacts:</strong>
+                            <br><code>confusion_matrix.png</code>, <code>report.txt</code></li>
+                    </ul>
+                </div>
+                <div class="code-block glass-panel"
+                    style="padding: 25px; margin: 0; display: flex; align-items: center;">
+                    <div style="width: 100%; font-size: 14px;">
+                        <span class="keyword">def</span> <span class="function">log_to_mlflow</span>():
+                        run_params = {
+                        <span class="string">"model_name"</span>: <span class="string">"twitter-roberta"</span>,
+                        <span class="string">"model_type"</span>: <span class="string">"baseline"</span>,
+                        <span class="string">"max_length"</span>: <span class="string">512</span>,
+                        }
+                        run_metrics = {
+                        <span class="string">"accuracy"</span>: ..., <span class="string">"f1_macro"</span>: ...
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 8 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide9">
+        <div class="content-area speaker-slide">
+            <div class="speaker-avatar"
+                style="color: #10b981; border-color: #10b981; box-shadow: inset 0 0 20px rgba(16,185,129,0.2), 0 0 40px rgba(16,185,129,0.3);">
+                <i class="fa-solid fa-server"></i>
+            </div>
+            <h2 class="speaker-name">Phạm Đức Long</h2>
+            <p class="speaker-role" style="color: #10b981;">Backend API & DevOps / CI-CD</p>
+            <div
+                style="max-width: 750px; margin-top: 30px; padding: 20px; background: rgba(16,185,129,0.05); border-radius: 8px; border: 1px solid rgba(16,185,129,0.2);">
+                <p style="font-size: 18px; font-style: italic; margin: 0;">"Responsible for FastAPI application
+                    architecture, Pydantic schemas validation, Docker containerisation, and GitHub Actions CI/CD
+                    pipelines."</p>
+            </div>
+        </div>
+        <div class="slide-number">Slide 9 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide10">
+        <div class="rubric-tag">Part 2: Technical Deep Dive (System)</div>
+        <h2 class="slide-title">System <span class="gradient-text">Architecture</span></h2>
+        <div class="content-area">
+            <p style="font-size: 18px; margin-bottom: 20px; text-align: center;">Five containerised services
+                orchestrated via <strong>Docker Compose</strong> on a shared bridge network
+                (<code>sentiment-network</code>).</p>
+
+            <div class="arch-diagram glass-panel"
+                style="width: 100%; max-width: 850px; margin-bottom: 25px; padding: 20px;">
+                <div class="arch-node" style="padding: 15px; width: 130px;"><i class="fa-brands fa-angular"
+                        style="font-size: 30px; margin-bottom: 8px;"></i>Frontend</div>
+                <i class="fa-solid fa-arrow-right arch-arrow"></i>
+                <div class="arch-node highlight" style="padding: 15px; width: 130px;"><i class="fa-solid fa-server"
+                        style="font-size: 30px; margin-bottom: 8px;"></i>FastAPI App</div>
+                <i class="fa-solid fa-arrow-right arch-arrow"></i>
+                <div class="arch-stack" style="gap: 12px;">
+                    <div class="arch-node" style="width: 160px; padding: 12px;"><i class="fa-solid fa-brain"
+                            style="font-size: 20px; margin-bottom: 4px;"></i>Inference Models</div>
+                    <div class="arch-node" style="width: 160px; padding: 12px;"><i class="fa-solid fa-chart-line"
+                            style="font-size: 20px; margin-bottom: 4px;"></i>MLflow</div>
+                    <div class="arch-node" style="width: 160px; padding: 12px;"><i class="fa-solid fa-database"
+                            style="font-size: 20px; margin-bottom: 4px;"></i>Prometheus</div>
+                </div>
+            </div>
+
+            <div class="table-layout glass-panel" style="max-width: 850px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>CPU Limit</th>
+                            <th>Memory Limit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>fastapi_app</code></td>
+                            <td>1.50 vCPU</td>
+                            <td>4 GB</td>
+                        </tr>
+                        <tr>
+                            <td><code>mlflow</code></td>
+                            <td>0.50 vCPU</td>
+                            <td>1 GB</td>
+                        </tr>
+                        <tr>
+                            <td><code>frontend / grafana</code></td>
+                            <td>0.25 vCPU</td>
+                            <td>512 MB</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="slide-number">Slide 10 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide11">
+        <div class="rubric-tag">Part 2: Technical Deep Dive (API)</div>
+        <h2 class="slide-title">REST API Design & <span class="gradient-text">Contracts</span></h2>
+        <div class="content-area">
+            <div class="two-column">
+                <div class="glass-panel" style="padding: 30px;">
+                    <h4 style="color: #38bdf8; font-size: 22px; margin-bottom: 20px;"><i
+                            class="fa-solid fa-network-wired"></i> Endpoints</h4>
+                    <div class="table-layout" style="margin-bottom: 20px;">
+                        <table>
+                            <tr>
+                                <th>Method</th>
+                                <th>Endpoint</th>
+                            </tr>
+                            <tr>
+                                <td style="color:#10b981; font-weight:600;">POST</td>
+                                <td><code>/predict</code></td>
+                            </tr>
+                            <tr>
+                                <td style="color:#10b981; font-weight:600;">POST</td>
+                                <td><code>/batch_predict</code></td>
+                            </tr>
+                            <tr>
+                                <td style="color:#10b981; font-weight:600;">POST</td>
+                                <td><code>/explain</code></td>
+                            </tr>
+                            <tr>
+                                <td style="color:#38bdf8; font-weight:600;">GET</td>
+                                <td><code>/metrics</code></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div style="background: rgba(245,158,11,0.1); border-left: 3px solid #f59e0b; padding: 12px;">
+                        <p style="font-size: 14px; margin: 0; color: #cbd5e1;">* Language Guard: Rejects non-English
+                            inputs immediately with HTTP 400.</p>
+                    </div>
+                </div>
+                <div class="glass-panel" style="padding: 30px;">
+                    <h4 style="color: #38bdf8; font-size: 22px; margin-bottom: 20px;"><i
+                            class="fa-solid fa-file-shield"></i> Pydantic Validation</h4>
+                    <div class="code-block" style="box-shadow: none; margin: 0; font-size: 13px;">
+                        <span class="keyword">class</span> <span class="function">PredictResponse</span>(BaseModel):
+                        text: <span class="keyword">str</span>
+                        sentiment: Literal[<span class="string">"positive"</span>, <span
+                            class="string">"negative"</span>, <span class="string">"neutral"</span>]
+                        confidence: <span class="keyword">float</span> = Field(ge=<span class="string">0.0</span>,
+                        le=<span class="string">1.0</span>)
+                        aspects: <span class="keyword">list</span>[AspectSentimentOut]
+                        sarcasm_flag: <span class="keyword">bool</span>
+                        latency_ms: <span class="keyword">float</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 11 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide12">
+        <div class="rubric-tag">Part 2: Technical Deep Dive (DevOps)</div>
+        <h2 class="slide-title">Multi-stage <span class="gradient-text">Docker Build</span></h2>
+        <div class="content-area">
+            <div class="two-column">
+                <div class="glass-panel" style="padding: 35px;">
+                    <ul class="bullet-list">
+                        <li><i class="fa-solid fa-box-open"></i> <strong>Stage 1 (Builder):</strong>
+                            <code>python:3.11-slim</code>. Installs heavy PyTorch CPU wheels and requirements.</li>
+                        <li style="margin-top: 25px;"><i class="fa-solid fa-compress"></i> <strong>Stage 2
+                                (Runtime):</strong> Copies only <code>site-packages</code> to drastically minimize the
+                            final image size.</li>
+                        <li style="margin-top: 25px;"><i class="fa-solid fa-wifi"></i> <strong>Offline
+                                Enforcement:</strong> Hugging Face model weights are downloaded at build time.
+                            <code>TRANSFORMERS_OFFLINE=1</code> ensures no network calls.</li>
+                    </ul>
+                </div>
+                <div class="code-block glass-panel"
+                    style="padding: 25px; margin: 0; display: flex; align-items: center;">
+                    <div style="width:100%; font-size: 13px;">
+                        <span class="comment"># Stage 1: build</span>
+                        <span class="keyword">FROM</span> python:3.11-slim <span class="keyword">AS</span> builder
+                        <span class="keyword">RUN</span> pip install torch --index-url ...
+
+                        <span class="comment"># Stage 2: lean runtime</span>
+                        <span class="keyword">FROM</span> python:3.11-slim
+                        <span class="keyword">COPY</span> --from=builder /usr/local/lib/python...
+                        <span class="keyword">COPY</span> src/ contracts/
+
+                        <span class="keyword">RUN</span> python src/model/download_models.py
+                        <span class="keyword">ENV</span> TRANSFORMERS_OFFLINE=1
+                        <span class="keyword">CMD</span> [<span class="string">"uvicorn"</span>, <span
+                            class="string">"src.main:app"</span>]
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 12 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide13">
+        <div class="rubric-tag">Part 2: Technical Deep Dive (DevOps)</div>
+        <h2 class="slide-title">CI/CD Pipeline <span class="gradient-text">(GitHub Actions)</span></h2>
+        <div class="content-area">
+            <p style="font-size: 18px; margin-bottom: 25px; text-align: center;">Automated workflow <code>ci.yml</code>
+                triggers on every push to <code>main/develop</code> and pull requests.</p>
+            <div class="two-column">
+                <div class="glass-panel" style="padding: 35px;">
+                    <ul class="bullet-list">
+                        <li><i class="fa-solid fa-download"></i> <strong>1. Install:</strong> Dependencies
+                            (<code>httpx</code>, <code>pytest-cov</code>).</li>
+                        <li><i class="fa-solid fa-vial"></i> <strong>2. Test & Coverage:</strong> Runs Pytest suite.
+                        </li>
+                        <li><i class="fa-solid fa-shield-halved" style="color: #ef4444;"></i> <strong
+                                style="color: #ef4444;">3. Lint (Hard):</strong> Flake8 fails build instantly on syntax
+                            errors (E9) or undefined names (F82).</li>
+                        <li><i class="fa-solid fa-triangle-exclamation" style="color: #f59e0b;"></i> <strong
+                                style="color: #f59e0b;">4. Lint (Soft):</strong> Flake8 warns on complexity metrics.
+                        </li>
+                    </ul>
+                </div>
+                <div class="code-block glass-panel"
+                    style="padding: 25px; margin: 0; display: flex; align-items: center;">
+                    <div style="width: 100%; font-size: 13px;">
+                        <span class="keyword">jobs</span>:
+                        <span class="function">test</span>:
+                        <span class="keyword">runs-on</span>: ubuntu-latest
+                        <span class="keyword">steps</span>:
+                        - <span class="keyword">run</span>: pip install -r requirements.txt
+                        - <span class="keyword">run</span>: pytest --cov=src tests/
+                        <span class="comment"># Hard failure on syntax errors</span>
+                        - <span class="keyword">run</span>: flake8 --select=E9,F63,F7,F82
+                        <span class="comment"># Soft warning for complexity > 10</span>
+                        - <span class="keyword">run</span>: flake8 --exit-zero --max-complexity=10
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 13 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide14">
+        <div class="content-area speaker-slide">
+            <div class="speaker-avatar"
+                style="color: #f59e0b; border-color: #f59e0b; box-shadow: inset 0 0 20px rgba(245,158,11,0.2), 0 0 40px rgba(245,158,11,0.4);">
+                <i class="fa-solid fa-chart-line"></i>
+            </div>
+            <h2 class="speaker-name">Dương Hồng Quân</h2>
+            <p class="speaker-role" style="color: #f59e0b;">Monitoring, Validation & RAI</p>
+            <div
+                style="max-width: 750px; margin-top: 30px; padding: 20px; background: rgba(245,158,11,0.05); border-radius: 12px; border: 1px solid rgba(245,158,11,0.2);">
+                <p style="font-size: 18px; font-style: italic; margin: 0;">"Responsible for data quality validation,
+                    Prometheus metrics, Grafana dashboards, comprehensive testing, and Responsible AI implementation."
+                </p>
+            </div>
+        </div>
+        <div class="slide-number">Slide 14 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide15">
+        <div class="rubric-tag">Part 2: Technical Deep Dive (Data)</div>
+        <h2 class="slide-title">Data Quality <span class="gradient-text">Validation</span></h2>
+        <div class="content-area">
+            <div class="glass-panel"
+                style="display: flex; align-items: center; gap: 25px; padding: 30px 40px; margin-bottom: 30px; width: 100%; border-left: 4px solid #38bdf8 !important;">
+                <i class="fa-solid fa-shield-halved" style="font-size: 45px; color: #38bdf8;"></i>
+                <div>
+                    <h3 style="font-size: 24px; margin-bottom: 8px;">The <code>DataQualityValidator</code></h3>
+                    <p style="font-size: 17px; margin: 0;">Ensures robust data entering the pipeline. Automatically
+                        generates <code>quality_report.json</code> logged to MLflow.</p>
+                </div>
+            </div>
+            <div class="glass-panel" style="padding: 35px; width: 100%;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
+                    <ul class="bullet-list">
+                        <li><i class="fa-solid fa-table-columns"></i> <strong>Schema Checks:</strong> Validates required
+                            columns (<code>sentence_id</code>, <code>text</code>, <code>sentiment</code>).</li>
+                        <li style="margin-top: 25px;"><i class="fa-solid fa-link-slash"></i> <strong>Referential
+                                Integrity:</strong> Ensures no orphan aspect rows exist.</li>
+                    </ul>
+                    <ul class="bullet-list">
+                        <li><i class="fa-solid fa-ban" style="color: #ef4444;"></i> <strong style="color:#ef4444">Null
+                                Constraints:</strong> Fails pipeline if any column exceeds a <strong>1% null
+                                rate</strong>.</li>
+                        <li style="margin-top: 25px;"><i class="fa-solid fa-chart-pie" style="color: #f59e0b;"></i>
+                            <strong style="color:#f59e0b">Distribution Monitoring:</strong> Triggers warnings if any
+                            class falls below <strong>5% representation</strong>.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 15 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide16">
+        <div class="rubric-tag">Part 2: Monitoring (10%)</div>
+        <h2 class="slide-title">Observability Stack & <span class="gradient-text">Grafana Dashboard</span></h2>
+
+        <div class="content-area" style="display: flex; flex-direction: column; gap: 20px; width: 100%;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; flex-shrink: 0;">
+                <div class="glass-panel" style="padding: 20px 25px; border-left: 4px solid #38bdf8 !important;">
+                    <h4 style="color: #38bdf8; font-size: 18px; margin-bottom: 10px;"><i
+                            class="fa-solid fa-stopwatch"></i> Prometheus Metrics</h4>
+                    <p style="font-size: 14px;">Tracks <code>api_requests_total</code> and latency histograms via ASGI
+                        Middleware.</p>
+                </div>
+                <div class="glass-panel" style="padding: 20px 25px; border-left: 4px solid #f59e0b !important;">
+                    <h4 style="color: #f59e0b; font-size: 18px; margin-bottom: 10px;"><i class="fa-solid fa-bell"></i>
+                        Alert Rules</h4>
+                    <p style="font-size: 14px;">Critical alerts when <strong>HTTP 5xx rate > 10%</strong> or
+                        <strong>Latency > 500ms</strong>.</p>
+                </div>
+            </div>
+
+            <div class="fit-image-box" style="padding: 0; background: none; border: none;">
+                <img src="image/dashboard.jpg"
+                    onerror="this.onerror=null; this.src='https://via.placeholder.com/1200x500?text=Loi+Đường+Dẫn+Ảnh'"
+                    alt="Grafana Dashboard"
+                    style="border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            </div>
+        </div>
+        <div class="slide-number">Slide 16 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide17">
+        <div class="rubric-tag">Part 2: Testing & CI/CD (15%)</div>
+        <h2 class="slide-title">Comprehensive <span class="gradient-text">Test Suite</span></h2>
+        <div class="content-area">
+            <div class="two-column">
+                <div class="glass-panel" style="padding: 35px;">
+                    <h4 style="color: #38bdf8; font-size: 22px; margin-bottom: 25px;"><i
+                            class="fa-solid fa-layer-group"></i> Three-Tier Architecture</h4>
+                    <ul class="bullet-list">
+                        <li><i class="fa-solid fa-microscope"></i> <strong>Unit Tests:</strong> Each transform tested
+                            with mock DataFrames.</li>
+                        <li style="margin-top: 20px;"><i class="fa-solid fa-file-contract"></i> <strong>Contract
+                                Tests:</strong> Validation of Pydantic field constraints.</li>
+                        <li style="margin-top: 20px;"><i class="fa-solid fa-plug"></i> <strong>API Integration:</strong>
+                            End-to-end testing via FastAPI <code>TestClient</code>.</li>
+                    </ul>
+                </div>
+                <div class="glass-panel" style="padding: 35px;">
+                    <h4 style="color: #38bdf8; font-size: 22px; margin-bottom: 25px;"><i class="fa-solid fa-code"></i>
+                        Integration Test Example</h4>
+                    <div class="code-block" style="box-shadow: none; margin: 0; font-size: 13px;">
+                        <span class="keyword">def</span> <span class="function">test_explain</span>(client):
+                        response = client.post(
+                        <span class="string">"/explain"</span>,
+                        json={<span class="string">"text"</span>: <span class="string">"I love this product!"</span>,
+                        <span class="string">"lang"</span>: <span class="string">"en"</span>}
+                        )
+                        <span class="keyword">assert</span> response.status_code == <span class="string">200</span>
+                        data = response.json()
+
+                        <span class="comment"># Schema invariant enforced by Pydantic</span>
+                        <span class="keyword">assert</span> len(data[<span class="string">"tokens"</span>]) ==
+                        len(data[<span class="string">"shap_values"</span>])
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="slide-number">Slide 17 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide18">
+        <div class="rubric-tag">Part 3: Responsible AI (10%)</div>
+        <h2 class="slide-title">Responsible AI & <span class="gradient-text">Explainability</span></h2>
+
+        <div class="content-area" style="flex-direction: row; gap: 30px; align-items: stretch;">
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 15px; min-width: 0;">
+                <div class="glass-panel" style="padding: 20px; border-left: 4px solid #38bdf8 !important;">
+                    <h3 style="font-size: 18px; color: #38bdf8; margin-bottom: 8px;"><i class="fa-solid fa-eye"></i>
+                        SHAP Explainability</h3>
+                    <p style="font-size: 14px; line-height: 1.4;">The <code>/explain</code> endpoint exposes
+                        <code>shap.Explainer</code>. The waterfall plot dictates model decisions at token level.</p>
+                </div>
+                <div class="glass-panel" style="padding: 20px; border-left: 4px solid #f59e0b !important;">
+                    <h3 style="font-size: 18px; color: #f59e0b; margin-bottom: 8px;"><i
+                            class="fa-solid fa-scale-balanced"></i> Fairness & Bias</h3>
+                    <p style="font-size: 14px; line-height: 1.4;"><strong>Domain Bias:</strong> RoBERTa favors Twitter
+                        text. <strong>Sarcasm:</strong> Flag reserved but currently causes reversed polarity.</p>
+                </div>
+                <div class="glass-panel" style="padding: 20px; border-left: 4px solid #10b981 !important; flex: 1;">
+                    <h3 style="font-size: 18px; color: #10b981; margin-bottom: 8px;"><i
+                            class="fa-solid fa-user-shield"></i> Ethics & Privacy</h3>
+                    <p style="font-size: 14px; line-height: 1.4;">Stateless API. Zero PII logged. <strong>Job
+                            Displacement:</strong> Positioned as decision-support, not human replacement.</p>
+                </div>
+            </div>
+
+            <div class="fit-image-box" style="flex: 1.5; background: #ffffff; padding: 10px;">
+                <img src="image/worst.jpg"
+                    onerror="this.onerror=null; this.src='https://via.placeholder.com/600x600?text=Loi+Đường+Dẫn+Ảnh'"
+                    alt="SHAP Waterfall Plot">
+            </div>
+        </div>
+        <div class="slide-number">Slide 18 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide19" style="padding: 30px 40px;">
+        <div class="rubric-tag" style="top: 20px; right: 40px;">Part 4: Live Demo (15%)</div>
+
+        <div style="width: 100%; z-index: 2; text-align: center; margin-bottom: 15px; flex-shrink: 0;">
+            <h2 class="slide-title" style="margin-bottom: 5px; justify-content: center; font-size: 32px;"><span
+                    class="gradient-text">SentimentPro UI ✨</span></h2>
+            <p style="font-size: 15px;">Angular-based Chatbot interface integrated with FastAPI Backend.</p>
+        </div>
+
+        <div class="fit-image-box" style="padding: 0; border: none; border-radius: 12px; background: transparent;">
+            <img src="image/image_9bd050.png"
+                onerror="this.onerror=null; this.src='https://via.placeholder.com/1200x600?text=Loi+Đường+Dẫn+Ảnh'"
+                alt="Sentiment Pro User Interface"
+                style="object-position: top center; border-radius: 12px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.2);">
+        </div>
+        <div class="slide-number" style="bottom: 15px; right: 40px;">Slide 19 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide20">
+        <h2 class="slide-title">Project <span class="gradient-text">Conclusion</span></h2>
+        <div class="content-area">
+            <div class="glass-panel" style="padding: 50px 60px; width: 100%;">
+                <ul class="bullet-list" style="font-size: 22px;">
+                    <li style="margin-bottom: 30px;"><i class="fa-solid fa-check-double" style="font-size: 26px;"></i>
+                        <strong style="color:#38bdf8;">Problem Solved:</strong> Automated sentiment and fine-grained
+                        aspect extraction.</li>
+                    <li style="margin-bottom: 30px;"><i class="fa-solid fa-check-double" style="font-size: 26px;"></i>
+                        <strong style="color:#38bdf8;">Production Ready:</strong> Containerised, offline-capable FastAPI
+                        backend.</li>
+                    <li style="margin-bottom: 30px;"><i class="fa-solid fa-check-double" style="font-size: 26px;"></i>
+                        <strong style="color:#38bdf8;">MLOps Integration:</strong> Full DVC data pipelines and MLflow
+                        tracking.</li>
+                    <li style="margin-bottom: 30px;"><i class="fa-solid fa-check-double" style="font-size: 26px;"></i>
+                        <strong style="color:#38bdf8;">Observability:</strong> Complete Prometheus/Grafana stack with
+                        alerting.</li>
+                    <li><i class="fa-solid fa-check-double" style="font-size: 26px;"></i> <strong
+                            style="color:#38bdf8;">Trustworthy AI:</strong> SHAP integration and robust data quality
+                        validation.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="slide-number">Slide 20 / 21</div>
+    </div>
+
+    <div class="slide-container" id="slide21">
+        <div class="rubric-tag">Part 5: Q&A Handling (15%)</div>
+        <div
+            style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; text-align: center; z-index: 2;">
+            <div
+                style="font-size: 100px; color: #38bdf8; margin-bottom: 30px; filter: drop-shadow(0 0 40px rgba(56,189,248,0.5));">
+                <i class="fa-solid fa-clipboard-question"></i>
+            </div>
+            <h2
+                style="font-size: 90px; color: #f8fafc; font-weight: 700; margin-bottom: 20px; text-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                Q&A <span class="gradient-text">Session</span></h2>
+            <p style="font-size: 26px; color: #94a3b8;">Cảm ơn Thầy và các bạn đã lắng nghe phần trình bày của nhóm.</p>
+        </div>
+        <div class="slide-number">Slide 21 / 21</div>
+    </div>
+
+    <button id="exportBtn" onclick="exportToPDF()">
+        <i class="fa-solid fa-file-pdf"></i> Tải file PDF
+    </button>
+
+    <script>
+        async function exportToPDF() {
+            const btn = document.getElementById('exportBtn');
+            const originalHTML = btn.innerHTML;
+
+            // Hiện hiệu ứng đang load
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang xử lý...';
+            btn.disabled = true;
+
+            try {
+                // Khởi tạo thư viện jsPDF (khổ Landscape, kích thước thật 1280x720 px)
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({
+                    orientation: 'landscape',
+                    unit: 'px',
+                    format: [1280, 720]
+                });
+
+                // Lấy tất cả các slide
+                const slides = document.querySelectorAll('.slide-container');
+
+                for (let i = 0; i < slides.length; i++) {
+                    // Tránh trình duyệt bị đơ bằng cách delay 1 xíu giữa các slide
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    const slide = slides[i];
+
+                    // Chụp ảnh slide hiện tại bằng html2canvas
+                    const canvas = await html2canvas(slide, {
+                        scale: 1.5, // Tăng nhẹ độ nét, nhưng không để quá cao tránh nặng file
+                        useCORS: true, // Cho phép load ảnh từ web ngoài
+                        backgroundColor: '#0b1120', // Ép cứng nền đen
+                        logging: false
+                    });
+
+                    // Chuyển ảnh chụp thành dạng JPG chất lượng cao
+                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+                    // Thêm trang mới nếu không phải là slide đầu tiên
+                    if (i > 0) {
+                        pdf.addPage();
+                    }
+
+                    // Chèn ảnh vào PDF
+                    pdf.addImage(imgData, 'JPEG', 0, 0, 1280, 720);
+                }
+
+                // Tải file xuống
+                pdf.save('Sentiment_Analysis_Presentation.pdf');
+
+            } catch (error) {
+                console.error("Lỗi khi tạo PDF:", error);
+                alert("Có lỗi xảy ra khi tạo PDF. Vui lòng thử lại!");
+            } finally {
+                // Khôi phục lại trạng thái nút bấm
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+
+</html>
