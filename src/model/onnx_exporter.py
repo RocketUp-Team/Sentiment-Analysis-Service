@@ -6,6 +6,7 @@ from optimum.onnxruntime import ORTModelForSequenceClassification, ORTQuantizer
 from optimum.onnxruntime.configuration import AutoQuantizationConfig
 
 from src.model.config import ModelConfig
+from src.model.device import get_device
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +20,14 @@ class OnnxExporter:
         """Merge PEFT adapter into base model and export to FP32 ONNX."""
         logger.info(f"Starting FP32 ONNX export to {output_path} for adapter {adapter_name}")
         
+        device = get_device()
+        
         # 1. Load base model
         base_model = AutoModelForSequenceClassification.from_pretrained(
             self._config.finetuned_model_name,
             num_labels=len(self._config.label_map),
             use_safetensors=True,
-        )
+        ).to(device)
         
         # 2. Load PEFT adapter
         adapter_path = (
