@@ -183,12 +183,12 @@ stages:
       size: 505953
     - path: src/scripts/run_finetuning.py
       hash: md5
-      md5: c95c0b45caa7a473a43c4835eb371d33
-      size: 8120
+      md5: 97d161253763e115e4402faf9f6f6eb4
+      size: 9792
     - path: src/training/
       hash: md5
-      md5: 6c1a89edf17f812ee7bc1089141beb66.dir
-      size: 17629
+      md5: 082650d1340c635a27c3cd197541e112.dir
+      size: 18910
       nfiles: 12
     params:
       params.yaml:
@@ -212,9 +212,9 @@ stages:
     outs:
     - path: models/adapters/sarcasm
       hash: md5
-      md5: d940bdbabe4af979f1e8fbf3f1b26cf6.dir
-      size: 130046247
-      nfiles: 49
+      md5: 50748eaa4353910583f3edf259bdfb77.dir
+      size: 102226582
+      nfiles: 39
   finetune_sentiment:
     cmd: python3 -m src.scripts.run_finetuning --task sentiment
     deps:
@@ -228,12 +228,12 @@ stages:
       size: 1718908
     - path: src/scripts/run_finetuning.py
       hash: md5
-      md5: c95c0b45caa7a473a43c4835eb371d33
-      size: 8120
+      md5: 97d161253763e115e4402faf9f6f6eb4
+      size: 9792
     - path: src/training/
       hash: md5
-      md5: 6c1a89edf17f812ee7bc1089141beb66.dir
-      size: 17629
+      md5: 082650d1340c635a27c3cd197541e112.dir
+      size: 18910
       nfiles: 12
     params:
       params.yaml:
@@ -257,8 +257,8 @@ stages:
     outs:
     - path: models/adapters/sentiment
       hash: md5
-      md5: c0b8aa318d0eb09d42a6bb9ad2fdc115.dir
-      size: 168001307
+      md5: 13acd6510384a3807438dffa404af7b0.dir
+      size: 168002568
       nfiles: 63
   export_onnx_sarcasm:
     cmd: python3 -m src.scripts.export_onnx --adapter-name sarcasm
