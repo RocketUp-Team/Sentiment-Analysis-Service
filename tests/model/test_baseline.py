@@ -52,7 +52,7 @@ def _assert_aspect_detection_call(call, text):
     """Verify the first zero-shot pass extracts ABSA aspects."""
     assert call["text"] == text
     assert call["candidate_labels"] == list(ModelConfig().absa_categories)
-    assert call["hypothesis_template"] == "This review is about {}."
+    assert call["hypothesis_template"] == ModelConfig().absa_aspect_template
     assert call["multi_label"] is True
 
 
@@ -60,7 +60,8 @@ def _assert_aspect_sentiment_call(call, text, aspect_name):
     """Verify the per-aspect zero-shot pass scores sentiment labels."""
     assert call["text"] == text
     assert call["candidate_labels"] == ["positive", "negative", "neutral"]
-    assert call["hypothesis_template"] == f"The sentiment about {aspect_name} is {{}}."
+    expected_template = ModelConfig().absa_sentiment_template.format(aspect=aspect_name)
+    assert call["hypothesis_template"] == expected_template
     assert call["multi_label"] is False
 
 
@@ -196,6 +197,72 @@ def _build_model_with_mocks_absa(
     return model, fake_zero_shot
 
 
+class FakePeftSequenceClassifier:
+    """Simple adapter-aware fake for finetuned mode."""
+
+    def __init__(self):
+        self.active_adapter = "sentiment"
+        self.set_adapter_calls = []
+        self.load_adapter_calls = []
+        self.hf_device_map = None
+
+    def to(self, device):
+        return self
+
+    def eval(self):
+        return self
+
+    def load_adapter(self, path, adapter_name):
+        self.load_adapter_calls.append((path, adapter_name))
+
+    def set_adapter(self, adapter_name):
+        self.active_adapter = adapter_name
+        self.set_adapter_calls.append(adapter_name)
+
+    def __call__(self, **inputs):
+        batch_size = inputs["input_ids"].shape[0]
+
+        @dataclass
+        class FakeOutput:
+            logits: torch.Tensor
+
+        if self.active_adapter == "sarcasm":
+            return FakeOutput(logits=torch.tensor([[0.1, 0.9, -1.0]] * batch_size))
+        return FakeOutput(logits=_make_mock_logits(batch_size))
+
+
+def _build_finetuned_model_with_mocks(config=None, device=None):
+    """Patch HuggingFace + PEFT and build a finetuned BaselineModelInference."""
+    config = config or ModelConfig(mode="finetuned")
+    device = device or torch.device("cpu")
+
+    def tokenizer_side_effect(texts, **kwargs):
+        batch_size = len(texts) if isinstance(texts, list) else 1
+        return _MockBatchEncoding(
+            {
+                "input_ids": torch.ones((batch_size, 3), dtype=torch.long),
+                "attention_mask": torch.ones((batch_size, 3), dtype=torch.long),
+            }
+        )
+
+    mock_tokenizer = MagicMock(side_effect=tokenizer_side_effect)
+    mock_base_model = MagicMock()
+    mock_base_model.to.return_value = mock_base_model
+    fake_peft_model = FakePeftSequenceClassifier()
+
+    with patch("src.model.baseline.AutoTokenizer") as MockTokenizer, \
+         patch("src.model.baseline.AutoModelForSequenceClassification") as MockModel, \
+         patch("src.model.baseline.PeftModel") as MockPeftModel:
+        MockTokenizer.from_pretrained.return_value = mock_tokenizer
+        MockModel.from_pretrained.return_value = mock_base_model
+        MockPeftModel.from_pretrained.return_value = fake_peft_model
+
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=device)
+
+    return model, mock_tokenizer, mock_base_model, fake_peft_model, MockPeftModel
+
+
 # ── Interface Compliance ───────────────────────────────────────
 
 class TestInterfaceCompliance:
@@ -227,10 +294,41 @@ class TestProperties:
         model, _, _ = _build_model_with_mocks()
         assert "cardiffnlp" in repr(model)
 
+    def test_finetuned_mode_loads_sentiment_and_sarcasm_adapters(self):
+        config = ModelConfig(
+            mode="finetuned",
+            sentiment_adapter_path="models/adapters/sentiment",
+            sarcasm_adapter_path="models/adapters/sarcasm",
+        )
+        _, _, mock_base_model, fake_peft_model, mock_peft_cls = _build_finetuned_model_with_mocks(
+            config=config
+        )
+
+        mock_peft_cls.from_pretrained.assert_called_once_with(
+            mock_base_model,
+            config.sentiment_adapter_path,
+            adapter_name="sentiment",
+        )
+        assert fake_peft_model.load_adapter_calls == [
+            (config.sarcasm_adapter_path, "sarcasm")
+        ]
+
 
 # ── predict_single ─────────────────────────────────────────────
 
 class TestPredictSingle:
+    def test_baseline_mode_no_regression(self):
+        default_model, _, _ = _build_model_with_mocks()
+        explicit_model, _, _ = _build_model_with_mocks(config=ModelConfig(mode="baseline"))
+
+        with patch.object(default_model, "_extract_aspects", return_value=[]), patch.object(
+            explicit_model, "_extract_aspects", return_value=[]
+        ):
+            default_result = default_model.predict_single("Great service")
+            explicit_result = explicit_model.predict_single("Great service")
+
+        assert explicit_result == default_result
+
     def test_returns_prediction_result(self):
         model, _, _ = _build_model_with_mocks()
         result = model.predict_single("The food was great")
@@ -301,6 +399,31 @@ class TestPredictSingle:
             max_length=ModelConfig().max_length,
         )
 
+    def test_finetuned_mode_switches_adapters_for_sentiment_and_sarcasm(self):
+        config = ModelConfig(mode="finetuned")
+        model, _, _, fake_peft_model, _ = _build_finetuned_model_with_mocks(config=config)
+
+        with patch.object(model, "_extract_aspects", return_value=[]):
+            result = model.predict_single("The food was great", lang="en")
+
+        assert fake_peft_model.set_adapter_calls[:2] == ["sentiment", "sarcasm"]
+        assert result.sentiment == "positive"
+        assert result.sarcasm_flag is True
+
+    def test_finetuned_sarcasm_flag_ignores_third_logit(self):
+        config = ModelConfig(mode="finetuned")
+        model, _, _, _, _ = _build_finetuned_model_with_mocks(config=config)
+
+        with patch.object(
+            model,
+            "_predict_probabilities",
+            return_value=torch.tensor([[0.1, 0.2, 0.99]]),
+        ) as mock_predict:
+            sarcasm_flag = model._predict_sarcasm_flag("The food was great")
+
+        mock_predict.assert_called_once_with("The food was great", adapter_name="sarcasm")
+        assert sarcasm_flag is True
+
 
 # ── predict_batch ──────────────────────────────────────────────
 
@@ -356,6 +479,129 @@ class TestPredictBatch:
             truncation=True,
             max_length=ModelConfig().max_length,
         )
+
+    def test_chunking_processes_all_texts(self):
+        """100 texts → 100 results regardless of chunk size."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+
+        def side_effect(*args, **kwargs):
+            batch = mock_tok.call_args[0][0]
+            n = len(batch) if isinstance(batch, list) else 1
+            return MagicMock(logits=_make_mock_logits(n))
+
+        mock_hf.side_effect = side_effect
+
+        texts = [f"text {i}" for i in range(100)]
+        results = model.predict_batch(texts, batch_size=32, skip_absa=True)
+        assert len(results) == 100
+
+    def test_chunking_calls_model_per_chunk(self):
+        """batch_size=32, 100 texts → exactly 4 forward passes."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+
+        def side_effect(*args, **kwargs):
+            batch = mock_tok.call_args[0][0]
+            n = len(batch) if isinstance(batch, list) else 1
+            return MagicMock(logits=_make_mock_logits(n))
+
+        mock_hf.side_effect = side_effect
+
+        texts = [f"text {i}" for i in range(100)]
+        model.predict_batch(texts, batch_size=32, skip_absa=True)
+        assert mock_hf.call_count == 4  # ceil(100/32) = 4
+
+    def test_custom_batch_size_override(self):
+        """batch_size=16, 100 texts → exactly 7 forward passes."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+
+        def side_effect(*args, **kwargs):
+            batch = mock_tok.call_args[0][0]
+            n = len(batch) if isinstance(batch, list) else 1
+            return MagicMock(logits=_make_mock_logits(n))
+
+        mock_hf.side_effect = side_effect
+
+        texts = [f"text {i}" for i in range(100)]
+        model.predict_batch(texts, batch_size=16, skip_absa=True)
+        assert mock_hf.call_count == 7  # ceil(100/16) = 7
+
+    def test_default_batch_size_from_config(self):
+        """batch_size=None → uses config.batch_size."""
+        from unittest.mock import MagicMock
+        config = ModelConfig(batch_size=8)
+        model, mock_tok, mock_hf = _build_model_with_mocks(config=config)
+
+        def side_effect(*args, **kwargs):
+            batch = mock_tok.call_args[0][0]
+            n = len(batch) if isinstance(batch, list) else 1
+            return MagicMock(logits=_make_mock_logits(n))
+
+        mock_hf.side_effect = side_effect
+
+        texts = [f"text {i}" for i in range(16)]
+        model.predict_batch(texts, batch_size=None, skip_absa=True)
+        assert mock_hf.call_count == 2  # ceil(16/8) = 2
+
+    def test_skip_absa_returns_empty_aspects(self):
+        """skip_absa=True → every result has aspects=[]."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+        mock_hf.return_value = MagicMock(logits=_make_mock_logits(3))
+
+        results = model.predict_batch(["a", "b", "c"], skip_absa=True)
+        for r in results:
+            assert r.aspects == []
+
+    def test_skip_absa_does_not_call_extract(self):
+        """skip_absa=True → _extract_aspects is never called."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+        mock_hf.return_value = MagicMock(logits=_make_mock_logits(2))
+
+        with patch.object(model, "_extract_aspects") as mock_extract:
+            model.predict_batch(["a", "b"], skip_absa=True)
+            mock_extract.assert_not_called()
+
+    def test_invalid_batch_size_raises(self):
+        """batch_size=0 → ValueError."""
+        model, _, _ = _build_model_with_mocks()
+        with pytest.raises(ValueError, match="batch_size must be positive"):
+            model.predict_batch(["text"], batch_size=0)
+
+    def test_negative_batch_size_raises(self):
+        """batch_size=-1 → ValueError."""
+        model, _, _ = _build_model_with_mocks()
+        with pytest.raises(ValueError, match="batch_size must be positive"):
+            model.predict_batch(["text"], batch_size=-1)
+
+    def test_batch_size_larger_than_input(self):
+        """5 texts with batch_size=32 → single chunk, 5 results."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+        mock_hf.return_value = MagicMock(logits=_make_mock_logits(5))
+
+        results = model.predict_batch(
+            ["a", "b", "c", "d", "e"], batch_size=32, skip_absa=True
+        )
+        assert len(results) == 5
+        assert mock_hf.call_count == 1
+
+    def test_result_order_matches_input(self):
+        """result[i].sentiment corresponds to texts[i]."""
+        from unittest.mock import MagicMock
+        model, mock_tok, mock_hf = _build_model_with_mocks()
+
+        # Class 0 (negative) wins for first text, class 2 (positive) for second
+        mock_hf.return_value = MagicMock(
+            logits=torch.tensor([[0.9, 0.2, 0.1], [0.1, 0.2, 0.9]])
+        )
+
+        results = model.predict_batch(["bad text", "good text"], skip_absa=True)
+        assert results[0].sentiment == "negative"
+        assert results[1].sentiment == "positive"
 
 
 # ── SHAP Explainability ────────────────────────────────────────
@@ -469,7 +715,7 @@ class TestABSA:
         fake_zero_shot = FakeZeroShotPipeline(
             aspect_result={
                 "labels": ["food", "service", "ambiance", "price", "location", "general"],
-                "scores": [0.49, 0.30, 0.12, 0.08, 0.05, 0.10],
+                "scores": [0.44, 0.30, 0.12, 0.08, 0.05, 0.10],
             }
         )
         model, _ = _build_model_with_mocks_absa(fake_zero_shot=fake_zero_shot)
@@ -638,3 +884,67 @@ class TestABSA:
                 assert aspect.aspect in ModelConfig().absa_categories
                 assert aspect.sentiment in ("positive", "negative", "neutral")
                 assert 0.0 <= aspect.confidence <= 1.0
+
+
+# ── ONNX Mode ──────────────────────────────────────────────────
+
+class TestONNXMode:
+    @patch("src.model.baseline.OnnxInferenceSession")
+    def test_onnx_mode_initialization(self, mock_onnx_cls):
+        config = ModelConfig(mode="onnx", onnx_model_path="fake/path")
+        
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=torch.device("cpu"))
+        
+        from pathlib import Path
+        
+        # Check sentiment model initialization
+        mock_onnx_cls.assert_any_call(
+            "fake/path", 
+            str(Path("fake/path").parent), 
+            config.max_length
+        )
+        # Check sarcasm model initialization
+        mock_onnx_cls.assert_any_call(
+            "fake/path", 
+            str(Path("fake/path").parent), 
+            config.max_length
+        )
+        # The main _onnx_session is the sentiment one which was initialized first
+        # But wait, since we use mock_onnx_cls, its return value will be the same for both.
+        assert model._onnx_session is mock_onnx_cls.return_value
+
+    @patch("src.model.baseline.OnnxInferenceSession")
+    def test_onnx_predict_single(self, mock_onnx_cls):
+        import numpy as np
+        # Return fake probs: negative=0.1, neutral=0.2, positive=0.7
+        mock_onnx_cls.return_value.predict_probs.return_value = np.array([[0.1, 0.2, 0.7]])
+        
+        config = ModelConfig(mode="onnx")
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=torch.device("cpu"))
+        
+        with patch.object(model, "_extract_aspects", return_value=[]):
+            result = model.predict_single("test text")
+            
+        assert result.sentiment == "positive"
+        assert result.confidence == 0.7
+
+    @patch("src.model.baseline.OnnxInferenceSession")
+    def test_onnx_predict_batch(self, mock_onnx_cls):
+        import numpy as np
+        mock_onnx_cls.return_value.predict_probs.return_value = np.array([
+            [0.8, 0.1, 0.1], 
+            [0.1, 0.2, 0.7]
+        ])
+        
+        config = ModelConfig(mode="onnx_int8")
+        from src.model.baseline import BaselineModelInference
+        model = BaselineModelInference(config=config, device=torch.device("cpu"))
+        
+        results = model.predict_batch(["bad text", "good text"], skip_absa=True)
+        assert len(results) == 2
+        assert results[0].sentiment == "negative"
+        assert results[0].confidence == 0.8
+        assert results[1].sentiment == "positive"
+        assert results[1].confidence == 0.7

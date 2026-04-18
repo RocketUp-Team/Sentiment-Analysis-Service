@@ -1,0 +1,14 @@
+{
+    "pytorch": {
+        "avg_latency_seconds": 180.08855744180036,
+        "throughput_samples_per_sec": 5.55282364524005
+    },
+    "onnx_fp32": {
+        "avg_latency_seconds": 168.981234183209,
+        "throughput_samples_per_sec": 5.917816879688561
+    },
+    "onnx_int8": {
+        "avg_latency_seconds": 167.44247018360767,
+        "throughput_samples_per_sec": 5.972200475204756
+    }
+}

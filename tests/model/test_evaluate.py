@@ -55,7 +55,7 @@ class TestEvaluateOnDataset:
         df = _make_test_df()
         mock_model = _make_mock_model([])
         # Try evaluating on a split that does not exist
-        metrics = evaluate_on_dataset(mock_model, df, split="val", batch_size=32)
+        metrics = evaluate_on_dataset(mock_model, df, split="val")
         assert metrics["n_samples"] == 0
         assert "error" in metrics
 
@@ -67,7 +67,7 @@ class TestEvaluateOnDataset:
         preds = df["sentiment"].tolist()
         mock_model = _make_mock_model(preds)
 
-        metrics = evaluate_on_dataset(mock_model, df, split="test", batch_size=32)
+        metrics = evaluate_on_dataset(mock_model, df, split="test")
 
         required_keys = {
             "split",
@@ -90,7 +90,7 @@ class TestEvaluateOnDataset:
         preds = df["sentiment"].tolist()
         mock_model = _make_mock_model(preds)
 
-        metrics = evaluate_on_dataset(mock_model, df, split="test", batch_size=32)
+        metrics = evaluate_on_dataset(mock_model, df, split="test")
         assert metrics["accuracy"] == pytest.approx(1.0)
         assert metrics["f1_macro"] == pytest.approx(1.0)
 
@@ -101,7 +101,7 @@ class TestEvaluateOnDataset:
         preds = df["sentiment"].tolist()
         mock_model = _make_mock_model(preds)
 
-        metrics = evaluate_on_dataset(mock_model, df, split="test", batch_size=32)
+        metrics = evaluate_on_dataset(mock_model, df, split="test")
         assert metrics["n_samples"] == 6
 
     def test_f1_per_class_has_three_values(self):
@@ -111,7 +111,7 @@ class TestEvaluateOnDataset:
         preds = df["sentiment"].tolist()
         mock_model = _make_mock_model(preds)
 
-        metrics = evaluate_on_dataset(mock_model, df, split="test", batch_size=32)
+        metrics = evaluate_on_dataset(mock_model, df, split="test")
         assert len(metrics["f1_per_class"]) == 3
 
     def test_confusion_matrix_is_3x3(self):
@@ -121,31 +121,38 @@ class TestEvaluateOnDataset:
         preds = df["sentiment"].tolist()
         mock_model = _make_mock_model(preds)
 
-        metrics = evaluate_on_dataset(mock_model, df, split="test", batch_size=32)
+        metrics = evaluate_on_dataset(mock_model, df, split="test")
         cm = metrics["confusion_matrix"]
         assert len(cm) == 3
         assert all(len(row) == 3 for row in cm)
 
-    def test_batching_works_with_small_batch_size(self):
-        """Batch size smaller than dataset should still work."""
+    def test_evaluate_on_dataset_delegates_chunking_to_predict_batch(self):
+        """evaluate_on_dataset should call predict_batch once with all texts."""
+        from unittest.mock import MagicMock
         from src.model.evaluate import evaluate_on_dataset
 
-        df = _make_test_df()
-        preds = df["sentiment"].tolist()
-        mock_model = _make_mock_model(preds[:2])  # batch of 2
-        mock_model.predict_batch.side_effect = [
-            [
-                PredictionResult(
-                    sentiment=s, confidence=0.9, aspects=[], sarcasm_flag=False
-                )
-                for s in preds[i : i + 2]
-            ]
-            for i in range(0, len(preds), 2)
+        texts = [f"text {i}" for i in range(12)]
+        df = pd.DataFrame({
+            "text": texts,
+            "sentiment": ["positive"] * 4 + ["negative"] * 4 + ["neutral"] * 4,
+            "split": ["test"] * 12,
+        })
+
+        mock_model = MagicMock()
+        mock_model.predict_batch.return_value = [
+            PredictionResult(sentiment="positive", confidence=0.9) for _ in range(4)
+        ] + [
+            PredictionResult(sentiment="negative", confidence=0.9) for _ in range(4)
+        ] + [
+            PredictionResult(sentiment="neutral", confidence=0.9) for _ in range(4)
         ]
 
-        metrics = evaluate_on_dataset(mock_model, df, split="test", batch_size=2)
-        assert metrics["n_samples"] == 6
-        assert metrics["accuracy"] == pytest.approx(1.0)
+        evaluate_on_dataset(mock_model, df, split="test")
+
+        mock_model.predict_batch.assert_called_once()
+        call_args = mock_model.predict_batch.call_args
+        assert call_args[0][0] == texts
+
 
     def test_raises_on_prediction_count_mismatch(self):
         from src.model.evaluate import evaluate_on_dataset
@@ -159,7 +166,7 @@ class TestEvaluateOnDataset:
         ]
 
         with pytest.raises(ValueError, match="Prediction count does not match"):
-            evaluate_on_dataset(mock_model, df, split="test", batch_size=100)
+            evaluate_on_dataset(mock_model, df, split="test")
 
 
 # ── _log_reporting_artifacts ───────────────────────────────────

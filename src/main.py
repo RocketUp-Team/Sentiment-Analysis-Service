@@ -14,15 +14,24 @@ from contracts.schemas import (
 )
 from contracts.mock_model import MockModelInference
 from src.model.baseline import BaselineModelInference
+from src.model.language_detector import LanguageDetectionResult, LanguageDetector
 from contracts.model_interface import ModelInference
-from src.monitoring.metrics import REQUEST_COUNT, REQUEST_LATENCY, MODEL_INFERENCE_LATENCY, monitor_middleware
+from src.monitoring.metrics import (
+    REQUEST_COUNT,
+    REQUEST_LATENCY,
+    MODEL_INFERENCE_LATENCY,
+    monitor_middleware,
+    normalize_language_label,
+)
 from contracts.errors import ModelError, UnsupportedLanguageError
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Global model instance initialized at startup
     global ml_model
-    ml_model = BaselineModelInference()
+    from src.model.config import ModelConfig
+    config = ModelConfig(mode="onnx")
+    ml_model = BaselineModelInference(config)
     ml_model.preload()
     yield
     # Clean up here if needed
@@ -65,12 +74,19 @@ app.middleware("http")(monitor_middleware)
 
 # Global model instance initialized at startup
 ml_model = None
+language_detector = LanguageDetector()
 
 # Dependency to get model inference instance
 def get_model() -> ModelInference:
     if ml_model is None:
         raise HTTPException(status_code=503, detail="Model is still loading or failed to load")
     return ml_model
+
+
+def resolve_request_language(request_lang: str | None, text: str) -> LanguageDetectionResult:
+    if request_lang:
+        return LanguageDetectionResult(lang=request_lang, confidence=1.0)
+    return language_detector.detect(text)
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check(model: ModelInference = Depends(get_model)):
@@ -84,15 +100,18 @@ async def health_check(model: ModelInference = Depends(get_model)):
 @app.post("/predict", response_model=PredictResponse)
 async def predict(request: PredictRequest, model: ModelInference = Depends(get_model)):
     start_time = time.time()
-    
+    detected = resolve_request_language(request.lang, request.text)
+
     # Measure model inference latency
     inference_start = time.time()
-    result = model.predict_single(request.text, request.lang)
+    result = model.predict_single(request.text, detected.lang)
     inference_duration = (time.time() - inference_start) * 1000
-    MODEL_INFERENCE_LATENCY.observe(inference_duration / 1000)
-    
+    MODEL_INFERENCE_LATENCY.labels(
+        lang=normalize_language_label(detected.lang)
+    ).observe(inference_duration / 1000)
+
     latency_ms = (time.time() - start_time) * 1000
-    
+
     return PredictResponse(
         text=request.text,
         sentiment=result.sentiment,
@@ -105,17 +124,20 @@ async def predict(request: PredictRequest, model: ModelInference = Depends(get_m
             ) for a in result.aspects
         ],
         sarcasm_flag=result.sarcasm_flag,
+        detected_lang=detected.lang,
+        lang_confidence=detected.confidence,
         latency_ms=latency_ms
     )
 
 @app.post("/explain", response_model=ExplainResponse)
 async def explain(request: ExplainRequest, model: ModelInference = Depends(get_model)):
     start_time = time.time()
-    
-    result = model.get_shap_explanation(request.text, request.lang)
-    
+    detected = resolve_request_language(request.lang, request.text)
+
+    result = model.get_shap_explanation(request.text, detected.lang)
+
     latency_ms = (time.time() - start_time) * 1000
-    
+
     return ExplainResponse(
         tokens=result.tokens,
         shap_values=result.shap_values,

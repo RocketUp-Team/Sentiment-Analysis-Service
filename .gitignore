@@ -28,6 +28,12 @@ Thumbs.db
 .coverage
 .coverage.*
 
+graphify-out/
+GEMINI.md
+
+# Local MLflow (from `mlflow server` in repo root)
+mlflow.db
+mlartifacts/
 # LaTeX build artifacts (keep .tex source and .pdf, ignore compiler output)
 docs/*.aux
 docs/*.log

@@ -1,0 +1,5 @@
+{
+  "task": "sentiment",
+  "overall_f1": 0.7925559947299078,
+  "n_samples": 100
+}

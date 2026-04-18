@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 import torch
+from peft import PeftModel
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from transformers import pipeline as hf_pipeline
 
@@ -17,6 +18,7 @@ from contracts.model_interface import (
 )
 from src.model.config import ModelConfig
 from src.model.device import get_device
+from src.model.onnx_inference import OnnxInferenceSession
 from src.monitoring.metrics import MODEL_INFERENCE_LATENCY
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,8 @@ class BaselineModelInference(ModelInference):
         self._tokenizer = None
         self._hf_pipeline = None
         self._absa_pipeline = None
+        self._onnx_session = None
+        self._sarcasm_onnx_session = None
         self._load_model()
 
     def preload(self) -> None:
@@ -50,11 +54,57 @@ class BaselineModelInference(ModelInference):
     def _load_model(self) -> None:
         """Load tokenizer and model, then move the model to the target device."""
         try:
-            self._tokenizer = AutoTokenizer.from_pretrained(self._config.model_name)
-            self._model = AutoModelForSequenceClassification.from_pretrained(
-                self._config.model_name
-            ).to(self._device)
-            self._model.eval()
+            if self._config.mode.startswith("onnx"):
+                path = (
+                    self._config.onnx_int8_model_path
+                    if self._config.mode == "onnx_int8"
+                    else self._config.onnx_model_path
+                )
+                from pathlib import Path
+                self._onnx_session = OnnxInferenceSession(
+                    path,
+                    str(Path(path).parent),
+                    self._config.max_length,
+                )
+                
+                # Load sarcasm ONNX model if available
+                sarcasm_path = path.replace("sentiment_", "sarcasm_")
+                try:
+                    self._sarcasm_onnx_session = OnnxInferenceSession(
+                        sarcasm_path,
+                        str(Path(sarcasm_path).parent),
+                        self._config.max_length,
+                    )
+                except Exception as exc:
+                    logger.warning(f"Failed to load ONNX sarcasm model: {exc}")
+                    self._sarcasm_onnx_session = None
+            elif self._config.mode == "finetuned":
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    self._config.finetuned_model_name
+                )
+                base_model = AutoModelForSequenceClassification.from_pretrained(
+                    self._config.finetuned_model_name,
+                    num_labels=len(self._config.label_map),
+                    use_safetensors=True,
+                ).to(self._device)
+                self._model = PeftModel.from_pretrained(
+                    base_model,
+                    self._config.sentiment_adapter_path,
+                    adapter_name="sentiment",
+                )
+                self._model.load_adapter(
+                    self._config.sarcasm_adapter_path,
+                    adapter_name="sarcasm",
+                )
+            else:
+                self._tokenizer = AutoTokenizer.from_pretrained(self._config.model_name)
+                self._model = AutoModelForSequenceClassification.from_pretrained(
+                    self._config.model_name,
+                    use_safetensors=True,
+                ).to(self._device)
+                
+            if self._model is not None:
+                self._model.eval()
         except Exception as exc:
             raise ModelError(f"Failed to load model: {exc}") from exc
 
@@ -74,9 +124,21 @@ class BaselineModelInference(ModelInference):
         return inputs
 
     def _predict_probabilities(
-        self, texts: str | list[str], *, padding: bool = False
+        self,
+        texts: str | list[str],
+        *,
+        padding: bool = False,
+        adapter_name: str | None = None,
     ) -> torch.Tensor:
         """Run the tokenizer/model stack and return class probabilities."""
+        if self._onnx_session is not None:
+            texts_list = [texts] if isinstance(texts, str) else texts
+            probs = self._onnx_session.predict_probs(texts_list)
+            return torch.from_numpy(probs)
+
+        if adapter_name is not None and hasattr(self._model, "set_adapter"):
+            self._model.set_adapter(adapter_name)
+
         tokenizer_kwargs = {
             "return_tensors": "pt",
             "truncation": True,
@@ -99,39 +161,115 @@ class BaselineModelInference(ModelInference):
 
         return torch.softmax(outputs.logits, dim=-1)
 
+    def _predict_sarcasm_flag(self, text: str) -> bool:
+        """Predict sarcasm from the dedicated finetuned adapter when available.
+
+        Note: The sarcasm adapter is trained with a 3-logit head (to share the same
+        backbone as the sentiment adapter), but only the first two logits correspond
+        to the binary irony task (0 = non_irony, 1 = irony).  The third logit is
+        intentionally discarded here.  See run_finetuning._model_num_labels for the
+        full rationale.
+        """
+        if self._config.mode.startswith("onnx"):
+            if getattr(self, "_sarcasm_onnx_session", None) is not None:
+                texts_list = [text]
+                probs = self._sarcasm_onnx_session.predict_probs(texts_list)[0][:2]
+                return bool(probs.argmax() == 1)
+            return False
+
+        if self._config.mode != "finetuned":
+            return False
+
+        # Slice [:2] discards the unused third logit — see docstring above.
+        probs = self._predict_probabilities(text, adapter_name="sarcasm")[0][:2]
+        return bool(probs.argmax().item() == 1)
+
     def predict_single(self, text: str, lang: str = "en") -> PredictionResult:
         """Predict overall sentiment and extract aspect sentiment when available."""
         self._check_language(lang)
-        probs = self._predict_probabilities(text)[0]
+        adapter_name = "sentiment" if self._config.mode == "finetuned" else None
+        probs = self._predict_probabilities(text, adapter_name=adapter_name)[0]
         pred_idx = probs.argmax().item()
 
         return PredictionResult(
             sentiment=self._config.label_map[pred_idx],
             confidence=round(probs[pred_idx].item(), 4),
             aspects=self._extract_aspects(text),
-            sarcasm_flag=False,
+            sarcasm_flag=self._predict_sarcasm_flag(text),
         )
 
     def predict_batch(
-        self, texts: list[str], lang: str = "en"
+        self,
+        texts: list[str],
+        lang: str = "en",
+        *,
+        batch_size: int | None = None,
+        skip_absa: bool = False,
     ) -> list[PredictionResult]:
-        """Predict sentiment for a batch of texts."""
+        """Predict sentiment for a batch of texts using chunked processing.
+
+        Args:
+            texts: Input texts to classify.
+            lang: Language code (must be supported).
+            batch_size: Number of texts per forward pass. None uses config default.
+            skip_absa: When True, skip aspect extraction (aspects=[]).
+        """
         if not texts:
             return []
 
+        if batch_size is not None and batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {batch_size}")
+
         self._check_language(lang)
-        probs = self._predict_probabilities(texts, padding=True)
+
+        resolved_batch_size = batch_size if batch_size is not None else self._config.batch_size
+        if resolved_batch_size <= 0:
+            raise ValueError(f"batch_size must be positive, got {resolved_batch_size}")
+
+        total_chunks = -(-len(texts) // resolved_batch_size)  # ceiling division
+
+        logger.info(
+            "predict_batch: %d texts, batch_size=%d, chunks=%d, skip_absa=%s",
+            len(texts),
+            resolved_batch_size,
+            total_chunks,
+            skip_absa,
+        )
+
+        all_probs: list[torch.Tensor] = []
+        for i in range(0, len(texts), resolved_batch_size):
+            chunk = texts[i : i + resolved_batch_size]
+            probs = self._predict_probabilities(
+                chunk,
+                padding=True,
+                adapter_name="sentiment" if self._config.mode == "finetuned" else None,
+            )
+            all_probs.append(probs)
+
+            chunk_number = i // resolved_batch_size + 1
+            if chunk_number % 10 == 0:
+                logger.debug(
+                    "predict_batch: processed chunk %d/%d",
+                    chunk_number,
+                    total_chunks,
+                )
+
+        combined_probs = torch.cat(all_probs, dim=0)
+
         results: list[PredictionResult] = []
-        for index in range(len(texts)):
-            pred_idx = probs[index].argmax().item()
+        for idx in range(len(texts)):
+            pred_idx = combined_probs[idx].argmax().item()
+            aspects = [] if skip_absa else self._extract_aspects(texts[idx])
+            sarcasm_flag = self._predict_sarcasm_flag(texts[idx])
             results.append(
                 PredictionResult(
                     sentiment=self._config.label_map[pred_idx],
-                    confidence=round(probs[index][pred_idx].item(), 4),
-                    aspects=self._extract_aspects(texts[index]),
-                    sarcasm_flag=False,
+                    confidence=round(combined_probs[idx][pred_idx].item(), 4),
+                    aspects=aspects,
+                    sarcasm_flag=sarcasm_flag,
                 )
             )
+
         return results
 
     @property
@@ -212,12 +350,31 @@ class BaselineModelInference(ModelInference):
     def get_shap_explanation(self, text: str, lang: str = "en") -> SHAPResult:
         """Return SHAP values per token for explainability."""
         import shap
+        import numpy as np
 
         self._check_language(lang)
         predicted_probs = self._predict_probabilities(text)[0]
         predicted_class_idx = int(predicted_probs.argmax().item())
-        pipe = self._get_classification_pipeline()
-        explainer = shap.Explainer(pipe)
+        
+        def predict_func(texts):
+            if isinstance(texts, np.ndarray):
+                texts = texts.tolist()
+            if isinstance(texts, str):
+                texts = [texts]
+            probs = self._predict_probabilities(texts, padding=True)
+            if hasattr(probs, "cpu"):
+                return probs.cpu().numpy()
+            return probs
+
+        tokenizer = self._tokenizer if self._tokenizer is not None else getattr(self._onnx_session, "tokenizer", None)
+        if tokenizer is None:
+            raise ModelError("No tokenizer available for SHAP explanation")
+
+        # Suppress parallelism warning during SHAP tokenization
+        import os
+        os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        
+        explainer = shap.Explainer(predict_func, tokenizer)
         shap_values = explainer([text])
 
         raw_tokens = shap_values.data[0]
@@ -233,7 +390,7 @@ class BaselineModelInference(ModelInference):
 
     @property
     def is_loaded(self) -> bool:
-        return self._model is not None
+        return self._model is not None or self._onnx_session is not None
 
     @property
     def device(self) -> torch.device:

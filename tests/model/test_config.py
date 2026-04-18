@@ -47,11 +47,31 @@ class TestModelConfig:
         config = ModelConfig(model_name="custom/model")
         assert config.model_name == "custom/model"
 
+    def test_default_mode_is_baseline(self):
+        assert ModelConfig().mode == "baseline"
+
+    def test_finetuned_model_defaults_match_phase2_paths(self):
+        config = ModelConfig()
+        assert config.finetuned_model_name == "xlm-roberta-base"
+        assert config.sentiment_adapter_path == "models/adapters/sentiment"
+        assert config.sarcasm_adapter_path == "models/adapters/sarcasm"
+
     def test_label_map_matches_project_sentiment_labels(self):
         """Ensure config labels match the project's expected sentiment labels."""
         config = ModelConfig()
         project_labels = {"positive", "negative", "neutral"}
         assert set(config.label_map.values()) == project_labels
+
+    def test_onnx_config_fields(self):
+        config = ModelConfig()
+        assert config.onnx_model_path == "models/onnx/sentiment_fp32/model.onnx"
+        assert config.onnx_int8_model_path == "models/onnx/sentiment_int8/model_quantized.onnx"
+
+    def test_onnx_modes(self):
+        config = ModelConfig(mode="onnx")
+        assert config.mode == "onnx"
+        config_int8 = ModelConfig(mode="onnx_int8")
+        assert config_int8.mode == "onnx_int8"
 
 
 class TestModelConfigABSA:
@@ -59,7 +79,7 @@ class TestModelConfigABSA:
         assert ModelConfig().absa_model_name == "MoritzLaurer/deberta-v3-base-zeroshot-v2.0"
 
     def test_default_absa_threshold(self):
-        assert ModelConfig().absa_threshold == 0.5
+        assert ModelConfig().absa_threshold == 0.45
 
     def test_default_absa_categories(self):
         categories = ModelConfig().absa_categories
@@ -72,3 +92,18 @@ class TestModelConfigABSA:
             "general",
         }
         assert len(categories) == 6
+
+
+def test_default_batch_size_is_32():
+    config = ModelConfig()
+    assert config.batch_size == 32
+
+
+def test_batch_size_is_configurable():
+    config = ModelConfig(batch_size=16)
+    assert config.batch_size == 16
+
+
+def test_supported_languages_include_english_and_vietnamese():
+    config = ModelConfig()
+    assert config.supported_languages == ("en", "vi")
