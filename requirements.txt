@@ -15,6 +15,7 @@ python-dotenv>=1.0.1
 # Allow torch>=2.4.1 compatible with Colab pre-installed CUDA torch.
 # Hard pin avoided — a CPU-only wheel is silently installed if the pin mismatches Colab's CUDA.
 torch>=2.4.1,<2.7.0
+torchvision>=0.11
 transformers>=4.30.0
 shap>=0.42.0
 matplotlib>=3.7.0
