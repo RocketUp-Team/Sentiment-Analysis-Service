@@ -10,9 +10,4 @@ import { RouterModule } from '@angular/router';
   styleUrls: ['./slide.component.css'],
 })
 export class SlideComponent {
-  exportToPDF() {
-    // Sử dụng hộp thoại in mặc định của hệ điều hành.
-    // CSS @media print tại styles.css đã cấu hình chi tiết (ẩn viền, đúng khổ màn hình, v.v)
-    window.print();
-  }
 }

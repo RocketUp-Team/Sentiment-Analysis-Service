@@ -579,12 +579,3 @@
 <a routerLink="/" class="back-btn">
   <i class="fa-solid fa-arrow-left"></i> Back to Chatbot
 </a>
-
-<button class="export-btn" (click)="exportToPDF()" [disabled]="isExporting()">
-  <ng-container *ngIf="!isExporting()">
-    <i class="fa-solid fa-file-pdf"></i> Tải file PDF
-  </ng-container>
-  <ng-container *ngIf="isExporting()">
-    <i class="fa-solid fa-spinner fa-spin"></i> Đang xuất PDF...
-  </ng-container>
-</button>
