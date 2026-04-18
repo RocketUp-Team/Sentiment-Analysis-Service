@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException, Request, Response
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
 import time
 import pandas as pd
 import io
@@ -10,6 +11,7 @@ from datetime import datetime
 from contracts.schemas import (
     PredictRequest, PredictResponse, AspectSentimentOut,
     ExplainRequest, ExplainResponse, HealthResponse,
+    BatchPredictResponse, BatchItemResult,
     BatchSubmitResponse, BatchStatusResponse
 )
 from contracts.mock_model import MockModelInference
@@ -147,21 +149,70 @@ async def explain(request: ExplainRequest, model: ModelInference = Depends(get_m
         latency_ms=latency_ms
     )
 
-@app.post("/batch_predict", response_model=BatchSubmitResponse)
+@app.post("/batch_predict", response_model=BatchPredictResponse)
 async def batch_predict(file: UploadFile = File(...), model: ModelInference = Depends(get_model)):
-    # Simple implementation: read CSV and return mock job info
-    # In a real app, this would be processed by a background worker (e.g., Celery)
+    """Process a CSV file with a 'text' column and return sentiment for every row.
+    
+    Runs inference in a thread pool (asyncio.to_thread) so uvicorn stays responsive.
+    ABSA is skipped for batch to keep latency acceptable on CPU.
+    """
+    start_time = time.time()
     content = await file.read()
-    df = pd.read_csv(io.BytesIO(content))
-    
-    job_id = str(uuid.uuid4())
-    
-    return BatchSubmitResponse(
-        job_id=job_id,
-        status="processing",
+
+    try:
+        df = pd.read_csv(io.BytesIO(content))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV: {exc}")
+
+    if "text" not in df.columns:
+        raise HTTPException(status_code=400, detail="CSV must contain a 'text' column.")
+
+    # Limit to 500 rows
+    df = df.head(500).reset_index(drop=True)
+    texts = [str(t).strip() for t in df["text"]]
+
+    # Filter empty rows
+    valid_mask = [bool(t) for t in texts]
+    valid_texts = [t for t, ok in zip(texts, valid_mask) if ok]
+
+    def _run_batch():
+        """Blocking inference — executed in thread pool."""
+        return model.predict_batch(valid_texts, skip_absa=True)
+
+    try:
+        preds = await asyncio.to_thread(_run_batch)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Batch inference failed: {exc}")
+
+    results: list[BatchItemResult] = []
+    pred_iter = iter(preds)
+    failed = 0
+
+    for i, (text, ok) in enumerate(zip(texts, valid_mask)):
+        if not ok:
+            failed += 1
+            results.append(BatchItemResult(
+                row=i + 1, text=text, sentiment="neutral", confidence=0.0,
+                error="Empty text — skipped",
+            ))
+            continue
+        pred = next(pred_iter)
+        results.append(BatchItemResult(
+            row=i + 1,
+            text=text,
+            sentiment=pred.sentiment,
+            confidence=round(pred.confidence, 4),
+            aspects=[],          # ABSA skipped in batch mode for performance
+        ))
+
+    return BatchPredictResponse(
         total_items=len(df),
-        created_at=datetime.now().isoformat()
+        processed_items=len(results) - failed,
+        failed_items=failed,
+        latency_ms=(time.time() - start_time) * 1000,
+        results=results,
     )
+
 
 @app.get("/batch_status/{job_id}", response_model=BatchStatusResponse)
 async def batch_status(job_id: str):

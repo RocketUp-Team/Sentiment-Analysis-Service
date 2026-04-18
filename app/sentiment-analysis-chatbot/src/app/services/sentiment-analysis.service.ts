@@ -7,6 +7,7 @@ import {
   AspectSentiment,
   PredictRequest,
   PredictResponse,
+  BatchPredictResponse,
 } from '../models/message.model';
 
 @Injectable({
@@ -16,7 +17,6 @@ export class SentimentAnalysisService {
   private http = inject(HttpClient);
   private apiUrl = '/api/predict';
 
-  // Signals for state management
   private messagesSignal = signal<Message[]>([]);
   public messages = this.messagesSignal.asReadonly();
 
@@ -28,14 +28,15 @@ export class SentimentAnalysisService {
     this.loadHistory();
   }
 
-  public sendMessage(text: string, lang: 'vi' | 'en' = 'en'): void {
-    this.addMessageSequence(text, text, lang, 'predict', null);
+  // ── Text analysis ────────────────────────────────────────────
+  public sendMessage(text: string): void {
+    this.addMessageSequence(text);
   }
 
   public addWelcomeMessage(): void {
     const welcome: Message = {
       id: crypto.randomUUID(),
-      text: '👋 Sentiment Analysis Service is ready!\n\nType any text to analyse its sentiment (positive / negative / neutral) with aspect breakdown.\n\n📄 You can also upload a CSV file for batch predictions.',
+      text: '👋 Sentiment Analysis Service is ready!\n\nType any text to analyse its sentiment (positive / negative / neutral) with aspect breakdown.\n\n📄 Use the Upload CSV button to run batch predictions.',
       sender: 'bot',
       timestamp: new Date(),
       sentiment: null,
@@ -43,72 +44,27 @@ export class SentimentAnalysisService {
     this.messagesSignal.update(msgs => [...msgs, welcome]);
   }
 
-  public sendDocument(file: File, lang: 'vi' | 'en' = 'en'): void {
-    const displayText = `📄 ${file.name}`;
-    const fileFormData = new FormData();
-    fileFormData.append('file', file);
-    fileFormData.append('lang', lang);
-    this.addMessageSequence(
-      displayText,
-      `Nội dung trích xuất từ file ${file.name}...`,
-      lang,
-      'upload/document',
-      fileFormData,
-    );
-  }
-
-  public sendAudio(blob: Blob, lang: 'vi' | 'en' = 'en'): void {
-    const audioFormData = new FormData();
-    audioFormData.append('file', blob);
-    audioFormData.append('lang', lang);
-
-    const userDisplayText = '🎤 [Audio Message]';
-    this.addMessageSequence(
-      userDisplayText,
-      '[Audio Content]', 
-      lang,
-      'upload/audio',
-      audioFormData,
-    );
-  }
-
-  private addMessageSequence(
-    userDisplayText: string,
-    backendText: string,
-    lang: 'vi' | 'en',
-    endpoint: string,
-    payload: any,
-  ): void {
+  private addMessageSequence(text: string): void {
     const userMessage: Message = {
       id: crypto.randomUUID(),
-      text: userDisplayText,
+      text,
       sender: 'user',
       timestamp: new Date(),
       sentiment: null,
     };
-
-    this.messagesSignal.update((msgs) => [...msgs, userMessage]);
+    this.messagesSignal.update(msgs => [...msgs, userMessage]);
 
     const botMessageId = crypto.randomUUID();
-    const botLoadingMessage: Message = {
+    const loadingMessage: Message = {
       id: botMessageId,
-      text: 'Đang phân tích...',
+      text: 'Analysing...',
       sender: 'bot',
       timestamp: new Date(),
       sentiment: 'LOADING',
     };
+    this.messagesSignal.update(msgs => [...msgs, loadingMessage]);
 
-    this.messagesSignal.update((msgs) => [...msgs, botLoadingMessage]);
-
-    let requestOb$: Observable<PredictResponse>;
-    if (endpoint === 'predict') {
-      requestOb$ = this.predict(backendText, lang);
-    } else {
-      // Gọi API Upload
-      requestOb$ = this.http.post<PredictResponse>(`/api/${endpoint}`, payload);
-    }
-
-    requestOb$.subscribe({
+    this.predict(text).subscribe({
       next: (res) => {
         this.updateBotMessage(botMessageId, {
           text: this.buildBotReply(res),
@@ -119,8 +75,7 @@ export class SentimentAnalysisService {
           latency_ms: res.latency_ms,
         });
       },
-      error: (err) => {
-        console.error(`API error for ${endpoint}:`, err);
+      error: () => {
         this.updateBotMessage(botMessageId, {
           text: 'System error — could not reach the API. Please check your connection.',
           sentiment: 'ERROR',
@@ -129,44 +84,18 @@ export class SentimentAnalysisService {
     });
   }
 
-  private predict(
-    text: string,
-    lang: 'vi' | 'en',
-  ): Observable<PredictResponse> {
-    return this.http.post<PredictResponse>(this.apiUrl, { text, lang } as PredictRequest);
+  private predict(text: string): Observable<PredictResponse> {
+    return this.http.post<PredictResponse>(this.apiUrl, { text } as PredictRequest);
   }
 
-  private updateBotMessage(id: string, partial: Partial<Message>): void {
-    this.messagesSignal.update((msgs) =>
-      msgs.map((m) => (m.id === id ? { ...m, ...partial } : m)),
-    );
-    this.saveHistory();
+  // ── Batch CSV ────────────────────────────────────────────────
+  public batchPredict(file: File): Observable<BatchPredictResponse> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<BatchPredictResponse>('/api/batch_predict', form);
   }
 
-  public clearHistory(): void {
-    this.messagesSignal.set([]);
-    localStorage.removeItem('sentiment_chat_history');
-  }
-
-  private saveHistory(): void {
-    localStorage.setItem(
-      'sentiment_chat_history',
-      JSON.stringify(this.messagesSignal()),
-    );
-  }
-
-  private loadHistory(): void {
-    const saved = localStorage.getItem('sentiment_chat_history');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        this.messagesSignal.set(parsed);
-      } catch (e) {
-        console.error('Failed to load history', e);
-      }
-    }
-  }
-
+  // ── Helpers ──────────────────────────────────────────────────
   private buildBotReply(res: PredictResponse): string {
     const emoji = res.sentiment === 'positive' ? '😊' : res.sentiment === 'negative' ? '😞' : '😐';
     const label  = res.sentiment.charAt(0).toUpperCase() + res.sentiment.slice(1);
@@ -190,5 +119,32 @@ export class SentimentAnalysisService {
 
     reply += `\n\n⏱ Processed in ${res.latency_ms.toFixed(0)} ms`;
     return reply;
+  }
+
+  private updateBotMessage(id: string, partial: Partial<Message>): void {
+    this.messagesSignal.update(msgs =>
+      msgs.map(m => (m.id === id ? { ...m, ...partial } : m))
+    );
+    this.saveHistory();
+  }
+
+  public clearHistory(): void {
+    this.messagesSignal.set([]);
+    localStorage.removeItem('sentiment_chat_history');
+  }
+
+  private saveHistory(): void {
+    localStorage.setItem('sentiment_chat_history', JSON.stringify(this.messagesSignal()));
+  }
+
+  private loadHistory(): void {
+    const saved = localStorage.getItem('sentiment_chat_history');
+    if (saved) {
+      try {
+        this.messagesSignal.set(JSON.parse(saved));
+      } catch {
+        // ignore corrupt history
+      }
+    }
   }
 }
