@@ -1,14 +1,14 @@
 {
     "pytorch": {
-        "avg_latency_seconds": 0.5711966786000175,
-        "throughput_samples_per_sec": 1750.7104601010005
+        "avg_latency_seconds": 0.5554435584001112,
+        "throughput_samples_per_sec": 1800.362943951282
     },
     "onnx_fp32": {
-        "avg_latency_seconds": 6.041339142200013,
-        "throughput_samples_per_sec": 165.52621471203156
+        "avg_latency_seconds": 6.417260685800102,
+        "throughput_samples_per_sec": 155.82972999877757
     },
     "onnx_int8": {
-        "avg_latency_seconds": 3.2239250674000233,
-        "throughput_samples_per_sec": 310.18090653281314
+        "avg_latency_seconds": 3.1114686152001014,
+        "throughput_samples_per_sec": 321.39163966328135
     }
 }
