@@ -297,33 +297,7 @@ Figure~\ref{fig:arch} shows the component diagram.
 
 \begin{figure}[H]
 \centering
-\resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[
-  node distance=1.4cm and 2.2cm,
-  box/.style={
-    draw, rounded corners=4pt, minimum width=2.8cm, minimum height=0.85cm,
-    font=\small\bfseries, align=center, fill=blue!8, drop shadow
-  },
-  ext/.style={box, fill=green!10},
-  warn/.style={box, fill=orange!15},
-  arr/.style={-Stealth, thick, gray!70},
-]
-\node[ext]  (user)   {User / Browser};
-\node[box]  (fe)     [right=of user]             {Angular\\ Frontend\\ (:80)};
-\node[box]  (api)    [right=of fe]               {FastAPI\\ App\\ (:8000)};
-\node[box]  (model)  [above right=1cm and 1.4cm of api] {XLM-RoBERTa\\ + LoRA\\ Inference};
-\node[box]  (prom)   [below=1.5cm of api]        {Prometheus\\ (:9091)};
-\node[box]  (grafana)[right=of prom]             {Grafana\\ (:3000)};
-\node[warn] (mlflow) [below=1.5cm of model]      {MLflow\\ (:5005)};
-
-\draw[arr] (user)  -- (fe);
-\draw[arr] (fe)    -- (api);
-\draw[arr] (api)   -- (model);
-\draw[arr] (api)   -- node[left,  font=\scriptsize]{/metrics} (prom);
-\draw[arr] (prom)  -- (grafana);
-\draw[arr] (api)   -- node[right, font=\scriptsize]{log runs} (mlflow);
-\end{tikzpicture}%
-}
+\includegraphics[width=\textwidth]{images/architecture_diagram.JPG}
 \caption{High-level component diagram -- Sentiment Analysis Service.}
 \label{fig:arch}
 \end{figure}
@@ -441,6 +415,7 @@ The system integrates diverse data sources and advanced modelling techniques to 
   \begin{itemize}[noitemsep]
     \item \textbf{Base Model (\texttt{xlm-roberta-base}):} Serves as a unified backbone for superior cross-lingual understanding.
     \item \textbf{Training Strategy (PEFT/LoRA):} Parameter-Efficient Fine-Tuning via Low-Rank Adaptation (LoRA) is employed. Separate lightweight adapters are trained for Sentiment Analysis and Sarcasm Detection, allowing multiple adapters to be stacked efficiently during inference to minimise memory footprint.
+    \item \textbf{Class Imbalance Handling:} To address significant class imbalances (e.g., the minority "neutral" class in Vietnamese datasets), the system incorporates a \texttt{WeightedLossTrainer} that dynamically computes and applies class-weighted Cross-Entropy Loss, alongside optional Random Oversampling during dataset construction.
     \item \textbf{Hardware-Aware Optimisation:} The training pipeline automatically detects available accelerators (CUDA, MPS, CPU). On supported GPUs (e.g., L4), it automatically enables Mixed Precision (\texttt{bf16}), fused optimisers (\texttt{adamw\_torch\_fused}), pinned memory, and tuned Data Loader workers to maximise training throughput.
     \item \textbf{Inference Optimisation (ONNX \& Quantization):} HuggingFace models are exported to ONNX format (both FP32 and INT8 quantization), significantly reducing inference latency and resource consumption in production.
   \end{itemize}
@@ -454,8 +429,8 @@ The complete lifecycle of data and models is orchestrated via Data Version Contr
   \item \textbf{Data Engineering:}
   \begin{itemize}[noitemsep]
     \item \texttt{download}: Automatically retrieves raw data from external sources.
-    \item \texttt{preprocess}: Executes a configurable transformation chain (label mapping, sentiment derivation, cleaning, deduplication, length filtering, and Train/Test splitting according to \texttt{params.yaml}).
-    \item \texttt{validate}: Enforces data quality checks (null ratios, minimum samples, label distributions) and automatically generates \texttt{quality\_report.json}.
+    \item \texttt{preprocess}: Executes a configurable transformation chain (label mapping, sentiment derivation, cleaning, deduplication, length filtering, and Train/Test splitting according to \texttt{params.yaml}). Includes class distribution analysis and oversampling strategies for minority classes.
+    \item \texttt{validate}: Enforces data quality checks (null ratios, minimum samples, label distributions) and automatically generates \texttt{quality\_report.json} and \texttt{class\_balance\_report.json}.
   \end{itemize}
   \item \textbf{Modeling:}
   \begin{itemize}[noitemsep]
@@ -506,6 +481,25 @@ MLflow is deeply integrated into the source code to track the entire process fro
 \includegraphics[width=0.9\textwidth]{images/mlflow_detail.png}
 \caption{Detailed experiment run metrics tracked in MLflow.}
 \label{fig:mlflow_detail}
+\end{figure}
+\subsubsection{Model Evaluation \& Fine-tuning Results}
+
+The fine-tuning phase yields significant improvements, especially for minority classes, owing to the class imbalance handling strategies employed (e.g., WeightedLossTrainer). 
+
+Figure~\ref{fig:classification_report} presents the classification report detailing precision, recall, and F1-score across all sentiment classes. Figure~\ref{fig:confusion_matrix} illustrates the overall confusion matrix, demonstrating the model's robust predictive performance and its ability to correctly identify the challenging "neutral" class.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/classification_report_finetuned.png}
+\caption{Classification report evaluating the fine-tuned model across all sentiment classes.}
+\label{fig:classification_report}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{images/confusion_matrix_finetuned_overall.png}
+\caption{Overall confusion matrix of the fine-tuned sentiment analysis model.}
+\label{fig:confusion_matrix}
 \end{figure}
 
 \subsection{Deployment (15\%)}

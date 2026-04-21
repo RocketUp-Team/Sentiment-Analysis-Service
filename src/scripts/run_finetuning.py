@@ -24,10 +24,16 @@ from transformers import (
     TrainingArguments,
 )
 
-from src.training.dataset_builder import build_stratify_labels, dedup_rows
+from src.training.class_weights import compute_class_weights
+from src.training.dataset_builder import (
+    build_stratify_labels,
+    dedup_rows,
+    oversample_minority_class,
+)
 from src.training.lora_config import build_lora_config
 from src.training.mlflow_callback import build_run_tags, resolve_tracking_uri
 from src.training.task_configs import get_task_config
+from src.training.weighted_trainer import WeightedLossTrainer
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -47,6 +53,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--tracking-uri",
         default=None,
         help="Override MLflow tracking URI.",
+    )
+    parser.add_argument(
+        "--no-balance",
+        action="store_true",
+        help="Tắt class balancing (oversampling + class weights). Mặc định: bật.",
     )
     return parser.parse_args(argv)
 
@@ -121,8 +132,14 @@ def _build_trainer(
     tokenizer,
     data_collator,
     trainer_cls=None,
+    class_weights: torch.Tensor | None = None,
 ):
-    trainer_cls = trainer_cls or Trainer
+    """Build a Trainer (or WeightedLossTrainer if class_weights provided)."""
+    if class_weights is not None and trainer_cls is None:
+        trainer_cls = WeightedLossTrainer
+    elif trainer_cls is None:
+        trainer_cls = Trainer
+
     kwargs = dict(
         model=model,
         args=training_args,
@@ -130,6 +147,9 @@ def _build_trainer(
         eval_dataset=eval_dataset,
         data_collator=data_collator,
     )
+    if class_weights is not None and issubclass(trainer_cls, WeightedLossTrainer):
+        kwargs["class_weights"] = class_weights
+
     parameter_names = inspect.signature(trainer_cls.__init__).parameters
     if "processing_class" in parameter_names:
         kwargs["processing_class"] = tokenizer
@@ -185,6 +205,7 @@ def train(
     task_name: str,
     *,
     smoke: bool = False,
+    balance: bool = True,
     root: Path | None = None,
 ) -> dict:
     """Run the full training pipeline for one task.
@@ -194,12 +215,21 @@ def train(
     The HuggingFace Trainer will log metrics to whichever MLflow run is active
     in the caller's context via report_to=["mlflow"].
 
+    Args:
+        task_name: "sarcasm" or "sentiment".
+        smoke:     If True, use 32 samples and 1 epoch for quick validation.
+        balance:   If True (default), apply class balancing per task config:
+                   - oversample_minority: oversample minority class in training split
+                   - use_class_weights: use WeightedLossTrainer with inverse-freq weights
+        root:      Project root path (auto-detected from __file__ if None).
+
     Returns dict with keys:
     - adapter_path: str — path to saved LoRA adapter
     - eval_metrics: dict — from trainer.evaluate()
     - trainable_params: tuple — (trainable, total) from peft
     - log_history: list[dict] — trainer.state.log_history for plotting
     - peft_model: PeftModel — reference for downstream SHAP/inspection
+    - class_weights: list[float] | None — weights used in loss, or None if disabled
     """
     root = root or Path(__file__).resolve().parents[2]
     task = get_task_config(task_name)
@@ -213,6 +243,23 @@ def train(
     rows = df.to_dict("records")
     clean_rows = dedup_rows(rows)
     split_rows = _split_rows_for_training(task, clean_rows, smoke=smoke)
+
+    # ── Oversampling (chỉ training split, không áp dụng cho test) ────────────
+    if balance and task.oversample_minority and not smoke:
+        train_df = pd.DataFrame(split_rows["train"])
+        train_df = oversample_minority_class(
+            train_df,
+            label_col="label",
+            target_ratio=task.oversample_target_ratio,
+            seed=task.seed,
+        )
+        logging.info(
+            "Oversampling applied: %d → %d training rows",
+            len(split_rows["train"]),
+            len(train_df),
+        )
+        split_rows["train"] = train_df.to_dict("records")
+
     hf_dataset = DatasetDict(
         {
             split_name: Dataset.from_list(split_rows[split_name])
@@ -240,6 +287,20 @@ def train(
     output_dir = _resolve_output_dir(root, task.name, smoke)
     training_args = _build_training_args(task, output_dir, epochs=epochs, smoke=smoke)
 
+    # ── Class weights (WeightedLossTrainer) ──────────────────────────────────
+    class_weights: torch.Tensor | None = None
+    if balance and task.use_class_weights:
+        train_labels = [row["label"] for row in split_rows["train"]]
+        class_weights = compute_class_weights(
+            train_labels,
+            num_labels=_model_num_labels(task),
+        )
+        logging.info(
+            "Class weights for %s: %s",
+            task_name,
+            class_weights.tolist(),
+        )
+
     trainer = _build_trainer(
         model=peft_model,
         training_args=training_args,
@@ -247,6 +308,7 @@ def train(
         eval_dataset=tokenized_ds["test"],
         tokenizer=tokenizer,
         data_collator=data_collator,
+        class_weights=class_weights,
     )
 
     trainer.train()
@@ -260,6 +322,7 @@ def train(
         "trainable_params": peft_model.get_nb_trainable_parameters(),
         "log_history": trainer.state.log_history,
         "peft_model": peft_model,
+        "class_weights": class_weights.tolist() if class_weights is not None else None,
     }
 
 
@@ -268,6 +331,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     task = get_task_config(args.task)
     tracking_uri = resolve_tracking_uri(args.tracking_uri)
+    balance = not args.no_balance
     tags = build_run_tags(
         task=task.name,
         git_sha=_git_sha(),
@@ -279,7 +343,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
-    logging.info("Starting %s finetuning run", task.name)
+    logging.info(
+        "Starting %s finetuning run (class balancing: %s)",
+        task.name,
+        "enabled" if balance else "disabled",
+    )
 
     mlflow.set_tracking_uri(tracking_uri)
     mlflow.set_experiment(f"phase2_finetuning_{task.name}")
@@ -287,9 +355,15 @@ def main(argv: list[str] | None = None) -> int:
     if not args.smoke:
         with mlflow.start_run():
             mlflow.set_tags(tags)
-            train(args.task, smoke=False)
+            result = train(args.task, smoke=False, balance=balance)
+            # Log class weights vào MLflow nếu có
+            if result.get("class_weights") is not None:
+                mlflow.log_param(
+                    "class_weights",
+                    ",".join(f"{w:.4f}" for w in result["class_weights"]),
+                )
     else:
-        train(args.task, smoke=True)
+        train(args.task, smoke=True, balance=balance)
 
     return 0
 
