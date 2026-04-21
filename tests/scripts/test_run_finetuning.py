@@ -200,7 +200,9 @@ class FakeTrainer:
         train_dataset,
         eval_dataset,
         processing_class=None,
+        tokenizer=None,
         data_collator=None,
+        class_weights=None,  # accepted so WeightedLossTrainer monkeypatch works
     ) -> None:
         self.kwargs = {
             "model": model,
@@ -209,6 +211,7 @@ class FakeTrainer:
             "eval_dataset": eval_dataset,
             "processing_class": processing_class,
             "data_collator": data_collator,
+            "class_weights": class_weights,
         }
         self.train_calls = 0
         self.state = FakeTrainerState()

@@ -84,25 +84,35 @@ class TestWeightedLossTrainerComputeLoss:
         assert isinstance(outputs, FakeOutputs)
 
     def test_weighted_loss_differs_from_unweighted_for_imbalanced_data(self):
-        """Minority class (0) nhận weight cao hơn → loss có weighted > unweighted."""
-        # 1 sample: true label = 0 (minority class), predict gần đúng
-        logits = torch.tensor([[5.0, -5.0, -5.0]])  # strongly predicts class 0
-        labels = torch.tensor([0])
+        """Minority class gets higher weight \u2192 total weighted loss differs from uniform.
+
+        NOTE: A single-sample batch is insufficient here because CrossEntropyLoss
+        with reduction='mean' normalises by weight[label], cancelling the weight
+        for a lone sample.  A two-sample batch with mixed labels avoids that.
+        """
+        # sample 0: strongly predicts class 0 (correct, label=0)
+        # sample 1: strongly predicts class 0 (WRONG, true label=1 = minority)
+        logits = torch.tensor([
+            [5.0, -5.0, -5.0],
+            [5.0, -5.0, -5.0],
+        ])
+        labels = torch.tensor([0, 1])
         inputs = {"labels": labels}
 
-        # Unweighted baseline
+        # Uniform weights: both classes treated identically
         unweighted_trainer = _build_trainer(num_labels=3, weights=[1.0, 1.0, 1.0])
         loss_unweighted = unweighted_trainer.compute_loss(
             FakeModel(logits), inputs.copy(), return_outputs=False
         )
 
-        # Weighted: class 0 có weight cao hơn (minority boost)
-        weighted_trainer = _build_trainer(num_labels=3, weights=[5.0, 1.0, 1.0])
+        # Minority boost: the wrong sample (class 1) penalised 5\u00d7 harder
+        weighted_trainer = _build_trainer(num_labels=3, weights=[1.0, 5.0, 1.0])
         loss_weighted = weighted_trainer.compute_loss(
             FakeModel(logits), inputs.copy(), return_outputs=False
         )
 
-        # Loss của sample minority phải lớn hơn khi có weight cao
+        # Weighted loss is strictly greater: the high-weight wrong prediction
+        # dominates the normalised mean more than with uniform weights.
         assert loss_weighted.item() > loss_unweighted.item()
 
     def test_matching_logits_and_labels_gives_low_loss(self):
