@@ -1,0 +1,46 @@
+# ── Training Image: Finetuning with class balancing ─────────────────────────
+# Dùng riêng để train, KHÔNG dùng cho API inference.
+# Không bao gồm ONNX, DVC pull, download_models — chỉ môi trường training.
+#
+# Build & run:
+#   docker compose --profile train up trainer
+#
+# Hoặc chạy 1 task cụ thể:
+#   docker compose run --rm trainer python -m src.scripts.run_finetuning --task sentiment --smoke
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Build dependencies (gcc cần cho một số python packages)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential git \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Cài PyTorch CPU (nhẹ hơn GPU wheel ~2GB) ─────────────────────────────────
+# Nếu muốn GPU: đổi base image sang pytorch/pytorch:2.4.1-cuda12.4-cudnn9-runtime
+# và bỏ dòng --index-url bên dưới
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# ── Cài training dependencies (bỏ onnxruntime-gpu không cần cho training) ────
+COPY requirements.txt .
+RUN grep -v "onnxruntime" requirements.txt > requirements_train.txt && \
+    pip install --no-cache-dir -r requirements_train.txt
+
+# ── Source code ───────────────────────────────────────────────────────────────
+COPY src/ ./src/
+COPY params.yaml ./
+COPY contracts/ ./contracts/
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Volumes được mount từ host (xem docker-compose.yml):
+#   - data/raw/      → dataset CSVs (download trước hoặc mount)
+#   - models/        → adapters output
+#   - mlruns/        → MLflow local tracking
+#   - reports/       → JSON metrics
+
+# Mặc định: chạy full sentiment training với class balancing
+CMD ["python", "-m", "src.scripts.run_finetuning", "--task", "sentiment"]
