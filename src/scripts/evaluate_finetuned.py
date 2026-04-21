@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import sys
 
+from sklearn.metrics import classification_report
+
 import pandas as pd
 
 from src.model.baseline import BaselineModelInference
@@ -134,6 +136,20 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps({"per_lang_f1": metrics_payload["per_lang_f1"]}, indent=2),
         encoding="utf-8",
     )
+    label_names = ["positive", "negative", "neutral"]
+    clf_report_dict = classification_report(
+        metrics_payload["y_true"],
+        metrics_payload["y_pred"],
+        labels=label_names,
+        output_dict=True,
+        zero_division=0,
+    )
+    clf_report_str = classification_report(
+        metrics_payload["y_true"],
+        metrics_payload["y_pred"],
+        labels=label_names,
+        zero_division=0,
+    )
     args.output.parent.joinpath("fairness_report.json").write_text(
         json.dumps(
             {
@@ -142,6 +158,8 @@ def main(argv: list[str] | None = None) -> int:
                 "per_lang_gap": metrics_payload["per_lang_gap"],
                 "sample_counts": metrics_payload["sample_counts"],
                 "confusion_matrices": metrics_payload["per_lang_confusion_matrices"],
+                "classification_report": clf_report_dict,
+                "classification_report_text": clf_report_str,
             },
             indent=2,
         ),

@@ -191,6 +191,7 @@ class FakeTrainer:
         eval_dataset,
         processing_class=None,
         data_collator=None,
+        class_weights=None,
     ) -> None:
         self.kwargs = {
             "model": model,
@@ -200,6 +201,7 @@ class FakeTrainer:
             "processing_class": processing_class,
             "data_collator": data_collator,
         }
+        self.class_weights = class_weights
         self.train_calls = 0
         self.state = FakeTrainerState()
         type(self).instances.append(self)
@@ -335,6 +337,10 @@ def _install_training_fakes(monkeypatch, read_csv_tables: dict[str, pd.DataFrame
         fake_peft_model["lora_config"] = lora_config
         return peft_model
 
+    def fake_compute_class_weights(labels, num_classes):
+        import torch
+        return torch.ones(num_classes, dtype=torch.float32)
+
     monkeypatch.setattr(run_finetuning.pd, "read_csv", fake_read_csv)
     monkeypatch.setattr(run_finetuning, "dedup_rows", fake_dedup_rows)
     monkeypatch.setattr(run_finetuning, "Dataset", dataset_factory)
@@ -344,6 +350,8 @@ def _install_training_fakes(monkeypatch, read_csv_tables: dict[str, pd.DataFrame
     monkeypatch.setattr(run_finetuning, "DataCollatorWithPadding", fake_data_collator_with_padding)
     monkeypatch.setattr(run_finetuning, "TrainingArguments", FakeTrainingArguments)
     monkeypatch.setattr(run_finetuning, "Trainer", FakeTrainer)
+    monkeypatch.setattr(run_finetuning, "WeightedTrainer", FakeTrainer)
+    monkeypatch.setattr(run_finetuning, "compute_class_weights", fake_compute_class_weights)
     monkeypatch.setattr(run_finetuning, "build_lora_config", fake_build_lora_config)
     monkeypatch.setattr(run_finetuning, "get_peft_model", fake_get_peft_model)
     monkeypatch.setattr(run_finetuning, "mlflow", fake_mlflow)
@@ -638,3 +646,48 @@ def test_train_returns_result_dict_with_expected_keys(monkeypatch):
     assert isinstance(result["log_history"], list)
     assert result["log_history"][0]["loss"] == 0.5
     assert result["peft_model"] is fakes["peft_model"]["model"]
+
+
+def test_sentiment_training_computes_class_weights_and_passes_to_trainer(monkeypatch):
+    """Verify the sentiment task computes class weights and uses WeightedTrainer."""
+
+    def build_rows(lang: str) -> list[dict]:
+        rows = []
+        for label_name in ("negative", "neutral", "positive"):
+            for idx in range(10):
+                rows.append(
+                    {
+                        "text": f"{lang}-{label_name}-{idx}",
+                        "label": label_name,
+                        "lang": lang,
+                    }
+                )
+        return rows
+
+    tables = {
+        "sentiment_en.csv": pd.DataFrame(build_rows("en")),
+        "sentiment_vi.csv": pd.DataFrame(build_rows("vi")),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    result = run_finetuning.main(["--task", "sentiment", "--smoke"])
+
+    assert result == 0
+    # The trainer should have received class_weights
+    trainer_instance = FakeTrainer.instances[0]
+    assert trainer_instance.class_weights is not None
+    assert len(trainer_instance.class_weights) == 3  # 3 sentiment classes
+
+
+def test_sarcasm_training_does_not_use_class_weights(monkeypatch):
+    """Verify sarcasm task does NOT compute class weights."""
+    tables = {
+        "sarcasm.csv": pd.DataFrame(_build_rows(40, "1")),
+    }
+    _install_training_fakes(monkeypatch, tables)
+
+    result = run_finetuning.main(["--task", "sarcasm", "--smoke"])
+
+    assert result == 0
+    trainer_instance = FakeTrainer.instances[0]
+    assert trainer_instance.class_weights is None

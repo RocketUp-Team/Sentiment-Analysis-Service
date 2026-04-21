@@ -28,6 +28,7 @@ from src.training.dataset_builder import build_stratify_labels, dedup_rows
 from src.training.lora_config import build_lora_config
 from src.training.mlflow_callback import build_run_tags, resolve_tracking_uri
 from src.training.task_configs import get_task_config
+from src.training.weighted_trainer import WeightedTrainer, compute_class_weights
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -120,16 +121,29 @@ def _build_trainer(
     eval_dataset,
     tokenizer,
     data_collator,
+    class_weights=None,
     trainer_cls=None,
 ):
-    trainer_cls = trainer_cls or Trainer
-    kwargs = dict(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
-        data_collator=data_collator,
-    )
+    if class_weights is not None:
+        # Use WeightedTrainer for imbalanced datasets (e.g. sentiment VI).
+        trainer_cls = trainer_cls or WeightedTrainer
+        kwargs = dict(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            data_collator=data_collator,
+            class_weights=class_weights,
+        )
+    else:
+        trainer_cls = trainer_cls or Trainer
+        kwargs = dict(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=eval_dataset,
+            data_collator=data_collator,
+        )
     parameter_names = inspect.signature(trainer_cls.__init__).parameters
     if "processing_class" in parameter_names:
         kwargs["processing_class"] = tokenizer
@@ -229,6 +243,18 @@ def train(
     tokenized_ds = hf_dataset.map(tokenize_fn, batched=True)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
+    # Compute class weights for imbalanced datasets (sentiment task).
+    class_weights = None
+    if task.name == "sentiment":
+        import numpy as np
+
+        train_labels = np.array([row["label"] for row in split_rows["train"]])
+        class_weights = compute_class_weights(train_labels, num_classes=task.num_labels)
+        logging.info(
+            "Class weights for sentiment: %s",
+            {name: f"{w:.3f}" for name, w in zip(task.label_names, class_weights.tolist())},
+        )
+
     model = AutoModelForSequenceClassification.from_pretrained(
         base_model_name,
         num_labels=_model_num_labels(task),
@@ -247,6 +273,7 @@ def train(
         eval_dataset=tokenized_ds["test"],
         tokenizer=tokenizer,
         data_collator=data_collator,
+        class_weights=class_weights,
     )
 
     trainer.train()
