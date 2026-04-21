@@ -167,9 +167,9 @@
   \toprule
   \textbf{\#} & \textbf{Full Name} & \textbf{Student ID} & \textbf{Responsibility} \\
   \midrule
-  1 & Duong Hong Quan & MSA23236 & Monitoring & DevOps / CI-CD \\
-  2 & Pham Duc Long   & MSA23233 & Backend API & Experiment Tracking \\
-  3 & Do Quoc Trung   & MSA23231 & ML Pipeline & Data Validation \\
+  1 & Duong Hong Quan & MSA23236 & Monitoring, DevOps / CI-CD \\
+  2 & Pham Duc Long   & MSA23233 & Backend API, Experiment Tracking \\
+  3 & Do Quoc Trung   & MSA23231 & ML Pipeline, Data Validation \\
   \bottomrule
 \end{tabular}\\[1.5cm]
 
@@ -297,6 +297,7 @@ Figure~\ref{fig:arch} shows the component diagram.
 
 \begin{figure}[H]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
   node distance=1.4cm and 2.2cm,
   box/.style={
@@ -321,7 +322,8 @@ Figure~\ref{fig:arch} shows the component diagram.
 \draw[arr] (api)   -- node[left,  font=\scriptsize]{/metrics} (prom);
 \draw[arr] (prom)  -- (grafana);
 \draw[arr] (api)   -- node[right, font=\scriptsize]{log runs} (mlflow);
-\end{tikzpicture}
+\end{tikzpicture}%
+}
 \caption{High-level component diagram -- Sentiment Analysis Service.}
 \label{fig:arch}
 \end{figure}
@@ -424,146 +426,87 @@ CI/CD
 
 \subsection{ML Pipeline (15\%)}
 
-\subsubsection{Dataset: SemEval-2014 Restaurant Reviews}
+\subsubsection{Datasets \& Machine Learning Models}
 
-The raw corpus is sourced from \texttt{data/external/semeval2014/} and ingested by \texttt{src.data.downloader}.
-After ingestion the corpus is managed through a four-stage DVC pipeline defined in \texttt{dvc.yaml}:
-
-\begin{lstlisting}[style=yamlstyle, caption={DVC pipeline stages (dvc.yaml)}]
-stages:
-  download:           # Downloads raw XML -> sentences.csv + aspects.csv
-  preprocess:         # Ordered transform chain (see Section 3.1.2)
-  validate:           # DataQualityValidator -> quality_report.json
-  evaluate_baseline:  # RoBERTa evaluation -> baseline_metrics.json + MLflow
-\end{lstlisting}
-
-\subsubsection{Preprocessing Pipeline}
-
-The \texttt{PreprocessingPipeline} class in \texttt{src/data/pipeline.py} applies a configurable, ordered chain of transforms.
-Each transform implements the \texttt{BaseTransform} interface operating on a pair of DataFrames.
-After every step, orphan aspect rows are automatically cascaded out.
-
-\begin{lstlisting}[language=Python, caption={Transform chain built from params.yaml}]
-transforms = [
-    LabelMapper(aspect_categories=params["label_mapping"]["aspect_categories"]),
-    SentimentDeriver(mixed_strategy="negative_priority"),
-    TextCleaner(lowercase=True, strip_whitespace=True),
-    DuplicateRemover(),
-    LengthFilter(min_length=3, max_length=2000),
-    Splitter(validation_ratio=0.1, seed=42),
-]
-\end{lstlisting}
-
-Key configuration parameters (\texttt{params.yaml}):
-
-\begin{table}[H]
-\centering
-\caption{Preprocessing Hyperparameters}
-\begin{tabularx}{\textwidth}{@{} l l X @{}}
-\toprule
-\textbf{Parameter} & \textbf{Value} & \textbf{Effect} \\
-\midrule
-\texttt{lowercase}            & \texttt{true}  & Normalises casing for better tokenisation \\
-\texttt{strip\_whitespace}    & \texttt{true}  & Removes leading/trailing whitespace \\
-\texttt{remove\_duplicates}   & \texttt{true}  & Eliminates exact duplicate sentences \\
-\texttt{drop\_conflict\_labels} & \texttt{true} & Removes sentences with conflicting aspect sentiments \\
-\texttt{min\_text\_length}    & 3 chars        & Filters trivially short texts \\
-\texttt{max\_text\_length}    & 2\,000 chars   & Prevents tokeniser overflow \\
-\texttt{validation\_ratio}    & 0.10           & 10\% of training data held for validation \\
-\texttt{split\_seed}          & 42             & Ensures reproducibility \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\textbf{Mixed Sentiment Strategy.}~When a sentence contains aspects with conflicting sentiments, the \texttt{SentimentDeriver} uses the \texttt{negative\_priority} strategy: a sentence is labelled \textit{negative} if any aspect is negative, overriding neutral or positive aspects.
-
-\subsubsection{Data Quality Validation}
-
-The \texttt{DataQualityValidator} (\texttt{src/data/validators.py}) enforces a comprehensive set of checks:
+The system integrates diverse data sources and advanced modelling techniques to support multiple text-classification tasks:
 
 \begin{itemize}[noitemsep]
-  \item \textbf{Schema checks:} required columns (\texttt{sentence\_id}, \texttt{text}, \texttt{sentiment}, \texttt{split} for sentences; \texttt{sentence\_id}, \texttt{aspect\_category}, \texttt{sentiment} for aspects).
-  \item \textbf{Minimum samples:} each split must have $\geq 100$ records.
-  \item \textbf{Null ratio:} no column may exceed a 1\% null rate.
-  \item \textbf{Label validity:} sentiment restricted to \{positive, negative, neutral\}; aspect categories to \{food, service, ambiance, price, location, general\}.
-  \item \textbf{Referential integrity:} no orphan aspect rows.
-  \item \textbf{Distribution warnings:} any class below $5\%$ representation triggers a warning logged to MLflow.
+  \item \textbf{Datasets:}
+  \begin{itemize}[noitemsep]
+    \item \textbf{ABSA SemEval 2014 (Restaurants):} Provides sentence and aspect-level sentiment annotations. Used for baseline evaluation.
+    \item \textbf{Sarcasm Dataset (\texttt{tweet\_eval\_irony\_v1}):} Identifies irony and sarcasm in social media contexts.
+    \item \textbf{Multilingual Sentiment (\texttt{multilingual\_sentiment\_v1}):} English and Vietnamese data for training multilingual capabilities.
+  \end{itemize}
+  \item \textbf{Machine Learning Models:}
+  \begin{itemize}[noitemsep]
+    \item \textbf{Base Model (\texttt{xlm-roberta-base}):} Serves as a unified backbone for superior cross-lingual understanding.
+    \item \textbf{Training Strategy (PEFT/LoRA):} Parameter-Efficient Fine-Tuning via Low-Rank Adaptation (LoRA) is employed. Separate lightweight adapters are trained for Sentiment Analysis and Sarcasm Detection, allowing multiple adapters to be stacked efficiently during inference to minimise memory footprint.
+    \item \textbf{Hardware-Aware Optimisation:} The training pipeline automatically detects available accelerators (CUDA, MPS, CPU). On supported GPUs (e.g., L4), it automatically enables Mixed Precision (\texttt{bf16}), fused optimisers (\texttt{adamw\_torch\_fused}), pinned memory, and tuned Data Loader workers to maximise training throughput.
+    \item \textbf{Inference Optimisation (ONNX \& Quantization):} HuggingFace models are exported to ONNX format (both FP32 and INT8 quantization), significantly reducing inference latency and resource consumption in production.
+  \end{itemize}
 \end{itemize}
 
-The quality report (\texttt{data/reports/quality\_report.json}) is automatically logged as an MLflow artifact with per-split sample counts, null ratios, and label distributions.
+\subsubsection{Reproducible DVC Pipeline}
 
-\subsubsection{Model: BaselineModelInference}
+The complete lifecycle of data and models is orchestrated via Data Version Control (DVC). The pipeline is defined as a Directed Acyclic Graph (DAG) in \texttt{dvc.yaml} to ensure strict reproducibility:
 
-The core inference engine is \texttt{BaselineModelInference} (\texttt{src/model/baseline.py}), implementing the \texttt{ModelInference} abstract interface.
-
-\begin{table}[H]
-\centering
-\caption{Model Configuration (ModelConfig)}
-\begin{tabularx}{\textwidth}{@{} l X X @{}}
-\toprule
-\textbf{Parameter} & \textbf{Value} & \textbf{Description} \\
-\midrule
-\texttt{model\_name}
-  & \texttt{cardiffnlp/} \texttt{twitter-roberta-base-sentiment-latest}
-  & Sentiment HuggingFace checkpoint \\
-\texttt{max\_length}
-  & 512 tokens
-  & Tokeniser truncation limit \\
-\texttt{label\_map}
-  & \{0: negative, 1: neutral, 2: positive\}
-  & Logit index to label mapping \\
-\texttt{absa\_model\_name}
-  & \texttt{MoritzLaurer/} \texttt{deberta-v3-base-zeroshot-v2.0}
-  & Zero-shot ABSA classifier \\
-\texttt{absa\_threshold}
-  & 0.5
-  & Minimum confidence to include an aspect \\
-\texttt{absa\_categories}
-  & food, service, ambiance, price, location, general
-  & Candidate aspect labels \\
-\texttt{supported\_languages}
-  & \texttt{("en",)}
-  & English only \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\textbf{Inference flow for \texttt{predict\_single}:}
 \begin{enumerate}[noitemsep]
-  \item Language guard: raises \texttt{UnsupportedLanguageError} for non-English inputs.
-  \item Tokenise with \texttt{AutoTokenizer} (no padding for single inputs).
-  \item Move tensors to target device (CPU or CUDA).
-  \item Forward pass under \texttt{torch.no\_grad()}; apply Softmax over logits.
-  \item Identify argmax class; round confidence to 4 decimal places.
-  \item Call \texttt{\_extract\_aspects()} with the DeBERTa zero-shot pipeline.
-  \item Return \texttt{PredictionResult(sentiment, confidence,\allowbreak\ aspects, sarcasm\_flag=False)}.
+  \item \textbf{Data Engineering:}
+  \begin{itemize}[noitemsep]
+    \item \texttt{download}: Automatically retrieves raw data from external sources.
+    \item \texttt{preprocess}: Executes a configurable transformation chain (label mapping, sentiment derivation, cleaning, deduplication, length filtering, and Train/Test splitting according to \texttt{params.yaml}).
+    \item \texttt{validate}: Enforces data quality checks (null ratios, minimum samples, label distributions) and automatically generates \texttt{quality\_report.json}.
+  \end{itemize}
+  \item \textbf{Modeling:}
+  \begin{itemize}[noitemsep]
+    \item \texttt{download\_sarcasm} / \texttt{download\_sentiment}: Prepares task-specific training datasets.
+    \item \texttt{finetune\_sarcasm} / \texttt{finetune\_sentiment}: Triggers LoRA adapter training.
+    \item \texttt{evaluate\_baseline} / \texttt{evaluate\_finetuned}: Evaluates models on test splits, generating detailed reports: \texttt{metrics\_finetuned.json}, \texttt{per\_language\_f1.json}, and \texttt{fairness\_report.json}.
+  \end{itemize}
+  \item \textbf{Deployment Preparation:}
+  \begin{itemize}[noitemsep]
+    \item \texttt{export\_onnx\_sentiment} / \texttt{export\_onnx\_sarcasm}: Merges LoRA weights into the base model and exports ONNX graphs.
+    \item \texttt{benchmark\_onnx}: Measures real-world inference performance, yielding \texttt{onnx\_benchmark.json}.
+  \end{itemize}
 \end{enumerate}
 
-\textbf{Batch inference (\texttt{predict\_batch}):}~Uses \texttt{padding=True} to process multiple texts in a single forward pass, reducing latency for batch workloads.
+Figure~\ref{fig:dvc_flow} illustrates the DAG of the data pipeline generated by DVC.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{images/dvc_flow.png}
+\caption{DVC pipeline DAG.}
+\label{fig:dvc_flow}
+\end{figure}
 
 \subsubsection{Experiment Tracking with MLflow}
 
-The \texttt{log\_to\_mlflow} function in \texttt{src/model/evaluate.py} logs the following at each evaluation run:
+MLflow is deeply integrated into the source code to track the entire process from data validation to model training:
 
-\begin{lstlisting}[language=Python, caption={MLflow run parameters and metrics}]
-run_params = {
-    "model_name":   "cardiffnlp/twitter-roberta-base-sentiment-latest",
-    "model_type":   "baseline_pretrained",
-    "max_length":   512,
-    "fine_tuned":   False,
-    "absa_enabled": False,
-}
-run_metrics = {
-    "accuracy", "f1_macro", "precision_macro",
-    "recall_macro", "mean_confidence", "n_samples",
-    # plus per-class: f1_positive, f1_negative, f1_neutral
-}
-# Artifacts: confusion_matrix.png, classification_report.txt,
-#            metrics_summary.json
-\end{lstlisting}
+\begin{itemize}[noitemsep]
+  \item \textbf{Data Quality Tracking:} The Data Validation process automatically logs metrics directly to the \texttt{data\_preprocessing} experiment. Metrics include \texttt{total\_samples}, split-specific null ratios, and a \texttt{passed\_quality\_checks} flag. The \texttt{quality\_report.json} is attached as an artifact.
+  \item \textbf{Model Training Tracking:} 
+  \begin{itemize}[noitemsep]
+    \item Integration with HuggingFace \texttt{Trainer} (\texttt{report\_to=["mlflow"]}) automatically logs loss, learning rate, and metrics per epoch.
+    \item \textbf{Organisational Structure:} Runs are organised into task-specific experiments (e.g., \texttt{phase2\_finetuning\_sentiment}, \texttt{phase2\_finetuning\_sarcasm}).
+    \item \textbf{Automatic Tagging:} Each run is explicitly tagged with \texttt{task}, \texttt{git\_sha} (linking model version to code), \texttt{device}, and \texttt{dataset\_version}.
+    \item \textbf{Hyperparameter Tracking:} Parameters such as \texttt{learning\_rate}, \texttt{batch\_size}, and \texttt{epochs} are automatically ingested from the centralised \texttt{params.yaml} and logged for comparative analysis.
+  \end{itemize}
+\end{itemize}
 
-The experiment name is \texttt{sentiment\_baseline}; data-preprocessing runs use \texttt{data\_preprocessing}.
-Both tracking URI and experiment names are configurable via \texttt{params.yaml}.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/mlflow_dashboard.png}
+\caption{MLflow dashboard overview on DagsHub.}
+\label{fig:mlflow_dash}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/mlflow_detail.png}
+\caption{Detailed experiment run metrics tracked in MLflow.}
+\label{fig:mlflow_detail}
+\end{figure}
 
 \subsection{Deployment (15\%)}
 
@@ -623,6 +566,15 @@ class ExplainResponse(BaseModel):
         return self
 \end{lstlisting}
 
+Figure~\ref{fig:predict_explain} shows the chatbot-style web interface in action, demonstrating both the prediction and SHAP explanation capabilities via the REST API.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/predict_explain.jpg}
+\caption{Web UI demonstrating sentiment prediction and SHAP explanation.}
+\label{fig:predict_explain}
+\end{figure}
+
 \subsubsection{Docker Containerisation}
 
 The Dockerfile employs a \textbf{multi-stage build} to minimise the final image size:
@@ -673,7 +625,7 @@ Three Prometheus metric families are defined in \texttt{src/monitoring/metrics.p
 \begin{table}[H]
 \centering
 \caption{Prometheus Metric Definitions}
-\begin{tabularx}{\textwidth}{@{} p{4.8cm} l X p{3cm} @{}}
+\begin{tabularx}{\textwidth}{@{} p{6.5cm} l X p{3cm} @{}}
 \toprule
 \textbf{Metric Name} & \textbf{Type} & \textbf{Description} & \textbf{Labels} \\
 \midrule
@@ -851,6 +803,22 @@ The explanation workflow:
   \item Per-token SHAP scores for the predicted class are extracted alongside the base value.
   \item The \texttt{ExplainResponse} schema enforces \texttt{len(tokens) == len(shap\_values)} via \texttt{model\_validator}.
 \end{enumerate}
+
+Figure~\ref{fig:shap_food} and Figure~\ref{fig:shap_negative} demonstrate SHAP waterfall plots for specific test samples, highlighting the token-level sentiment attributions.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/sample_1_pred-negative_aspects-food_service.png}
+\caption{SHAP explanation highlighting negative aspects regarding food and service.}
+\label{fig:shap_food}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{images/sample_3_pred-negative.png}
+\caption{SHAP explanation indicating a negative sentiment prediction.}
+\label{fig:shap_negative}
+\end{figure}
 
 \subsection{Fairness Analysis}
 

@@ -14,10 +14,26 @@ export interface Message {
   aspects?: AspectSentiment[];
   sarcasm_flag?: boolean;
   latency_ms?: number;
+  // SHAP explanation (populated on demand via /explain)
+  explainData?: ExplainResponse;
+  explainLoading?: boolean;
 }
 
 export interface PredictRequest {
   text: string;
+  lang?: string | null;
+}
+
+export interface ExplainRequest {
+  text: string;
+  lang?: string | null;
+}
+
+export interface ExplainResponse {
+  tokens: string[];
+  shap_values: number[];
+  base_value: number;
+  latency_ms: number;
 }
 
 export interface PredictResponse {

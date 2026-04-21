@@ -7,6 +7,8 @@ import {
   AspectSentiment,
   PredictRequest,
   PredictResponse,
+  ExplainRequest,
+  ExplainResponse,
   BatchPredictResponse,
 } from '../models/message.model';
 
@@ -86,6 +88,55 @@ export class SentimentAnalysisService {
 
   private predict(text: string): Observable<PredictResponse> {
     return this.http.post<PredictResponse>(this.apiUrl, { text } as PredictRequest);
+  }
+
+  // ── Explain (SHAP) ───────────────────────────────────────────
+  /**
+   * Calls POST /api/explain for a bot message.
+   * Looks up the user message that PRECEDES the bot message in the signal
+   * to get the original text — no need to store sourceText anywhere.
+   */
+  public explainMessage(botMessageId: string): void {
+    const msgs = this.messagesSignal();
+    const botIdx = msgs.findIndex(m => m.id === botMessageId);
+
+    // Walk backwards from the bot message to find the closest user message
+    const userMsg = botIdx > 0
+      ? msgs.slice(0, botIdx).reverse().find(m => m.sender === 'user')
+      : null;
+
+    if (!userMsg?.text?.trim()) {
+      console.warn('[explain] No preceding user message found for', botMessageId);
+      return;
+    }
+
+    // Mark loading
+    this.messagesSignal.update(all =>
+      all.map(m => m.id === botMessageId ? { ...m, explainLoading: true } : m)
+    );
+
+    this.callExplainApi(userMsg.text.trim()).subscribe({
+      next: (res) => {
+        this.messagesSignal.update(all =>
+          all.map(m =>
+            m.id === botMessageId
+              ? { ...m, explainLoading: false, explainData: res }
+              : m
+          )
+        );
+        this.saveHistory();
+      },
+      error: (err) => {
+        console.error('[explain] API error', err);
+        this.messagesSignal.update(all =>
+          all.map(m => m.id === botMessageId ? { ...m, explainLoading: false } : m)
+        );
+      },
+    });
+  }
+
+  private callExplainApi(text: string): Observable<ExplainResponse> {
+    return this.http.post<ExplainResponse>('/api/explain', { text } as ExplainRequest);
   }
 
   // ── Batch CSV ────────────────────────────────────────────────
