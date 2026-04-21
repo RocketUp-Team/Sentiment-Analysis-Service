@@ -293,6 +293,8 @@ class FakeMlflow:
         self.tracking_uris: list[str] = []
         self.experiments: list[str] = []
         self.tags: list[dict] = []
+        self.params: dict[str, str] = {}
+        self.metrics: dict[str, float] = {}
         self.start_run_calls = 0
 
     def set_tracking_uri(self, uri: str) -> None:
@@ -303,6 +305,12 @@ class FakeMlflow:
 
     def set_tags(self, tags: dict) -> None:
         self.tags.append(tags)
+
+    def log_param(self, key: str, value) -> None:
+        self.params[key] = str(value)
+
+    def log_metric(self, key: str, value: float) -> None:
+        self.metrics[key] = value
 
     def start_run(self):
         self.start_run_calls += 1
