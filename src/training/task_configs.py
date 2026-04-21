@@ -16,8 +16,8 @@ class TaskConfig:
     languages: tuple[str, ...]
     epochs: int
     learning_rate: float = 2e-4
-    batch_size: int = 16
-    gradient_accumulation_steps: int = 2
+    batch_size: int = 16        # Aligned with params.yaml training.*.batch_size
+    gradient_accumulation_steps: int = 2  # Aligned with params.yaml; effective batch = 32
     max_length: int = 128
     dataset_version: str = "v1"
     seed: int = 42

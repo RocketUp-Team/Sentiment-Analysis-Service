@@ -41,6 +41,7 @@ class ModelInference(abc.ABC):
         *,
         batch_size: int | None = None,
         skip_absa: bool = False,
+        skip_sarcasm: bool = False,
     ) -> list[PredictionResult]:
         raise NotImplementedError
 

@@ -10,13 +10,48 @@ from transformers import TrainingArguments
 from src.scripts import run_finetuning
 from src.scripts.run_finetuning import parse_args
 from src.training.task_configs import get_task_config
-from src.training.mlflow_callback import REQUIRED_TAGS, build_run_tags, resolve_tracking_uri
+from src.training.mlflow_callback import (
+    REQUIRED_TAGS,
+    build_run_tags,
+    resolve_pipeline_tracking_uri,
+    resolve_tracking_uri,
+)
 
 
 def test_run_finetuning_uses_local_mlflow_when_env_missing(monkeypatch):
     monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
 
     assert resolve_tracking_uri() == "file:./mlruns"
+
+
+def test_resolve_pipeline_tracking_uri_prefers_env(monkeypatch):
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "https://dagshub.com/u/r.mlflow")
+
+    assert (
+        resolve_pipeline_tracking_uri({"tracking_uri": "http://localhost:5000"})
+        == "https://dagshub.com/u/r.mlflow"
+    )
+
+
+def test_resolve_pipeline_tracking_uri_uses_yaml_when_env_missing(monkeypatch):
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+
+    assert (
+        resolve_pipeline_tracking_uri({"tracking_uri": "http://mlflow:5000"})
+        == "http://mlflow:5000"
+    )
+
+
+def test_resolve_pipeline_tracking_uri_fallback_default(monkeypatch):
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+
+    assert resolve_pipeline_tracking_uri({}) == "http://localhost:5000"
+
+
+def test_resolve_pipeline_tracking_uri_no_fallback_when_disabled(monkeypatch):
+    monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
+
+    assert resolve_pipeline_tracking_uri({}, fallback=None) == ""
 
 
 def test_parse_args_accepts_supported_tasks():
@@ -132,6 +167,17 @@ class FakePeftModel:
     def save_pretrained(self, path: str) -> None:
         self.saved_paths.append(path)
 
+    def get_nb_trainable_parameters(self) -> tuple[int, int]:
+        return (1000, 100000)
+
+
+class FakeTrainerState:
+    def __init__(self) -> None:
+        self.log_history: list[dict] = [
+            {"loss": 0.5, "epoch": 1},
+            {"eval_loss": 0.4, "epoch": 1},
+        ]
+
 
 class FakeTrainer:
     instances: list["FakeTrainer"] = []
@@ -155,10 +201,14 @@ class FakeTrainer:
             "data_collator": data_collator,
         }
         self.train_calls = 0
+        self.state = FakeTrainerState()
         type(self).instances.append(self)
 
     def train(self) -> None:
         self.train_calls += 1
+
+    def evaluate(self) -> dict:
+        return {"eval_loss": 0.4, "eval_f1": 0.85}
 
 
 class FakeTrainingArguments:
@@ -569,3 +619,22 @@ def test_main_sentiment_smoke_skips_brittle_stratified_split(monkeypatch):
     assert result == 0
     assert len(fakes["dataset_factory"].rows_by_split["train"]) == 28
     assert len(fakes["dataset_factory"].rows_by_split["test"]) == 4
+
+
+def test_train_returns_result_dict_with_expected_keys(monkeypatch):
+    tables = {
+        "sarcasm.csv": pd.DataFrame(_build_rows(40, "1")),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    from src.scripts.run_finetuning import train
+
+    result = train("sarcasm", smoke=True)
+
+    assert isinstance(result, dict)
+    assert result["adapter_path"].endswith("models/adapters_smoke/sarcasm")
+    assert result["eval_metrics"] == {"eval_loss": 0.4, "eval_f1": 0.85}
+    assert result["trainable_params"] == (1000, 100000)
+    assert isinstance(result["log_history"], list)
+    assert result["log_history"][0]["loss"] == 0.5
+    assert result["peft_model"] is fakes["peft_model"]["model"]

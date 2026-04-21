@@ -42,4 +42,7 @@ docs/*.toc
 docs/*.fls
 docs/*.fdb_latexmk
 docs/*.synctex.gz
+
+/models/adapters/
+/models/onnx/temp_merged/
 __MACOSX/

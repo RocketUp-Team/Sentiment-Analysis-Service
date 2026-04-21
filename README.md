@@ -216,6 +216,19 @@ dvc repro
 | Stage | Script | Output |
 |---|---|---|
 | `download` | `src/data/downloader.py` | `data/raw/` |
+
+### Colab Training Pipeline
+The full end-to-end training and export pipeline is available in `notebooks/colab_full_pipeline.ipynb`. To run it on Google Colab, you must configure the following **Colab Secrets**:
+
+| Secret Key | Description |
+|---|---|
+| `MLFLOW_TRACKING_URI` | Your DagsHub MLflow tracking URI |
+| `DAGSHUB_USER` | Your DagsHub username |
+| `DAGSHUB_TOKEN` | Your DagsHub access token |
+| `GITHUB_TOKEN` | Your GitHub Personal Access Token |
+| `MODEL_VERSION` | The version tag for the model (e.g., `v1.2.0`) |
+| `GIT_USER_EMAIL` | Your git commit email (e.g. `you@example.com`) |
+| `GIT_USER_NAME` | Your git commit name (e.g. `Your Name`) |
 | `preprocess` | `src/data/pipeline.py` | `data/processed/` |
 | `validate` | `src/data/validators.py` | `data/reports/quality_report.json` |
 | `evaluate_baseline` | `src/model/evaluate.py` | `data/reports/baseline_metrics.json` + MLflow run |

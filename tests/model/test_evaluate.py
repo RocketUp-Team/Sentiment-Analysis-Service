@@ -252,6 +252,43 @@ class TestLogToMlflow:
         mock_mlflow.log_metrics.assert_called_once()
         mock_log_reporting_artifacts.assert_called_once_with(mock_mlflow, metrics)
 
+    def test_mlflow_tracking_uri_env_overrides_params(self, monkeypatch):
+        import src.model.evaluate as evaluate_module
+        from src.model.config import ModelConfig
+
+        monkeypatch.setenv(
+            "MLFLOW_TRACKING_URI", "https://dagshub.com/user/repo.mlflow"
+        )
+        config = ModelConfig()
+        mock_mlflow = MagicMock()
+        metrics = {
+            "accuracy": 0.8,
+            "f1_macro": 0.75,
+            "f1_per_class": [0.7, 0.8, 0.75],
+            "precision_macro": 0.76,
+            "recall_macro": 0.74,
+            "mean_confidence": 0.85,
+            "n_samples": 100,
+            "device": "cpu",
+            "confusion_matrix": [[30, 5, 5], [3, 25, 2], [2, 3, 25]],
+            "classification_report": "dummy report",
+        }
+        params_yaml = {
+            "mlflow": {
+                "tracking_uri": "http://localhost:5000",
+                "model_experiment_name": "test_exp",
+            }
+        }
+
+        with patch.object(
+            evaluate_module.importlib, "import_module", return_value=mock_mlflow
+        ), patch.object(evaluate_module, "_log_reporting_artifacts"):
+            evaluate_module.log_to_mlflow(config, metrics, params_yaml)
+
+        mock_mlflow.set_tracking_uri.assert_called_once_with(
+            "https://dagshub.com/user/repo.mlflow"
+        )
+
     def test_uses_default_experiment_name(self):
         import src.model.evaluate as evaluate_module
         from src.model.config import ModelConfig

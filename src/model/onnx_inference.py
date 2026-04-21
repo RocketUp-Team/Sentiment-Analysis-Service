@@ -2,11 +2,22 @@ import numpy as np
 import onnxruntime as ort
 from transformers import AutoTokenizer
 
+from src.model.device import get_device
+
 class OnnxInferenceSession:
     def __init__(self, model_path: str, tokenizer_name: str, max_length: int = 512):
+        device = get_device()
+        providers = ["CPUExecutionProvider"]
+        available_providers = ort.get_available_providers()
+        
+        if device.type == "cuda" and "CUDAExecutionProvider" in available_providers:
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        elif device.type == "mps" and "CoreMLExecutionProvider" in available_providers:
+            providers = ["CoreMLExecutionProvider", "CPUExecutionProvider"]
+
         self.session = ort.InferenceSession(
             model_path, 
-            providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+            providers=providers
         )
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         self.max_length = max_length

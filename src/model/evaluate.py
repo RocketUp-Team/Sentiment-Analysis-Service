@@ -26,6 +26,7 @@ from sklearn.metrics import (
 from contracts.model_interface import ModelInference
 from src.data.utils import load_params
 from src.model.config import ModelConfig
+from src.training.mlflow_callback import resolve_pipeline_tracking_uri
 
 logger = logging.getLogger(__name__)
 
@@ -165,12 +166,7 @@ def log_to_mlflow(config: ModelConfig, metrics: dict, params_yaml: dict) -> None
     import os
     mlflow_client = importlib.import_module("mlflow")
     mlflow_config = params_yaml.get("mlflow", {})
-
-    tracking_uri = (
-        os.environ.get("MLFLOW_TRACKING_URI")
-        or mlflow_config.get("tracking_uri")
-        or "http://localhost:5000"
-    )
+    tracking_uri = resolve_pipeline_tracking_uri(mlflow_config)
     experiment_name = mlflow_config.get(
         "model_experiment_name",
         "sentiment_baseline",

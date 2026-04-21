@@ -202,6 +202,7 @@ class BaselineModelInference(ModelInference):
         *,
         batch_size: int | None = None,
         skip_absa: bool = False,
+        skip_sarcasm: bool = False,
     ) -> list[PredictionResult]:
         """Predict sentiment for a batch of texts using chunked processing.
 
@@ -210,6 +211,9 @@ class BaselineModelInference(ModelInference):
             lang: Language code (must be supported).
             batch_size: Number of texts per forward pass. None uses config default.
             skip_absa: When True, skip aspect extraction (aspects=[]).
+            skip_sarcasm: When True, skip per-sample sarcasm prediction
+                (sarcasm_flag=False). Useful for benchmarking sentiment-only
+                throughput without the sequential sarcasm overhead.
         """
         if not texts:
             return []
@@ -226,11 +230,12 @@ class BaselineModelInference(ModelInference):
         total_chunks = -(-len(texts) // resolved_batch_size)  # ceiling division
 
         logger.info(
-            "predict_batch: %d texts, batch_size=%d, chunks=%d, skip_absa=%s",
+            "predict_batch: %d texts, batch_size=%d, chunks=%d, skip_absa=%s, skip_sarcasm=%s",
             len(texts),
             resolved_batch_size,
             total_chunks,
             skip_absa,
+            skip_sarcasm,
         )
 
         all_probs: list[torch.Tensor] = []
@@ -254,10 +259,13 @@ class BaselineModelInference(ModelInference):
         combined_probs = torch.cat(all_probs, dim=0)
 
         results: list[PredictionResult] = []
-        for idx in range(len(texts)):
+        n_texts = len(texts)
+        for idx in range(n_texts):
             pred_idx = combined_probs[idx].argmax().item()
             aspects = [] if skip_absa else self._extract_aspects(texts[idx])
-            sarcasm_flag = self._predict_sarcasm_flag(texts[idx])
+            sarcasm_flag = (
+                False if skip_sarcasm else self._predict_sarcasm_flag(texts[idx])
+            )
             results.append(
                 PredictionResult(
                     sentiment=self._config.label_map[pred_idx],
@@ -266,6 +274,15 @@ class BaselineModelInference(ModelInference):
                     sarcasm_flag=sarcasm_flag,
                 )
             )
+
+            # Progress logging for long-running post-processing
+            processed = idx + 1
+            if processed % 200 == 0 or processed == n_texts:
+                logger.info(
+                    "predict_batch: post-processing %d/%d samples",
+                    processed,
+                    n_texts,
+                )
 
         return results
 

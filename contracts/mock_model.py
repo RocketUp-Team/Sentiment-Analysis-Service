@@ -64,6 +64,7 @@ class MockModelInference(ModelInference):
         *,
         batch_size: int | None = None,
         skip_absa: bool = False,
+        skip_sarcasm: bool = False,
     ) -> list[PredictionResult]:
         self._check_language(lang)
         return [self._random_prediction() for _ in texts]

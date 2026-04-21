@@ -14,6 +14,7 @@ from typing import Any
 import pandas as pd
 
 from src.data.utils import load_params
+from src.training.mlflow_callback import resolve_pipeline_tracking_uri
 
 logger = logging.getLogger("data_validator")
 
@@ -348,7 +349,7 @@ def log_quality_report_to_mlflow(
     report_file = Path(report_path).resolve()
     project_root = _find_project_root(report_file)
     git_version = _git_short_sha(project_root)
-    tracking_uri = str(mlflow_config.get("tracking_uri", "")).strip()
+    tracking_uri = resolve_pipeline_tracking_uri(mlflow_config, fallback=None)
     experiment_name = str(mlflow_config.get("experiment_name", "data_preprocessing"))
     run_params: dict[str, Any] = {
         "dataset": str(mlflow_config.get("dataset_name", "semeval2014_restaurants")),
