@@ -156,8 +156,8 @@
 \colorbox{NavyBlue!15}{%
   \begin{minipage}{0.7\textwidth}\centering\vspace{0.4em}
     {\small\bfseries Topic:} {\small NLP -- Topic 8 -- Sentiment Analysis Service}\\[0.2em]
-    {\small\bfseries Dataset:} {\small SemEval-2014 Task 4 Restaurant Reviews}\\[0.2em]
-    {\small\bfseries ML Model:} {\small RoBERTa + DeBERTa v3 Zero-Shot ABSA}\\[0.4em]
+    {\small\bfseries Dataset:} {\small SemEval-2014 · tweet\_eval\_irony\_v1 · multilingual\_sentiment\_v1}\\[0.2em]
+    {\small\bfseries ML Model:} {\small XLM-RoBERTa + PEFT/LoRA (Sentiment \& Sarcasm Adapters)}\\[0.4em]
   \end{minipage}
 }\\[1.4cm]
 
@@ -193,7 +193,7 @@
 % ============================================================
 \begin{abstract}
 This report documents the complete lifecycle of the \textbf{Sentiment Analysis Service}, a production-grade ML system developed as the capstone project for the DDM501 course.
-The system performs real-time sentence-level sentiment classification (positive / negative / neutral) as well as Aspect-Based Sentiment Analysis (ABSA) using a pre-trained RoBERTa transformer evaluated on restaurant-domain reviews.
+The system performs real-time sentence-level sentiment classification (positive / negative / neutral) as well as Aspect-Based Sentiment Analysis (ABSA). The core model is \texttt{xlm-roberta-base}, fine-tuned via Parameter-Efficient Fine-Tuning (PEFT/LoRA) to produce separate lightweight adapters for Sentiment Analysis and Sarcasm Detection, enabling multilingual support across English and Vietnamese.
 
 The service is exposed through a RESTful FastAPI application, containerised with Docker, orchestrated via Docker Compose, and equipped with a full observability stack (Prometheus + Grafana), experiment tracking (MLflow), automated data validation (DVC), a robust test suite, and a GitHub Actions CI/CD pipeline.
 A dedicated \texttt{/explain} endpoint delivers token-level SHAP attributions, fulfilling the Responsible AI explainability requirement.
@@ -281,9 +281,9 @@ System   & Avg Inference Latency          & ${<}\,500$\,ms                      
 
 \subsection{Scope \& Constraints}
 \begin{itemize}[noitemsep]
-  \item \textbf{In Scope:} Real-time sentiment + ABSA inference, SHAP explainability, batch CSV processing, full observability stack, data quality validation, MLflow experiment tracking.
-  \item \textbf{Out of Scope:} Fine-tuning on custom data, multi-language support, user authentication / rate limiting.
-  \item \textbf{Constraints:} CPU-only Docker image; offline model serving (weights cached at build time); Python~3.11.
+  \item \textbf{In Scope:} Real-time sentiment + ABSA inference, SHAP explainability, batch CSV processing, full observability stack, data quality validation, MLflow experiment tracking, PEFT/LoRA fine-tuning pipeline for Sentiment and Sarcasm tasks, multilingual support (English \& Vietnamese).
+  \item \textbf{Out of Scope:} User authentication / rate limiting, online learning / continuous retraining.
+  \item \textbf{Constraints:} CPU-only Docker inference image; offline model serving (ONNX weights cached at build time); Python~3.11; GPU (e.g., L4) required for fine-tuning.
 \end{itemize}
 
 % ============================================================
@@ -311,7 +311,7 @@ Figure~\ref{fig:arch} shows the component diagram.
 \node[ext]  (user)   {User / Browser};
 \node[box]  (fe)     [right=of user]             {Angular\\ Frontend\\ (:80)};
 \node[box]  (api)    [right=of fe]               {FastAPI\\ App\\ (:8000)};
-\node[box]  (model)  [above right=1cm and 1.4cm of api] {RoBERTa\\ Inference};
+\node[box]  (model)  [above right=1cm and 1.4cm of api] {XLM-RoBERTa\\ + LoRA\\ Inference};
 \node[box]  (prom)   [below=1.5cm of api]        {Prometheus\\ (:9091)};
 \node[box]  (grafana)[right=of prom]             {Grafana\\ (:3000)};
 \node[warn] (mlflow) [below=1.5cm of model]      {MLflow\\ (:5005)};
@@ -368,8 +368,8 @@ mlflow       & 0.50 vCPU & 1\,GB \\
   \item User submits text to \texttt{POST /predict} (or \texttt{/explain}) via the Angular frontend or any HTTP client.
   \item FastAPI validates the request body through Pydantic schemas (\texttt{PredictRequest}).
   \item Validated text is forwarded to \texttt{BaselineModelInference\allowbreak.predict\_single()}.
-  \item The RoBERTa tokenizer encodes the text; softmax output gives sentiment label and confidence.
-  \item The DeBERTa zero-shot ABSA pipeline extracts aspect sentiments above a 0.5 threshold.
+  \item The XLM-RoBERTa tokenizer encodes the text; the ONNX-optimised model with merged LoRA weights returns a softmax output giving sentiment label and confidence.
+  \item The ABSA module extracts aspect-level sentiments (food, service, ambiance, price, location, general) above a 0.5 threshold.
   \item For \texttt{/explain}, a SHAP \texttt{Explainer} returns per-token attribution scores.
   \item The response is serialised by \texttt{PredictResponse} and returned to the client.
   \item The monitoring middleware records request counts and latencies for Prometheus.
@@ -389,13 +389,13 @@ API
   & Async-native, auto-generates OpenAPI/Swagger, Pydantic integration
   & Node.js higher throughput for pure I/O \\
 ML Model
-  & RoBERTa
-  & Pre-trained on 58M tweets; strong zero-shot sentiment accuracy
-  & Larger than DistilBERT; slower inference \\
-ABSA
-  & DeBERTa v3
-  & No labelled ABSA data needed; flexible candidate category set
-  & Higher latency than a fine-tuned model \\
+  & XLM-RoBERTa
+  & Strong cross-lingual backbone; supports English and Vietnamese; backbone shared across all tasks
+  & Larger than DistilBERT; mitigated by ONNX + INT8 quantization \\
+Fine-tuning
+  & PEFT / LoRA
+  & Parameter-efficient; separate lightweight adapters for Sentiment and Sarcasm; multiple adapters stackable on a single backbone to minimise memory footprint
+  & Requires adapter management logic; mitigated by DVC pipeline \\
 Container
   & Docker multi-stage
   & Smaller image: builder installs deps, runtime copies site-packages only
@@ -822,11 +822,11 @@ Figure~\ref{fig:shap_food} and Figure~\ref{fig:shap_negative} demonstrate SHAP w
 
 \subsection{Fairness Analysis}
 
-\textbf{Known Biases.}~The \texttt{cardiffnlp/twitter-roberta-base-sentiment-latest} model was pre-trained on Twitter data, introducing:
+\textbf{Known Biases.}~The \texttt{xlm-roberta-base} model, fine-tuned via LoRA on the \texttt{multilingual\_sentiment\_v1} dataset, may exhibit the following biases:
 \begin{itemize}[noitemsep]
-  \item \textbf{Domain bias:} informal/social-media language is better handled than formal text.
-  \item \textbf{Language bias:} English only; non-English inputs are blocked by the language guard.
-  \item \textbf{Sarcasm:} The \texttt{sarcasm\_flag} field is reserved but not yet populated -- a known limitation.
+  \item \textbf{Domain bias:} Training data skews toward social-media and review text; performance may degrade on highly formal or technical language.
+  \item \textbf{Language imbalance:} English training samples may outnumber Vietnamese samples, potentially reducing fairness across languages. Per-language F1 scores are tracked in \texttt{per\_language\_f1.json} and logged to MLflow.
+  \item \textbf{Sarcasm:} The dedicated LoRA sarcasm adapter (trained on \texttt{tweet\_eval\_irony\_v1}) addresses this limitation; the \texttt{sarcasm\_flag} field in the API response is populated accordingly.
 \end{itemize}
 
 \textbf{Dataset Bias Mitigation.}~The \texttt{DataQualityValidator} emits distribution warnings when any class falls below 5\% in a split, enabling early detection of imbalance before evaluation.
@@ -849,17 +849,17 @@ Figure~\ref{fig:shap_food} and Figure~\ref{fig:shap_negative} demonstrate SHAP w
 \textbf{Risk} & \textbf{Implication \& Mitigation} & \textbf{Status} \\
 \midrule
 Biased training data
-  & RoBERTa pre-trained on Twitter; may disadvantage formal text.
-    Future fine-tuning on diverse corpora recommended.
+  & XLM-RoBERTa fine-tuned on multilingual sentiment and irony data; may disadvantage highly formal text or underrepresented language variants.
+    Per-language fairness tracked via \texttt{fairness\_report.json}.
   & Acknowledged \\
 Misclassification harm
   & Incorrect label could negatively influence business decisions.
     SHAP explanations and human-in-the-loop review are recommended.
   & SHAP done \\
 Sarcasm detection
-  & Missed sarcasm leads to reversed polarity. \texttt{sarcasm\_flag}
-    reserved; dedicated sarcasm model planned.
-  & Planned \\
+  & Missed sarcasm leads to reversed polarity. Dedicated LoRA sarcasm adapter
+    trained on \texttt{tweet\_eval\_irony\_v1}; \texttt{sarcasm\_flag} populated in API response.
+  & Implemented \\
 Job displacement
   & May reduce manual review roles. System is positioned as
     decision-support, not a replacement.
@@ -950,11 +950,11 @@ The Sentiment Analysis Service successfully demonstrates a complete, production-
 \begin{enumerate}
   \item \textbf{Problem Definition:} Clearly motivated by business need; success metrics defined at business, model, and system levels.
   \item \textbf{Architecture:} Microservices design with full observability and experiment tracking, all resource-limited via Docker Compose.
-  \item \textbf{ML Pipeline:} Reproducible data pipeline (DVC) with data-quality validation, configurable preprocessing transforms, and MLflow-tracked evaluations of the RoBERTa baseline.
-  \item \textbf{Deployment:} Multi-stage Docker image with offline model serving; REST API with Pydantic schemas; health checks and CORS middleware.
+  \item \textbf{ML Pipeline:} Reproducible data pipeline (DVC) encompassing three datasets (SemEval-2014, \texttt{tweet\_eval\_irony\_v1}, \texttt{multilingual\_sentiment\_v1}), data-quality validation, PEFT/LoRA fine-tuning of \texttt{xlm-roberta-base} for Sentiment and Sarcasm tasks, ONNX export with INT8 quantization, and MLflow-tracked evaluations including per-language fairness reporting.
+  \item \textbf{Deployment:} Multi-stage Docker image with offline ONNX model serving; REST API with Pydantic schemas; health checks and CORS middleware.
   \item \textbf{Monitoring:} Three Prometheus metrics via ASGI middleware; Grafana dashboards auto-provisioned; two alerting rules for error rate and inference latency.
   \item \textbf{Testing \& CI/CD:} Three test layers (unit, integration, data quality); GitHub Actions lints and tests on every commit.
-  \item \textbf{Responsible AI:} SHAP token attributions via \texttt{/explain}; bias acknowledgment; privacy-preserving stateless design; ethical risk register.
+  \item \textbf{Responsible AI:} SHAP token attributions via \texttt{/explain}; per-language fairness analysis; privacy-preserving stateless design; ethical risk register.
 \end{enumerate}
 
 % ============================================================
