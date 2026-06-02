@@ -21,6 +21,13 @@ class TaskConfig:
     max_length: int = 128
     dataset_version: str = "v1"
     seed: int = 42
+    # ── Class balancing ────────────────────────────────────────────────────────
+    # use_class_weights: áp dụng CrossEntropyLoss(weight=...) để penalize majority class
+    use_class_weights: bool = True
+    # oversample_minority: oversample class thiểu số trong training split (pandas-based)
+    oversample_minority: bool = False
+    # oversample_target_ratio: tỷ lệ tối thiểu mỗi class sau oversampling (0.0-1.0)
+    oversample_target_ratio: float = 0.15
 
 
 _TASKS: dict[str, TaskConfig] = {
@@ -32,6 +39,9 @@ _TASKS: dict[str, TaskConfig] = {
         languages=("en",),
         epochs=3,
         dataset_version="tweet_eval_irony_v1",
+        # Sarcasm test set mildly imbalanced (IR=1.52x) → class weights đủ
+        use_class_weights=True,
+        oversample_minority=False,
     ),
     "sentiment": TaskConfig(
         name="sentiment",
@@ -41,6 +51,10 @@ _TASKS: dict[str, TaskConfig] = {
         languages=("en", "vi"),
         epochs=5,
         dataset_version="multilingual_sentiment_v1",
+        # UIT-VSFC VI neutral cực kỳ ít (IR=11.5x) → dùng cả 2 kỹ thuật
+        use_class_weights=True,
+        oversample_minority=True,
+        oversample_target_ratio=0.15,
     ),
 }
 

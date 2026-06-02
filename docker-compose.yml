@@ -86,6 +86,49 @@ services:
     networks:
       - sentiment-network
 
+  # ── Training service ─────────────────────────────────────────────────────────
+  # Chạy: docker compose --profile train up trainer
+  # Hoặc smoke test: docker compose --profile train run --rm trainer python -m src.scripts.run_finetuning --task sentiment --smoke
+  trainer:
+    profiles: ["train"]
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+    environment:
+      # MLflow log ra thư mục local (mount vào host)
+      - MLFLOW_TRACKING_URI=file:///app/mlruns
+      # Tăng số threads cho training CPU
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+      # HuggingFace cache trong container (tránh re-download mỗi lần)
+      - HF_HOME=/app/.cache/huggingface
+      - TRANSFORMERS_CACHE=/app/.cache/huggingface
+    volumes:
+      # Data CSVs (tải trước bằng DVC hoặc script downloader)
+      - ./data:/app/data
+      # Adapter output sẽ được lưu vào đây
+      - ./models:/app/models
+      # MLflow runs persist trên host
+      - ./mlruns:/app/mlruns
+      # Reports (metrics JSON, class balance report)
+      - ./reports:/app/reports
+      # HuggingFace model cache (tránh download lại khi rebuild image)
+      - huggingface_cache:/app/.cache/huggingface
+    deploy:
+      resources:
+        limits:
+          cpus: '6.0'
+          memory: 12G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+    networks:
+      - sentiment-network
+
 networks:
   sentiment-network:
     driver: bridge
+
+volumes:
+  # Shared HuggingFace model cache giữa các lần train
+  huggingface_cache:

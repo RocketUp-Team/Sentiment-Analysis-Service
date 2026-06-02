@@ -64,3 +64,24 @@ evaluation:
 adapters:
   sentiment_path: "models/adapters/sentiment"
   sarcasm_path: "models/adapters/sarcasm"
+
+# ── Class Balancing ─────────────────────────────────────────────────────────
+# Cấu hình xử lý mất cân bằng dữ liệu (class imbalance).
+# Bật/tắt qua CLI: --no-balance để tắt cả hai kỹ thuật.
+#
+# Kết quả phân tích (check_class_balance.py):
+#   tweet_eval/irony (sarcasm)     : IR=1.08x  ✅  Balanced
+#   multilingual-sentiments (EN)   : IR=1.00x  ✅  Balanced
+#   UIT-VSFC (VI)                  : IR=11.52x ❌  Severely imbalanced
+#     → neutral class chỉ 4.3% toàn bộ dataset
+#
+# Kỹ thuật 1 — class_weights (áp dụng cho cả sarcasm & sentiment):
+#   WeightedLossTrainer: CrossEntropyLoss(weight=inverse_freq_weights)
+#
+# Kỹ thuật 2 — oversample_minority (chỉ sentiment/VI):
+#   Pandas RandomSampler with replacement trên training split
+#   Target: neutral class đạt ≥ oversample_target_ratio của training set
+class_balancing:
+  use_class_weights: true
+  oversample_minority: true
+  oversample_target_ratio: 0.15

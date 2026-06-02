@@ -5,7 +5,17 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from transformers import TrainingArguments
+
+try:
+    import torch
+    from transformers import TrainingArguments
+    HAS_TORCH = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    TrainingArguments = None  # type: ignore[assignment,misc]
+    HAS_TORCH = False
+
+requires_torch = pytest.mark.skipif(not HAS_TORCH, reason="torch not installed")
 
 from src.scripts import run_finetuning
 from src.scripts.run_finetuning import parse_args
@@ -190,7 +200,9 @@ class FakeTrainer:
         train_dataset,
         eval_dataset,
         processing_class=None,
+        tokenizer=None,
         data_collator=None,
+        class_weights=None,  # accepted so WeightedLossTrainer monkeypatch works
     ) -> None:
         self.kwargs = {
             "model": model,
@@ -199,6 +211,7 @@ class FakeTrainer:
             "eval_dataset": eval_dataset,
             "processing_class": processing_class,
             "data_collator": data_collator,
+            "class_weights": class_weights,
         }
         self.train_calls = 0
         self.state = FakeTrainerState()
@@ -280,6 +293,8 @@ class FakeMlflow:
         self.tracking_uris: list[str] = []
         self.experiments: list[str] = []
         self.tags: list[dict] = []
+        self.params: dict[str, str] = {}
+        self.metrics: dict[str, float] = {}
         self.start_run_calls = 0
 
     def set_tracking_uri(self, uri: str) -> None:
@@ -290,6 +305,12 @@ class FakeMlflow:
 
     def set_tags(self, tags: dict) -> None:
         self.tags.append(tags)
+
+    def log_param(self, key: str, value) -> None:
+        self.params[key] = str(value)
+
+    def log_metric(self, key: str, value: float) -> None:
+        self.metrics[key] = value
 
     def start_run(self):
         self.start_run_calls += 1
@@ -303,7 +324,12 @@ def _build_rows(count: int, label: str | int, lang: str = "en") -> list[dict]:
     ]
 
 
-def _install_training_fakes(monkeypatch, read_csv_tables: dict[str, pd.DataFrame]):
+def _install_training_fakes(
+    monkeypatch,
+    read_csv_tables: dict[str, pd.DataFrame],
+    *,
+    override_compute_class_weights: bool = True,
+):
     dataset_factory = FakeDatasetFactory()
     tokenizer = FakeTokenizer()
     auto_tokenizer = FakeAutoTokenizer(tokenizer)
@@ -313,6 +339,10 @@ def _install_training_fakes(monkeypatch, read_csv_tables: dict[str, pd.DataFrame
     dedup_inputs: list[list[dict]] = []
     collator_calls: list[FakeTokenizer] = []
     lora_calls: list[str] = []
+    # Capture class weights computed during training
+    computed_weights: list[torch.Tensor] = []
+    # Capture oversample calls
+    oversample_calls: list[pd.DataFrame] = []
 
     def fake_read_csv(path):
         return read_csv_tables[Path(path).name].copy()
@@ -335,6 +365,15 @@ def _install_training_fakes(monkeypatch, read_csv_tables: dict[str, pd.DataFrame
         fake_peft_model["lora_config"] = lora_config
         return peft_model
 
+    def fake_compute_class_weights(labels, *, num_labels):
+        w = torch.ones(num_labels, dtype=torch.float32)
+        computed_weights.append(w)
+        return w
+
+    def fake_oversample(df, *, label_col, target_ratio, seed):
+        oversample_calls.append(df.copy())
+        return df  # pass-through (tránh thay đổi size trong tests)
+
     monkeypatch.setattr(run_finetuning.pd, "read_csv", fake_read_csv)
     monkeypatch.setattr(run_finetuning, "dedup_rows", fake_dedup_rows)
     monkeypatch.setattr(run_finetuning, "Dataset", dataset_factory)
@@ -344,11 +383,15 @@ def _install_training_fakes(monkeypatch, read_csv_tables: dict[str, pd.DataFrame
     monkeypatch.setattr(run_finetuning, "DataCollatorWithPadding", fake_data_collator_with_padding)
     monkeypatch.setattr(run_finetuning, "TrainingArguments", FakeTrainingArguments)
     monkeypatch.setattr(run_finetuning, "Trainer", FakeTrainer)
+    monkeypatch.setattr(run_finetuning, "WeightedLossTrainer", FakeTrainer)
     monkeypatch.setattr(run_finetuning, "build_lora_config", fake_build_lora_config)
     monkeypatch.setattr(run_finetuning, "get_peft_model", fake_get_peft_model)
     monkeypatch.setattr(run_finetuning, "mlflow", fake_mlflow)
     monkeypatch.setattr(run_finetuning, "_git_sha", lambda: "abc1234")
     monkeypatch.setattr(run_finetuning.getpass, "getuser", lambda: "tester")
+    if override_compute_class_weights:
+        monkeypatch.setattr(run_finetuning, "compute_class_weights", fake_compute_class_weights)
+    monkeypatch.setattr(run_finetuning, "oversample_minority_class", fake_oversample)
 
     FakeTrainer.instances = []
     FakeTrainingArguments.instances = []
@@ -363,6 +406,8 @@ def _install_training_fakes(monkeypatch, read_csv_tables: dict[str, pd.DataFrame
         "dedup_inputs": dedup_inputs,
         "collator_calls": collator_calls,
         "lora_calls": lora_calls,
+        "computed_weights": computed_weights,
+        "oversample_calls": oversample_calls,
     }
 
 
@@ -525,6 +570,7 @@ def test_split_rows_stratifies_multilingual_sentiment_eval_set():
     assert set(group_counts(split_rows["train"]).values()) == {9}
 
 
+@requires_torch
 def test_build_training_args_returns_real_transformers_object_for_smoke(tmp_path):
     args = run_finetuning._build_training_args(
         get_task_config("sarcasm"),
@@ -638,3 +684,78 @@ def test_train_returns_result_dict_with_expected_keys(monkeypatch):
     assert isinstance(result["log_history"], list)
     assert result["log_history"][0]["loss"] == 0.5
     assert result["peft_model"] is fakes["peft_model"]["model"]
+    # Trường class_weights phải tồn tại trong kết quả
+    assert "class_weights" in result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Class balancing tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_parse_args_no_balance_flag():
+    args = parse_args(["--task", "sarcasm", "--no-balance"])
+
+    assert args.no_balance is True
+
+
+def test_parse_args_balance_enabled_by_default():
+    args = parse_args(["--task", "sarcasm"])
+
+    assert args.no_balance is False
+
+
+def test_train_computes_class_weights_when_balance_enabled(monkeypatch):
+    tables = {
+        "sarcasm.csv": pd.DataFrame(_build_rows(40, "1")),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    from src.scripts.run_finetuning import train
+    result = train("sarcasm", smoke=True, balance=True)
+
+    # compute_class_weights phải được gọi (smoke=True nên không oversample)
+    assert len(fakes["computed_weights"]) == 1
+    # Kết quả phải có class_weights (list)
+    assert result["class_weights"] is not None
+    assert isinstance(result["class_weights"], list)
+
+
+def test_train_skips_class_weights_when_balance_disabled(monkeypatch):
+    tables = {
+        "sarcasm.csv": pd.DataFrame(_build_rows(40, "1")),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    from src.scripts.run_finetuning import train
+    result = train("sarcasm", smoke=True, balance=False)
+
+    # Khi balance=False, không tính class weights
+    assert len(fakes["computed_weights"]) == 0
+    assert result["class_weights"] is None
+
+
+def test_no_balance_flag_propagates_to_train(monkeypatch):
+    """--no-balance CLI flag khiến train() chạy với balance=False."""
+    tables = {
+        "sarcasm.csv": pd.DataFrame(_build_rows(40, "1")),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    result = run_finetuning.main(["--task", "sarcasm", "--smoke", "--no-balance"])
+
+    assert result == 0
+    assert len(fakes["computed_weights"]) == 0
+
+
+def test_oversample_not_called_in_smoke_mode(monkeypatch):
+    """Smoke mode bỏ qua oversampling để giữ tốc độ."""
+    tables = {
+        "sarcasm.csv": pd.DataFrame(_build_rows(40, "1")),
+    }
+    fakes = _install_training_fakes(monkeypatch, tables)
+
+    from src.scripts.run_finetuning import train
+    train("sarcasm", smoke=True, balance=True)
+
+    # smoke=True → oversample_minority_class không được gọi
+    assert len(fakes["oversample_calls"]) == 0

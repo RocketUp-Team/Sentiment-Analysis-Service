@@ -101,15 +101,18 @@ def test_evaluate_finetuned_main_writes_sarcasm_reports_from_inference(
     assert json.loads(
         output_path.parent.joinpath("per_language_f1.json").read_text(encoding="utf-8")
     ) == {"per_lang_f1": {"en": 1.0}}
-    assert json.loads(
+    fairness_report = json.loads(
         output_path.parent.joinpath("fairness_report.json").read_text(encoding="utf-8")
-    ) == {
+    )
+    # Check the stable keys; extra keys (e.g. classification_report) are allowed.
+    expected_fairness_keys = {
         "overall_f1": 1.0,
         "per_lang_f1": {"en": 1.0},
         "per_lang_gap": 0.0,
         "sample_counts": {"en": 2},
         "confusion_matrices": {"en": [[1, 0], [0, 1]]},
     }
+    assert expected_fairness_keys.items() <= fairness_report.items()
 
 
 def test_evaluate_finetuned_main_uses_test_split_when_present(tmp_path, monkeypatch):
@@ -244,9 +247,11 @@ def test_evaluate_finetuned_main_uses_multilingual_sentiment_dataset(tmp_path, m
     assert json.loads(
         output_path.parent.joinpath("per_language_f1.json").read_text(encoding="utf-8")
     ) == {"per_lang_f1": {"en": 1.0, "vi": 0.0}}
-    assert json.loads(
+    fairness_report = json.loads(
         output_path.parent.joinpath("fairness_report.json").read_text(encoding="utf-8")
-    ) == {
+    )
+    # Check the stable keys; extra keys (e.g. classification_report) are allowed.
+    expected_fairness_keys = {
         "overall_f1": 0.8,
         "per_lang_f1": {"en": 1.0, "vi": 0.0},
         "per_lang_gap": 1.0,
@@ -256,6 +261,7 @@ def test_evaluate_finetuned_main_uses_multilingual_sentiment_dataset(tmp_path, m
             "vi": [[0, 0, 0], [0, 0, 0], [0, 1, 0]],
         },
     }
+    assert expected_fairness_keys.items() <= fairness_report.items()
 
 
 def test_evaluate_returns_metrics_payload_dict(tmp_path, monkeypatch):
