@@ -1,7 +1,7 @@
 \input{handbook/shared/preamble.tex}
 
-\title{\textbf{Sentiment Analysis Service}\\Sổ tay kỹ thuật và báo cáo phân quyền sở hữu}
-\author{Tài liệu nội bộ ưu tiên mã nguồn}
+\title{\textbf{Sentiment Analysis Service}\\Gói bàn giao dự án end-to-end hoàn chỉnh}
+\author{Tài liệu bàn giao nội bộ ưu tiên mã nguồn}
 \date{2026-06-05}
 
 \begin{document}
@@ -12,8 +12,8 @@
 {\color{NavyBlue}\rule{\linewidth}{3pt}}\\[0.4em]
 {\color{SteelBlue}\rule{\linewidth}{1pt}}\\[1.1cm]
 {\Large\bfseries\color{NavyBlue} SENTIMENT ANALYSIS SERVICE}\\[0.25em]
-{\large\bfseries Sổ tay kỹ thuật và báo cáo phân quyền sở hữu}\\[0.35em]
-{\normalsize Phục vụ CTO review, due diligence, readiness, handover, onboarding}\\[1.0cm]
+{\large\bfseries Gói bàn giao dự án end-to-end hoàn chỉnh}\\[0.35em]
+{\normalsize Phục vụ đánh giá CTO, thẩm định kỹ thuật, production readiness, bàn giao, và onboarding}\\[1.0cm]
 
 \begin{tabular}{@{}ll@{}}
 Tech Lead & Le Quang Tuyen \\
@@ -91,8 +91,8 @@ Giá trị chính không nằm ở việc có một mô hình sentiment đơn l�
 \midrule
 Prototype & Đã vượt qua. Repo có API, Docker, test, DVC, MLflow, ONNX export, và dashboard monitoring. \\
 MVP & Đã vượt qua. Có predict, explain, health, metrics, batch CSV, và UI cơ bản. \\
-Advanced MVP & \textbf{Trạng thái hiện tại}. Hệ thống có luồng end-to-end thực, có monitoring, có training lifecycle, nhưng còn thiếu các kiểm soát production. \\
-Pre-Production & Đạt một phần. Có container hóa và cấu trúc vận hành, nhưng thiếu auth, batch status là mock, nhiều state trong memory, và chưa có durable job system. \\
+Advanced MVP & \textbf{Trạng thái hiện tại}. Hệ thống có luồng end-to-end thực, có monitoring, có vòng đời training, nhưng còn thiếu các kiểm soát production. \\
+Pre-Production & Đạt một phần. Có container hóa và cấu trúc vận hành, nhưng thiếu xác thực, endpoint trạng thái batch chỉ là mock, nhiều trạng thái nằm trong memory, và chưa có hệ thống job bền vững. \\
 Production Ready & Chưa đạt. Phù hợp demo nội bộ hoặc pilot giới hạn; chưa phù hợp môi trường doanh nghiệp thực thụ. \\
 \bottomrule
 \end{tabularx}
@@ -104,7 +104,7 @@ Production Ready & Chưa đạt. Phù hợp demo nội bộ hoặc pilot giới 
   \item UI Angular kết nối được tới API, nhưng contract chưa khớp hoàn toàn với backend.
   \item Pipeline training có thật qua \texttt{dvc.yaml}, \texttt{params.yaml}, \texttt{src/scripts/run\_finetuning.py}, \texttt{export\_onnx.py}.
   \item Monitoring stack tồn tại trong Compose với Prometheus, Grafana và alert rules.
-  \item Các kiểm soát production quan trọng chưa có: authentication, authorization, secret hygiene tốt, state persistence, rate limiting, job queue bền vững.
+  \item Các kiểm soát production quan trọng chưa có: xác thực, phân quyền, quản lý bí mật tốt, lưu trạng thái bền vững, giới hạn tốc độ, và job queue bền vững.
 \end{itemize}
 
 \section{Phần 2 - Mô hình tư duy hệ thống}
@@ -205,7 +205,7 @@ Inference layer & Biến text thành logits và nhãn & \texttt{ONNXInferenceMod
 Model & Tạo dự đoán & ONNX model hoặc baseline path & AI & Model files, config & Artifact lỗi hoặc version drift \\
 Response & Trả kết quả có cấu trúc & Pydantic response models & Backend & JSON serialization & Response shape lệch docs/UI \\
 Monitoring & Ghi metrics & Prometheus metrics endpoint & Solution & Prometheus scrape & Monitoring stack down \\
-Feedback & Lưu phản hồi nghiệp vụ & \textbf{Not Implemented} & Solution & N/A & Không có closed-loop feedback \\
+Feedback & Lưu phản hồi nghiệp vụ & \textbf{Chưa triển khai} & Solution & N/A & Chưa có vòng lặp phản hồi khép kín \\
 Training & Cập nhật mô hình & DVC + HF + PEFT + MLflow & ML & Datasets, GPU/CPU, params & Data drift, evaluation yếu \\
 Deployment & Đưa artifact vào runtime & Docker build + Compose runtime & Solution & Image build, mounted model files & Thay model không kiểm soát rollout \\
 \bottomrule
@@ -261,7 +261,7 @@ sequenceDiagram
 \texttt{models} & Artifact model phục vụ runtime hoặc export & Rất cao & AI + ML & Rất cao; mất artifact thì runtime không phục vụ được \\
 \texttt{data} & Dữ liệu thô, đã xử lý, mẫu, eval inputs & Trung bình đến cao & ML & Cao với training, thấp hơn với runtime \\
 \texttt{tests} & API, performance, benchmark tests & Trung bình & Backend + AI + ML & Trung bình; thiếu test làm tăng rủi ro thay đổi \\
-\texttt{docs} & Tài liệu, handbook, review cũ & Thấp đối với runtime & Tech Lead + Solution & Trung bình vì có thể gây hiểu nhầm nếu lệch code \\
+\texttt{docs} & Tài liệu, handbook, báo cáo cũ & Thấp đối với runtime & Tech Lead + Solution & Trung bình vì có thể gây hiểu nhầm nếu lệch code \\
 \texttt{reports} & Báo cáo phân tích trước đó & Thấp & Tech Lead & Thấp; dùng làm tham khảo \\
 \texttt{notebooks} & Khám phá và thực nghiệm & Thấp đến trung bình & ML + AI & Trung bình; kiến thức có thể nằm ở đây nhưng không phải runtime chính \\
 \texttt{mlruns} & Tracking local của MLflow & Thấp cho runtime, cao cho ML traceability & ML & Trung bình; mất history thì giảm auditability \\
@@ -515,15 +515,15 @@ Backend dùng request/response model để validate cơ bản. Tuy vậy, drift 
 \end{table}
 
 \subsection{Xử lý lỗi}
-Lỗi hiện được xử lý ở mức route và runtime, nhưng chưa có error taxonomy mạnh, chưa có auth failure path, và chưa có idempotent job control. Đối với vận hành, điều này có nghĩa là incident sẽ phải đọc log và tái hiện thủ công nhiều hơn.
+Lỗi hiện được xử lý ở mức route và runtime, nhưng chưa có phân loại lỗi đủ mạnh, chưa có luồng thất bại cho xác thực, và chưa có cơ chế kiểm soát job idempotent. Về vận hành, điều này có nghĩa là sự cố sẽ thường phải đọc log và tái hiện thủ công nhiều hơn.
 
 \subsection{Khoảng trống backend}
 \begin{itemize}[leftmargin=1.2em]
-  \item Not Implemented: authentication
-  \item Not Implemented: authorization
-  \item Not Implemented: durable batch job system
-  \item Not Implemented: persistent request/job state store
-  \item Partial: contract alignment giữa docs, frontend, và runtime
+  \item Chưa triển khai: authentication
+  \item Chưa triển khai: authorization
+  \item Chưa triển khai: durable batch job system
+  \item Chưa triển khai: persistent request/job state store
+  \item Triển khai một phần: đồng bộ contract giữa docs, frontend, và runtime
 \end{itemize}
 
 \section{Phần 9 - Sổ tay AI inference}
@@ -707,8 +707,8 @@ Prediction & runtime pipeline & UI và caller & AI + Backend & label, probabilit
 \toprule
 \textbf{Vấn đề} & \textbf{Mức độ} & \textbf{Owner} & \textbf{Mitigation} \\
 \midrule
-Không có authentication cho API & Critical & Backend + Solution & thêm authn, token/session policy, bảo vệ admin endpoints \\
-Không có authorization cho evaluate/admin-like actions & Critical & Backend + Solution & tách admin surface và policy kiểm soát quyền \\
+Không có xác thực cho API & Critical & Backend + Solution & thêm authn, token/session policy, bảo vệ admin endpoints \\
+Không có phân quyền cho evaluate/admin-like actions & Critical & Backend + Solution & tách admin surface và policy kiểm soát quyền \\
 CORS mở rộng & High & Backend & giới hạn origin theo môi trường \\
 Grafana mặc định admin/admin & High & Solution & đổi secret, externalize credential, rotate ngay \\
 Secrets quản lý còn sơ khai & High & Solution + Tech Lead & dùng secret store hoặc env governance tốt hơn \\
@@ -769,7 +769,7 @@ Data Pipeline Failure & DVC stage fail, train không chạy & thiếu data, para
 \toprule
 \textbf{Mức} & \textbf{Mô tả} & \textbf{Tác động} & \textbf{Owner} & \textbf{Khuyến nghị} \\
 \midrule
-Critical & Không có auth/authz & không thể mở production an toàn & Backend + Solution & thêm auth, tách admin surface, kiểm soát quyền \\
+Critical & Không có xác thực và phân quyền & không thể mở production an toàn & Backend + Solution & thêm auth, tách admin surface, kiểm soát quyền \\
 Critical & Batch status là mock trong khi batch chạy sync & giao diện và kỳ vọng tích hợp bị lệch & Backend & hoặc bỏ endpoint status, hoặc triển khai job system thật \\
 High & Drift giữa UI, docs, và backend về \texttt{lang} và route shape & bug tích hợp, hiểu sai phạm vi sản phẩm & UI/UX + Backend + Solution & chuẩn hóa contract và test E2E \\
 High & Grafana dùng credential mặc định & rủi ro truy cập trái phép & Solution & đổi secret ngay \\
@@ -777,7 +777,7 @@ High & \texttt{/evaluate} công khai & bề mặt lạm dụng và chi phí vậ
 Medium & Logic runtime tập trung nhiều trong \texttt{src/main.py} & khó bảo trì dài hạn & Backend & tách router/service/module boundary \\
 Medium & Chưa có persistent store cho job và feedback & không thể audit/khôi phục tốt & Backend + Solution & thêm DB/queue phù hợp \\
 Medium & Fairness governance chưa hoàn chỉnh & khó mở rộng enterprise & ML & thêm báo cáo fairness vào release gate \\
-Low & README và contract docs cũ hơn implementation & onboarding và due diligence chậm hơn & Tech Lead & cập nhật tài liệu theo code \\
+Low & README và contract docs cũ hơn implementation & onboarding và thẩm định kỹ thuật chậm hơn & Tech Lead & cập nhật tài liệu theo code \\
 \bottomrule
 \end{longtable}
 
