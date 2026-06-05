@@ -1,7 +1,7 @@
 \input{handbook/shared/preamble.tex}
 
-\title{\textbf{Sentiment Analysis Service}\\So tay ky thuat va bao cao phan quyen so huu}
-\author{Tai lieu noi bo uu tien ma nguon}
+\title{\textbf{Sentiment Analysis Service}\\Sổ tay kỹ thuật và báo cáo phân quyền sở hữu}
+\author{Tài liệu nội bộ ưu tiên mã nguồn}
 \date{2026-06-05}
 
 \begin{document}
@@ -10,10 +10,10 @@
 \thispagestyle{empty}
 \centering
 {\color{NavyBlue}\rule{\linewidth}{3pt}}\\[0.4em]
-{\color{SteelBlue}\rule{\linewidth}{1pt}}\\[1.2cm]
-{\Large\bfseries\color{NavyBlue} SENTIMENT ANALYSIS SERVICE}\\[0.3em]
-{\large\bfseries So tay ky thuat va bao cao phan quyen so huu}\\[0.3em]
-{\normalsize Tai lieu handover, readiness review va phan cong ownership}\\[1.0cm]
+{\color{SteelBlue}\rule{\linewidth}{1pt}}\\[1.1cm]
+{\Large\bfseries\color{NavyBlue} SENTIMENT ANALYSIS SERVICE}\\[0.25em]
+{\large\bfseries Sổ tay kỹ thuật và báo cáo phân quyền sở hữu}\\[0.35em]
+{\normalsize Phục vụ CTO review, due diligence, readiness, handover, onboarding}\\[1.0cm]
 
 \begin{tabular}{@{}ll@{}}
 Tech Lead & Le Quang Tuyen \\
@@ -26,7 +26,19 @@ UI/UX Engineering Lead & Nguyen Le Hong Nhi \\
 
 \vfill
 \infobox{
-\textbf{Nguyen tac nguon su that:} tai lieu nay uu tien implementation trong repository, sau do den cau hinh runtime, tests, va cuoi cung moi den cac bao cao cu. Neu code va tai lieu mau thuan, van hanh se tin code.
+\textbf{Thứ tự nguồn sự thật dùng trong tài liệu này:}
+\newline
+1. Mã nguồn
+\newline
+2. Cấu hình runtime
+\newline
+3. Manifest hạ tầng
+\newline
+4. Kiểm thử
+\newline
+5. Báo cáo cũ
+\newline
+6. README và tài liệu hướng dẫn
 }
 \vfill
 {\color{SteelBlue}\rule{\linewidth}{1pt}}\\[0.25em]
@@ -36,497 +48,871 @@ UI/UX Engineering Lead & Nguyen Le Hong Nhi \\
 \tableofcontents
 \newpage
 
-\section{Danh gia dieu hanh}
-\subsection{Muc dich kinh doanh}
-San pham bien feedback van ban thanh tin hieu van hanh co cau truc: sentiment tong the, sentiment theo aspect, dau hieu sarcasm, va giai thich muc token. Gia tri kinh doanh nam o phan tich review, theo doi chat luong dich vu, ho tro triage support, va demo explainable AI.
+\section{Phần 1 - Đánh giá điều hành}
+\subsection{Bài toán kinh doanh}
+Hệ thống giải bài toán chuyển phản hồi văn bản tự do thành tín hiệu vận hành có cấu trúc để phục vụ phân tích sản phẩm, triage hỗ trợ khách hàng, giám sát chất lượng dịch vụ, và trình diễn năng lực AI. Nếu làm thủ công, khối lượng đánh giá không mở rộng được và không tạo ra dữ liệu có thể hành động.
 
-\subsection{Muc dich san pham}
-Repository dang dong thoi chua hai san pham:
+\subsection{Mục đích sản phẩm}
+Repository hiện cung cấp:
 \begin{itemize}[leftmargin=1.2em]
-  \item dich vu inference online qua Angular va FastAPI
-  \item he thong ML offline cho preprocessing, finetuning, evaluation, MLflow, va ONNX export
+  \item giao diện Angular dạng chat và batch upload cho người dùng cuối
+  \item dịch vụ FastAPI cho predict, explain, health, metrics, batch predict và evaluate
+  \item pipeline ML ngoại tuyến cho download dữ liệu, tiền xử lý, validation, finetuning, đánh giá, và export ONNX
 \end{itemize}
 
-\subsection{Muc dich ky thuat}
-Codebase the hien duoc day du chuoi phan phoi ML:
+\subsection{Mục tiêu kỹ thuật}
+Mục tiêu kỹ thuật là chứng minh một chuỗi ML-in-production hoàn chỉnh:
 \begin{itemize}[leftmargin=1.2em]
-  \item DVC quan ly data flow
-  \item Hugging Face va PEFT cho training
-  \item ONNX runtime cho serving
-  \item Prometheus va Grafana cho observability
-  \item Docker Compose cho dong goi va chay he thong
+  \item DVC điều phối pipeline dữ liệu và huấn luyện
+  \item MLflow theo dõi thí nghiệm và chỉ số
+  \item PEFT/LoRA cho fine-tuning
+  \item ONNX Runtime cho serving tối ưu
+  \item Prometheus và Grafana cho quan sát vận hành
+  \item Docker Compose để đóng gói hệ thống tích hợp
 \end{itemize}
 
-\subsection{Gia tri cot loi}
-Gia tri chinh khong nam o model moi la. Gia tri nam o viec dong goi sentiment inference thanh mot dich vu co explainability, batch processing, monitoring, va data/model lineage ro rang.
+\subsection{Người dùng cuối}
+\begin{itemize}[leftmargin=1.2em]
+  \item stakeholder sản phẩm muốn xem sentiment nhanh
+  \item người dùng demo tương tác với chatbot có explainability
+  \item kỹ sư vận hành backend, inference, training và monitoring
+  \item chủ dự án tương lai cần tiếp quản toàn bộ vòng đời hệ thống
+\end{itemize}
 
-\subsection{Danh gia do truong thanh}
+\subsection{Giá trị cốt lõi}
+Giá trị chính không nằm ở việc có một mô hình sentiment đơn lẻ. Giá trị nằm ở việc đóng gói sentiment inference thành dịch vụ có API, explainability, batch scoring, monitoring, lineage mô hình, và quy trình training có thể lặp lại.
+
+\subsection{Phân loại mức trưởng thành}
 \begin{table}[H]
 \centering
 \begin{tabularx}{\textwidth}{@{}lX@{}}
 \toprule
-\textbf{Moc} & \textbf{Danh gia} \\
+\textbf{Mức} & \textbf{Đánh giá} \\
 \midrule
-Prototype & Da vuot qua. Repo co API contracts, tests, monitoring, Docker, DVC, MLflow, ONNX export. \\
-MVP & Da vuot qua. Co predict, explain, health, metrics va batch CSV. \\
-Advanced MVP & \textbf{Trang thai hien tai}. He thong da co hanh vi san pham end-to-end va vong doi ML khong don gian. \\
-Pre-Production & Moi dat mot phan. Van con thieu auth, CORS dang mo, state trong memory, batch status mock, va chua co durable job orchestration. \\
-Production Ready & Chua dat. Phu hop cho demo, noi bo, va pilot kiem soat chat; chua phu hop enterprise production. \\
+Prototype & Đã vượt qua. Repo có API, Docker, test, DVC, MLflow, ONNX export, và dashboard monitoring. \\
+MVP & Đã vượt qua. Có predict, explain, health, metrics, batch CSV, và UI cơ bản. \\
+Advanced MVP & \textbf{Trạng thái hiện tại}. Hệ thống có luồng end-to-end thực, có monitoring, có training lifecycle, nhưng còn thiếu các kiểm soát production. \\
+Pre-Production & Đạt một phần. Có container hóa và cấu trúc vận hành, nhưng thiếu auth, batch status là mock, nhiều state trong memory, và chưa có durable job system. \\
+Production Ready & Chưa đạt. Phù hợp demo nội bộ hoặc pilot giới hạn; chưa phù hợp môi trường doanh nghiệp thực thụ. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\subsection{Vi sao chua san sang production}
+\subsection{Lý do xếp hạng theo implementation}
 \begin{itemize}[leftmargin=1.2em]
-  \item \texttt{src/main.py} mo toan bo endpoint inference va evaluation ma khong co auth.
-  \item \texttt{/batch\_status/\{job\_id\}} la mock, khong co queue hay persistent state.
-  \item frontend cho phep chon ngon ngu nhung \texttt{SentimentAnalysisService.predict()} bo qua truong \texttt{lang}.
-  \item Grafana duoc khoi tao voi mat khau mac dinh \texttt{admin}.
-  \item health check chi xac nhan model da load, khong xac minh toan bo dependency xuong duoi.
+  \item Runtime API chạy thật trong \texttt{src/main.py}, có startup load model, metrics, explain, batch, evaluate.
+  \item UI Angular kết nối được tới API, nhưng contract chưa khớp hoàn toàn với backend.
+  \item Pipeline training có thật qua \texttt{dvc.yaml}, \texttt{params.yaml}, \texttt{src/scripts/run\_finetuning.py}, \texttt{export\_onnx.py}.
+  \item Monitoring stack tồn tại trong Compose với Prometheus, Grafana và alert rules.
+  \item Các kiểm soát production quan trọng chưa có: authentication, authorization, secret hygiene tốt, state persistence, rate limiting, job queue bền vững.
 \end{itemize}
 
-\section{Mo hinh tinh than he thong}
-\subsection{Business view}
+\section{Phần 2 - Mô hình tư duy hệ thống}
+\subsection{Mô hình tư duy kinh doanh}
 \begin{mermaidblock}
 flowchart LR
-  Customer[Khach hang hoac Analyst]
-  UI[Angular UI]
-  API[FastAPI Service]
-  Insight[Sentiment va Aspect Insight]
-  Ops[Monitoring va Reports]
-  Improve[Retraining va Export]
-  Customer --> UI --> API --> Insight --> Ops --> Improve
+    Feedback[Phản hồi khách hàng] --> Analysis[Phân tích sentiment]
+    Analysis --> Insight[Insight vận hành]
+    Insight --> Action[Ưu tiên xử lý]
+    Action --> BetterService[Cải thiện sản phẩm và dịch vụ]
 \end{mermaidblock}
 
-\subsection{Product view}
-\begin{mermaidblock}
-flowchart TB
-  A[Single Predict]
-  B[Explain SHAP]
-  C[Batch CSV Predict]
-  D[Background Evaluate]
-  E[Dashboard va Metrics]
-  UI[Frontend]
-  UI --> A
-  UI --> B
-  UI --> C
-  API[Backend]
-  A --> API
-  B --> API
-  C --> API
-  D --> API
-  API --> E
-\end{mermaidblock}
+Hệ thống nhận câu đánh giá và trả ra kết quả sentiment có thể dùng để phân loại mức độ hài lòng, nhận diện chủ đề bị phàn nàn, và tạo cơ sở cho hành động tiếp theo.
 
-\subsection{Engineering view}
+\subsection{Mô hình tư duy sản phẩm}
 \begin{mermaidblock}
 flowchart LR
-  FE[app/sentiment-analysis-chatbot]
-  BE[src/main.py]
-  MODEL[src/model]
-  DATA[src/data]
-  TRAIN[src/scripts + src/training]
-  OBS[infra + src/monitoring]
-  FE --> BE --> MODEL
-  DATA --> TRAIN
-  TRAIN --> MODEL
-  BE --> OBS
+    User[Người dùng] --> UI[Angular UI]
+    UI --> API[FastAPI]
+    API --> Model[Sentiment + ABSA + SHAP]
+    Model --> Result[Kết quả có giải thích]
+    Result --> User
 \end{mermaidblock}
 
-\subsection{Infrastructure view}
+Về góc nhìn sản phẩm, đây là một công cụ phân tích sentiment có hai chế độ chính: chat một câu và batch upload CSV. Trải nghiệm giải thích đóng vai trò tăng niềm tin hơn là tối ưu throughput.
+
+\subsection{Mô hình tư duy kỹ thuật}
+\begin{mermaidblock}
+flowchart TD
+    subgraph Runtime
+      FE[Angular]
+      Nginx[Nginx]
+      API[FastAPI]
+      ORT[ONNX Runtime]
+    end
+    subgraph ML
+      Data[DVC stages]
+      Train[HF Trainer + PEFT]
+      Eval[Evaluation]
+      Export[ONNX Export]
+      Track[MLflow]
+    end
+    FE --> Nginx --> API --> ORT
+    Data --> Train --> Eval --> Export --> ORT
+    Train --> Track
+    Eval --> Track
+\end{mermaidblock}
+
+Hệ thống chia rõ hai mặt: mặt online phục vụ inference và mặt offline phục vụ dữ liệu, training, đánh giá, export. Điểm nối giữa hai mặt là artifact ONNX và cấu hình model.
+
+\subsection{Mô hình tư duy vận hành}
 \begin{mermaidblock}
 flowchart LR
-  Browser --> Nginx[Frontend container :80]
-  Nginx --> FastAPI[fastapi_app :8000]
-  FastAPI --> ML[Model runtime in-process]
-  FastAPI --> Metrics[/metrics]
-  Metrics --> Prometheus[:9091]
-  Prometheus --> Grafana[:3000]
-  FastAPI --> Eval[/evaluate]
-  Eval --> MLflow[:5005]
+    Compose[Docker Compose] --> Services[API/UI/Prometheus/Grafana/MLflow]
+    Services --> Metrics[/metrics]
+    Metrics --> Prometheus
+    Prometheus --> Grafana
+    Prometheus --> Alerts[Alert rules]
 \end{mermaidblock}
 
-\subsection{AI/ML view}
+Về vận hành, hệ thống dựa vào Compose cho môi trường tích hợp. Monitoring quan sát được nhưng response playbook và độ bền trạng thái vẫn chưa hoàn chỉnh.
+
+\subsection{Mô hình tư duy AI/ML}
 \begin{mermaidblock}
 flowchart LR
-  Raw[data/raw]
-  Prep[src.data.pipeline.py]
-  Validate[src.data.validators.py]
-  Train[src.scripts.run_finetuning.py]
-  Eval[src.scripts.evaluate_finetuned.py va src.model.evaluate.py]
-  Export[src.scripts.export_onnx.py]
-  Serve[src.model.baseline.py]
-  Raw --> Prep --> Validate --> Train --> Eval --> Export --> Serve
+    Raw[Raw data] --> Prep[Tiền xử lý]
+    Prep --> Finetune[Finetuning]
+    Finetune --> Evaluate[Đánh giá]
+    Evaluate --> MLflow[MLflow]
+    Finetune --> Export[Export ONNX]
+    Export --> Serve[Inference runtime]
 \end{mermaidblock}
 
-\section{Luong nghiep vu end-to-end}
-\begin{longtable}{@{}p{0.12\textwidth}p{0.22\textwidth}p{0.40\textwidth}p{0.16\textwidth}@{}}
+Mô hình chính cho sentiment được fine-tune, sau đó merge adapter và export sang ONNX để phục vụ inference. ABSA và sarcasm là khả năng bổ trợ, không phải phần cứng cốt lõi của throughput.
+
+\subsection{Giải thích ngắn gọn cho người mới}
+Nếu nhìn ở mức cao, repository này là một chuỗi khép kín:
+\begin{itemize}[leftmargin=1.2em]
+  \item dữ liệu được tải và làm sạch
+  \item mô hình được fine-tune và đánh giá
+  \item artifact ONNX được sinh ra cho runtime
+  \item API nạp artifact và trả kết quả cho UI
+  \item metrics được Prometheus thu thập và Grafana trực quan hóa
+\end{itemize}
+Điểm yếu lớn nhất hiện tại không phải là thiếu ý tưởng kiến trúc mà là thiếu các kiểm soát production và một vài chỗ contract drift giữa UI, docs, và backend.
+
+\section{Phần 3 - Luồng end-to-end đầy đủ}
+\subsection{Bảng luồng}
+\begin{longtable}{@{}p{0.11\textwidth}p{0.17\textwidth}p{0.18\textwidth}p{0.13\textwidth}p{0.15\textwidth}p{0.20\textwidth}@{}}
 \toprule
-\textbf{Buoc} & \textbf{Muc tieu kinh doanh} & \textbf{Implementation ky thuat} & \textbf{Owner} \\
+\textbf{Bước} & \textbf{Mục tiêu} & \textbf{Implementation} & \textbf{Owner} & \textbf{Phụ thuộc} & \textbf{Failure mode} \\
 \midrule
-\endhead
-Customer & Gui text de duoc phan tich & Nguoi dung tuong tac voi chat input hoac CSV upload trong Angular components. & UI/UX Lead \\
-UI & Thu thap text, voice transcription, hoac CSV & \texttt{ChatInputComponent} phat su kien text; \texttt{BatchUploadComponent} upload file multipart. & UI/UX Lead \\
-API & Validate request va route dung execution path & \texttt{src/main.py} dung Pydantic schema trong \texttt{contracts/schemas.py}. & Backend Lead \\
-Inference & Sinh sentiment, aspects, sarcasm, hoac SHAP & \texttt{BaselineModelInference} goi HF hoac ONNX runtime va zero-shot ABSA. & AI Lead \\
-Result & Tra response co cau truc cho UI hoac caller & \texttt{PredictResponse}, \texttt{ExplainResponse}, va batch response. & Backend Lead \\
-Monitoring & Ghi nhan request count va latency & middleware trong \texttt{src/monitoring/metrics.py} va endpoint \texttt{/metrics}. & Solution Lead \\
-Feedback & Xem metrics va report evaluation & Grafana, MLflow, JSON reports trong \texttt{reports/} va \texttt{data/reports/}. & Solution Lead / ML Lead \\
-Retraining & Nang cap model/adapters & \texttt{src/scripts/run\_finetuning.py}, task configs, class weights, LoRA adapters. & ML Lead \\
-Deployment & Dong goi artifact moi de phuc vu runtime & Dockerfiles, Compose, ONNX export scripts, mounted model dirs. & Solution Lead / Backend Lead \\
+Người dùng & Gửi yêu cầu sentiment & Chat UI hoặc batch upload & UI/UX & Browser, frontend build & UI validation không chặn lỗi logic \\
+Frontend & Thu thập input và gọi API & Angular service dùng \texttt{HttpClient} & UI/UX & Nginx proxy, contract model & \texttt{lang} không luôn được gửi, mismatch option \\
+API gateway & Định tuyến request & Nginx proxy \texttt{/api/} về backend & Solution & Container networking & Sai prefix gây 404 hoặc contract drift \\
+Backend & Validate và điều phối inference & FastAPI route trong \texttt{src/main.py} & Backend & Pydantic, app state & Thiếu auth, state memory-only \\
+Inference layer & Biến text thành logits và nhãn & \texttt{ONNXInferenceModel} và helpers & AI & Tokenizer, ONNX Runtime & Model load fail, tokenizer mismatch \\
+Model & Tạo dự đoán & ONNX model hoặc baseline path & AI & Model files, config & Artifact lỗi hoặc version drift \\
+Response & Trả kết quả có cấu trúc & Pydantic response models & Backend & JSON serialization & Response shape lệch docs/UI \\
+Monitoring & Ghi metrics & Prometheus metrics endpoint & Solution & Prometheus scrape & Monitoring stack down \\
+Feedback & Lưu phản hồi nghiệp vụ & \textbf{Not Implemented} & Solution & N/A & Không có closed-loop feedback \\
+Training & Cập nhật mô hình & DVC + HF + PEFT + MLflow & ML & Datasets, GPU/CPU, params & Data drift, evaluation yếu \\
+Deployment & Đưa artifact vào runtime & Docker build + Compose runtime & Solution & Image build, mounted model files & Thay model không kiểm soát rollout \\
 \bottomrule
 \end{longtable}
 
-\section{Kien truc chi tiet}
-\subsection{Frontend}
-\textbf{Trach nhiem:} message flow, voice capture, luu lich su, explain trigger, batch upload, theme control.\\
-\textbf{Phu thuoc:} Angular, HttpClient, local storage, backend \texttt{/api/*}.\\
-\textbf{Rui ro:} contract drift, bug ngon ngu, frontend test it.\\
-\textbf{Ownership:} UI/UX Lead primary, Backend Lead secondary.
-
-\subsection{Backend}
-\textbf{Trach nhiem:} startup lifecycle, dependency injection, validation, exception mapping, health, metrics, evaluate trigger, batch orchestration.\\
-\textbf{Phu thuoc:} FastAPI, pandas, model interface, monitoring middleware.\\
-\textbf{Rui ro:} single-process bottleneck, route ton tai nhung chi la mock, khong auth.\\
-\textbf{Ownership:} Backend Lead primary, Solution Lead secondary.
-
-\subsection{Inference layer}
-\textbf{Trach nhiem:} sentiment scoring, sarcasm adapter, ABSA extraction, SHAP, ONNX load, language validation.\\
-\textbf{Phu thuoc:} Hugging Face, PEFT, SHAP, onnxruntime, tokenizer va model artifacts.\\
-\textbf{Rui ro:} startup latency, SHAP ton tai chi phi cao, artifact mismatch.\\
-\textbf{Ownership:} AI Lead primary, ML Lead secondary.
-
-\subsection{Training layer}
-\textbf{Trach nhiem:} load dataset, dedup, split, xu ly imbalance, LoRA config, trainer, MLflow logging.\\
-\textbf{Phu thuoc:} Datasets, Transformers, PEFT, sklearn, task configs.\\
-\textbf{Rui ro:} data skew, phu thuoc file raw, reproducibility chi dung trong dung environment.\\
-\textbf{Ownership:} ML Lead primary, AI Lead secondary.
-
-\subsection{Monitoring layer}
-\textbf{Trach nhiem:} request metrics, dashboard provisioning, alert rules.\\
-\textbf{Phu thuoc:} Prometheus, Grafana, middleware instrumentation.\\
-\textbf{Rui ro:} khong co tracing, chua co business SLI manh.\\
-\textbf{Ownership:} Solution Lead primary, Backend Lead secondary.
-
-\subsection{Deployment layer}
-\textbf{Trach nhiem:} image build, service topology, ports, resource limits, network, mounted volumes.\\
-\textbf{Phu thuoc:} Dockerfile, Dockerfile.train, Compose, model va data dirs.\\
-\textbf{Rui ro:} secret handling yeu, default credentials, khong co rollback automation.\\
-\textbf{Ownership:} Solution Lead primary, Backend Lead secondary.
-
-\section{Ban do ownership repository}
-\begin{longtable}{@{}p{0.19\textwidth}p{0.20\textwidth}p{0.12\textwidth}p{0.12\textwidth}p{0.13\textwidth}p{0.11\textwidth}p{0.08\textwidth}@{}}
-\toprule
-\textbf{Folder} & \textbf{Muc dich} & \textbf{Primary} & \textbf{Secondary} & \textbf{Business Impact} & \textbf{Modification Risk} & \textbf{Knowledge Risk} \\
-\midrule
-\endhead
-\texttt{app/} & Angular UI cho nguoi dung & UI/UX & Backend & High & Medium & Medium \\
-\texttt{contracts/} & API va model contracts dung chung & Backend & AI & High & High & Medium \\
-\texttt{data/} & Raw, processed, eval, report artifacts & ML & AI & High & High & High \\
-\texttt{docs/} & Bao cao cu va handbook & Tech Lead & All leads & Medium & Low & Low \\
-\texttt{infra/} & Prometheus va Grafana provisioning & Solution & Backend & High & Medium & Medium \\
-\texttt{mlruns/} & Local MLflow store & ML & Solution & Medium & Low & Medium \\
-\texttt{models/} & Adapters va ONNX artifacts & AI & ML & High & High & High \\
-\texttt{notebooks/} & Colab/manual pipeline & ML & AI & Medium & Medium & High \\
-\texttt{reports/} & Evaluation va benchmark outputs & ML & AI & Medium & Low & Medium \\
-\texttt{src/data/} & Download, preprocess, validate & ML & AI & High & High & Medium \\
-\texttt{src/model/} & Runtime inference va export logic & AI & ML & High & High & High \\
-\texttt{src/monitoring/} & Prometheus instrumentation & Solution & Backend & Medium & Low & Low \\
-\texttt{src/scripts/} & CLI entrypoints & ML & AI & High & Medium & Medium \\
-\texttt{src/training/} & Training internals & ML & AI & High & Medium & Medium \\
-\texttt{tests/} & Regression safety net & Tech Lead & Owning team & High & Medium & Medium \\
-\texttt{.github/} & CI behavior & Backend & Tech Lead & High & Medium & Medium \\
-\bottomrule
-\end{longtable}
-
-\section{Trace thuc thi runtime}
-\begin{longtable}{@{}p{0.12\textwidth}p{0.18\textwidth}p{0.20\textwidth}p{0.14\textwidth}p{0.14\textwidth}p{0.12\textwidth}p{0.10\textwidth}@{}}
-\toprule
-\textbf{Flow} & \textbf{File / Class} & \textbf{Function} & \textbf{Input} & \textbf{Output} & \textbf{Exception Path} & \textbf{Owner} \\
-\midrule
-\endhead
-Startup & \texttt{src/main.py} / module & \texttt{lifespan()} & env \texttt{MODEL\_MODE} & \texttt{ml\_model} san sang & \texttt{ModelError} khi load loi & Backend + AI \\
-Health & \texttt{src/main.py} / API & \texttt{health\_check()} & HTTP GET & \texttt{HealthResponse} & 503 neu model chua ready & Backend \\
-Predict & \texttt{src/main.py} / API & \texttt{predict()} & \texttt{PredictRequest} & \texttt{PredictResponse} & 400/500 neu lang hoac model loi & Backend \\
-Predict core & \texttt{src/model/baseline.py} / \texttt{BaselineModelInference} & \texttt{predict\_single()} & text, lang & \texttt{PredictionResult} & unsupported language hoac model failure & AI \\
-Explain & \texttt{src/main.py} / API & \texttt{explain()} & \texttt{ExplainRequest} & \texttt{ExplainResponse} & explainer failure & Backend + AI \\
-Batch Predict & \texttt{src/main.py} / API & \texttt{batch\_predict()} & uploaded CSV & \texttt{BatchPredictResponse} & 400 invalid CSV, 500 batch failure & Backend \\
-Batch core & \texttt{src/model/baseline.py} / \texttt{BaselineModelInference} & \texttt{predict\_batch()} & list text & list \texttt{PredictionResult} & invalid batch size & AI \\
-Evaluate trigger & \texttt{src/main.py} / API & \texttt{run\_evaluate()} & POST & status JSON & 409 neu dang chay, state memory co the mat & Backend + ML \\
-Evaluate status & \texttt{src/main.py} / API & \texttt{evaluate\_status()} & GET & state JSON & stale sau restart & Backend \\
-Offline eval & \texttt{src/model/evaluate.py} & \texttt{evaluate\_on\_dataset()} & processed test frame & metrics dict & tra ve error payload neu split rong & ML + AI \\
-\bottomrule
-\end{longtable}
-
-\subsection{Sequence diagrams}
-\textbf{Startup}
+\subsection{Chuỗi runtime chính}
 \begin{mermaidblock}
 sequenceDiagram
-  participant U as Uvicorn/FastAPI
-  participant A as src.main.lifespan
-  participant C as ModelConfig
-  participant M as BaselineModelInference
-  participant O as OnnxInferenceSession hoac HF model
-  U->>A: app startup
-  A->>C: doc MODEL_MODE
-  A->>M: khoi tao
-  M->>O: load tokenizer/model/session
-  A->>M: preload()
-  M->>M: warm ABSA pipeline
-  A-->>U: app ready
+    participant U as User
+    participant FE as Angular Frontend
+    participant NX as Nginx
+    participant API as FastAPI
+    participant INF as ONNXInferenceModel
+    participant MON as Prometheus
+
+    U->>FE: nhập văn bản hoặc tải CSV
+    FE->>NX: gọi /api/predict hoặc /api/batch_predict
+    NX->>API: forward request
+    API->>INF: tokenize và infer
+    INF-->>API: logits, probabilities, labels
+    API-->>NX: JSON response
+    NX-->>FE: kết quả
+    FE-->>U: hiển thị sentiment, confidence, explain
+    MON->>API: scrape /metrics
 \end{mermaidblock}
 
-\textbf{Predict}
+\subsection{Chuỗi training đến serving}
 \begin{mermaidblock}
 sequenceDiagram
-  participant User
-  participant FE as Angular UI
-  participant API as FastAPI /predict
-  participant LD as LanguageDetector
-  participant MI as BaselineModelInference
-  participant ABSA as Zero-shot pipeline
-  User->>FE: nhap text
-  FE->>API: POST /api/predict {text}
-  API->>LD: resolve_request_language()
-  API->>MI: predict_single(text, lang)
-  MI->>MI: sentiment logits
-  MI->>ABSA: aspect extraction
-  MI-->>API: PredictionResult
-  API-->>FE: PredictResponse
-  FE-->>User: render ket qua
+    participant D as DVC Pipeline
+    participant T as Finetuning Script
+    participant M as MLflow
+    participant E as Export ONNX
+    participant R as Runtime API
+
+    D->>T: dữ liệu đã chuẩn hóa
+    T->>M: log params và metrics
+    T-->>E: checkpoint tốt nhất
+    E-->>R: ONNX model + tokenizer config
+    R->>R: startup load artifact
 \end{mermaidblock}
 
-\section{Team handbooks}
-\subsection{7.1 Tech Lead Handbook}
-\textbf{Owner:} Le Quang Tuyen.\\
-\textbf{Responsibilities:} kien truc, code-review bar, readiness approval, giai quyet xung dot cross-team.\\
-\textbf{Systems owned:} kien truc toan he thong, standards, quality gates.\\
-\textbf{Operational duties:} review readiness va chi huy incident Sev-1.\\
-\textbf{Release duties:} approve contract changes va security exceptions.\\
-\textbf{Risks:} architecture drift va ownership mo ho.\\
-\textbf{KPIs:} escaped defects, release predictability, readiness score.
+\section{Phần 4 - Reverse engineering repository}
+\subsection{Phân tích thư mục chính}
+\begin{longtable}{@{}p{0.18\textwidth}p{0.24\textwidth}p{0.18\textwidth}p{0.16\textwidth}p{0.18\textwidth}@{}}
+\toprule
+\textbf{Thư mục} & \textbf{Mục đích} & \textbf{Liên quan runtime} & \textbf{Owner} & \textbf{Mức rủi ro} \\
+\midrule
+\texttt{app/sentiment-analysis-chatbot} & Frontend Angular, assets, Nginx config & Cao & UI/UX & Trung bình đến cao vì contract drift tác động trực tiếp người dùng \\
+\texttt{src} & Mã nguồn backend, inference, data, training scripts & Rất cao & Backend, AI, ML & Rất cao; đây là lõi hệ thống \\
+\texttt{contracts} & API schema, contract examples & Trung bình & Backend + Solution & Trung bình; docs drift có thể làm đội tích hợp hiểu sai \\
+\texttt{infra} & Prometheus, Grafana provisioning, dashboards & Cao & Solution & Cao nếu monitoring hỏng hoặc cấu hình sai \\
+\texttt{models} & Artifact model phục vụ runtime hoặc export & Rất cao & AI + ML & Rất cao; mất artifact thì runtime không phục vụ được \\
+\texttt{data} & Dữ liệu thô, đã xử lý, mẫu, eval inputs & Trung bình đến cao & ML & Cao với training, thấp hơn với runtime \\
+\texttt{tests} & API, performance, benchmark tests & Trung bình & Backend + AI + ML & Trung bình; thiếu test làm tăng rủi ro thay đổi \\
+\texttt{docs} & Tài liệu, handbook, review cũ & Thấp đối với runtime & Tech Lead + Solution & Trung bình vì có thể gây hiểu nhầm nếu lệch code \\
+\texttt{reports} & Báo cáo phân tích trước đó & Thấp & Tech Lead & Thấp; dùng làm tham khảo \\
+\texttt{notebooks} & Khám phá và thực nghiệm & Thấp đến trung bình & ML + AI & Trung bình; kiến thức có thể nằm ở đây nhưng không phải runtime chính \\
+\texttt{mlruns} & Tracking local của MLflow & Thấp cho runtime, cao cho ML traceability & ML & Trung bình; mất history thì giảm auditability \\
+\bottomrule
+\end{longtable}
 
-\subsection{7.2 ML Engineering Handbook}
-\textbf{Owner:} Duong Binh An.\\
-\textbf{Responsibilities:} datasets, preprocessing, validation thresholds, finetuning, evaluation, MLflow.\\
-\textbf{Systems owned:} \texttt{src/data/}, \texttt{src/training/}, scripts training, \texttt{data/}, \texttt{reports/}.\\
-\textbf{Operational duties:} dam bao dataset integrity va evaluation reproducibility.\\
-\textbf{Release duties:} xac nhan metric truoc khi promote artifact.\\
-\textbf{Risks:} knowledge silo o data lineage va imbalance logic.\\
-\textbf{KPIs:} macro F1, per-language F1, validation pass rate.
+\subsection{Đồ thị phụ thuộc thư mục}
+\begin{mermaidblock}
+flowchart TD
+    UI[app/sentiment-analysis-chatbot] --> SRC[src]
+    SRC --> MODELS[models]
+    SRC --> DATA[data]
+    SRC --> INFRA[infra]
+    TESTS[tests] --> SRC
+    CONTRACTS[contracts] --> SRC
+    DOCS[docs] --> SRC
+\end{mermaidblock}
 
-\subsection{7.3 AI Engineering Handbook}
-\textbf{Owner:} Do Quoc Trung.\\
-\textbf{Responsibilities:} inference behavior, ONNX runtime, ABSA, sarcasm, SHAP, language detection.\\
-\textbf{Systems owned:} \texttt{src/model/}, \texttt{models/}.\\
-\textbf{Operational duties:} model load diagnostics, latency tuning, artifact compatibility.\\
-\textbf{Release duties:} ky duyệt artifact integrity va inference regression.\\
-\textbf{Risks:} artifact mismatch, SHAP chi phi cao, provider issues.\\
-\textbf{KPIs:} p95 latency, load success, inference error rate.
+\subsection{Đồ thị phụ thuộc runtime}
+\begin{mermaidblock}
+flowchart LR
+    Browser --> Angular
+    Angular --> Nginx
+    Nginx --> FastAPI
+    FastAPI --> ONNX
+    FastAPI --> Metrics
+    Metrics --> Prometheus
+    Prometheus --> Grafana
+\end{mermaidblock}
 
-\subsection{7.4 Solution Engineering Handbook}
-\textbf{Owner:} Duong Hong Quan.\\
-\textbf{Responsibilities:} integration end-to-end, monitoring stack, deployment topology.\\
-\textbf{Systems owned:} \texttt{infra/}, Compose topology, release runbooks.\\
-\textbf{Operational duties:} giu observability va environment consistency.\\
-\textbf{Release duties:} verify service health, ports, volume, dashboards.\\
-\textbf{Risks:} dependency drift, insecure defaults, nhieu buoc manual.\\
-\textbf{KPIs:} deployment success, monitoring freshness, MTTR.
+\subsection{Đồ thị phụ thuộc training}
+\begin{mermaidblock}
+flowchart LR
+    RawData --> Downloader
+    Downloader --> Pipeline
+    Pipeline --> Validators
+    Validators --> Finetuning
+    Finetuning --> Evaluate
+    Finetuning --> MLflow
+    Finetuning --> ONNXExport
+\end{mermaidblock}
 
-\subsection{7.5 Backend Engineering Handbook}
-\textbf{Owner:} Pham Duc Long.\\
-\textbf{Responsibilities:} API semantics, validation, exception handling, evaluate va batch endpoints.\\
-\textbf{Systems owned:} \texttt{src/main.py}, \texttt{contracts/}, backend CI.\\
-\textbf{Operational duties:} endpoint health, error triage, backward compatibility.\\
-\textbf{Release duties:} giu OpenAPI dung va schema on dinh.\\
-\textbf{Risks:} route drift, state memory, expensive call khong gioi han.\\
-\textbf{KPIs:} 5xx rate, schema-change defect rate.
+\subsection{Đồ thị phụ thuộc deployment}
+\begin{mermaidblock}
+flowchart TD
+    Dockerfile --> APIImage
+    DockerfileTrain --> TrainImage
+    Compose --> APIImage
+    Compose --> FrontendImage
+    Compose --> Prometheus
+    Compose --> Grafana
+    Compose --> MLflow
+\end{mermaidblock}
 
-\subsection{7.6 UI/UX Engineering Handbook}
-\textbf{Owner:} Nguyen Le Hong Nhi.\\
-\textbf{Responsibilities:} user journey, interaction quality, explain visualization, batch UX.\\
-\textbf{Systems owned:} Angular application.\\
-\textbf{Operational duties:} validate client behavior voi backend contract.\\
-\textbf{Release duties:} dam bao feature hien thi dung voi backend support that.\\
-\textbf{Risks:} contract mismatch, test it, state local storage.\\
-\textbf{KPIs:} task completion, UI defect rate, explain usage.
+\section{Phần 5 - Phân tích file quan trọng theo mức độ}
+\subsection{Top 50 file quan trọng nhất}
+\begin{longtable}{@{}p{0.05\textwidth}p{0.29\textwidth}p{0.18\textwidth}p{0.12\textwidth}p{0.28\textwidth}@{}}
+\toprule
+\textbf{Hạng} & \textbf{File} & \textbf{Vì sao tồn tại} & \textbf{Owner} & \textbf{Tác động nếu mất} \\
+\midrule
+1 & \texttt{src/main.py} & Entry point runtime và toàn bộ API contract thật & Backend & API không chạy \\
+2 & \texttt{src/model/onnx\_inference.py} & Pipeline serving ONNX & AI & Predict path hỏng \\
+3 & \texttt{src/model/config.py} & Cấu hình model, nhãn, ngôn ngữ hỗ trợ & AI & Runtime lệch model \\
+4 & \texttt{src/model/baseline.py} & Wrapper inference baseline & AI & Đường fallback suy giảm \\
+5 & \texttt{src/model/onnx\_exporter.py} & Chuyển checkpoint thành artifact runtime & AI + ML & Không thể đóng vòng training sang serving \\
+6 & \texttt{src/scripts/run\_finetuning.py} & Script huấn luyện chính & ML & Không vận hành được training \\
+7 & \texttt{src/scripts/evaluate\_finetuned.py} & Đánh giá checkpoint & ML & Không chấm được chất lượng sau train \\
+8 & \texttt{src/scripts/export\_onnx.py} & Entry point export ONNX & AI + ML & Không tạo được artifact runtime \\
+9 & \texttt{src/data/pipeline.py} & Tiền xử lý dữ liệu & ML & Dataset huấn luyện sai hoặc thiếu \\
+10 & \texttt{src/data/validators.py} & Kiểm soát chất lượng dữ liệu & ML & Data quality suy giảm \\
+11 & \texttt{src/data/downloader.py} & Tải dữ liệu nguồn & ML & Không tái lập được pipeline \\
+12 & \texttt{src/training/dataset\_builder.py} & Tạo dataset cho trainer & ML & Train input không dựng được \\
+13 & \texttt{src/training/metrics.py} & Tính metric & ML & Báo cáo chất lượng sai \\
+14 & \texttt{src/training/weighted\_trainer.py} & Trainer tùy biến xử lý imbalance & ML & Hiệu quả train giảm \\
+15 & \texttt{src/training/task\_configs.py} & Cấu hình task huấn luyện & ML & Lifecycle nhiều task bị lệch \\
+16 & \texttt{src/training/lora\_config.py} & Cấu hình LoRA/PEFT & ML & Fine-tuning không nhất quán \\
+17 & \texttt{src/training/mlflow\_callback.py} & Log MLflow trong training & ML & Mất traceability \\
+18 & \texttt{src/model/evaluate.py} & Runtime evaluate helper & AI + Backend & Endpoint evaluate hỏng \\
+19 & \texttt{src/model/language\_detector.py} & Suy luận ngôn ngữ & AI & Routing ngôn ngữ giảm chính xác \\
+20 & \texttt{src/model/device.py} & Quyết định CPU/GPU/MPS & AI & Runtime chọn thiết bị sai \\
+21 & \texttt{docker-compose.yml} & Bản đồ triển khai tích hợp & Solution & Không dựng được stack \\
+22 & \texttt{Dockerfile} & Build ảnh backend & Solution & API container không build \\
+23 & \texttt{Dockerfile.train} & Build ảnh training & Solution + ML & Train image không build \\
+24 & \texttt{app/.../src/app/app.component.ts} & App shell frontend & UI/UX & Luồng chat UI gãy \\
+25 & \texttt{app/.../services/sentiment-analysis.service.ts} & Gọi API từ UI & UI/UX & Frontend không giao tiếp backend \\
+26 & \texttt{app/.../chat-input.component.ts} & Nhập câu, chọn ngôn ngữ & UI/UX & Tương tác người dùng suy giảm \\
+27 & \texttt{app/.../batch-upload.component.ts} & Upload CSV batch & UI/UX & Batch UI mất chức năng \\
+28 & \texttt{app/.../models/message.model.ts} & Contract hiển thị message & UI/UX & Rendering chat sai \\
+29 & \texttt{app/sentiment-analysis-chatbot/nginx.conf} & Proxy và phục vụ frontend & Solution & Tích hợp FE-BE lỗi \\
+30 & \texttt{infra/prometheus/prometheus.yml} & Scrape config & Solution & Metrics không thu thập \\
+31 & \texttt{infra/prometheus/alert\_rules.yml} & Cảnh báo & Solution + SRE & Không có alert thực dụng \\
+32 & \texttt{infra/grafana/provisioning/datasources/datasource.yml} & Datasource Grafana & Solution & Dashboard mù dữ liệu \\
+33 & \texttt{infra/grafana/dashboards/sentiment-analysis-dashboard.json} & Dashboard chính & Solution & Mất quan sát trực quan \\
+34 & \texttt{tests/test\_api.py} & Bằng chứng contract API cơ bản & Backend & Regression dễ lọt \\
+35 & \texttt{tests/perf/test\_inference\_latency.py} & Guardrail latency & AI & Hiệu năng giảm không bị phát hiện \\
+36 & \texttt{tests/model/test\_batch\_throughput.py} & Guardrail throughput & AI & Batch path thoái hóa \\
+37 & \texttt{dvc.yaml} & Định nghĩa pipeline dữ liệu/train/eval & ML & Mất orchestration \\
+38 & \texttt{params.yaml} & Tham số pipeline/training & ML & Run không nhất quán \\
+39 & \texttt{requirements.txt} & Dependency runtime/train & Solution + Tech Lead & Build và run có thể hỏng \\
+40 & \texttt{contracts/openapi.yaml} & Hợp đồng giao tiếp mong muốn & Backend + Solution & Tích hợp bên ngoài lệch \\
+41 & \texttt{contracts/README.md} & Giải thích contract & Backend + Solution & Dễ tạo hiểu nhầm nếu drift \\
+42 & \texttt{README.md} & Điểm vào cho người mới & Tech Lead & Onboarding chậm và sai kỳ vọng \\
+43 & \texttt{src/scripts/prepare\_eval.py} & Chuẩn bị tập đánh giá & ML & Đánh giá khó lặp lại \\
+44 & \texttt{src/scripts/benchmark\_onnx.py} & Benchmark tốc độ inference & AI & Thiếu dữ liệu hiệu năng \\
+45 & \texttt{src/training/class\_weights.py} & Tính trọng số lớp & ML & Dữ liệu imbalance xử lý kém \\
+46 & \texttt{.github/workflows/ci.yml} & Tự động hóa CI & Tech Lead + Backend & Không có guardrail tích hợp \\
+47 & \texttt{mlruns/} & Lịch sử thực nghiệm cục bộ & ML & Audit trail giảm \\
+48 & \texttt{models/} & Artifacts runtime thật & AI + ML & Runtime không thể nạp model \\
+49 & \texttt{data/} & Dữ liệu và output pipeline & ML & Không tái tạo được model \\
+50 & \texttt{docs/handbook/*} & Tài liệu handover hiện tại & Tech Lead + Solution & Kiến thức tổ chức không được truyền đạt \\
+\bottomrule
+\end{longtable}
 
-\section{RACI matrix}
+\subsection{Ghi chú mức độ quan trọng}
+Các file trong top 10 có thể làm hệ thống ngừng hoạt động nếu bị xóa hoặc sửa sai. Các file từ hạng 11 đến 20 chi phối khả năng tái lập training và chất lượng mô hình. Các file từ 21 đến 36 quyết định khả năng dựng môi trường, tích hợp giao diện, và giám sát vận hành. Phần còn lại là tài sản điều phối, kiểm soát thay đổi, và tri thức tổ chức.
+
+\section{Phần 6 - Trace thực thi}
+\subsection{Khởi động ứng dụng}
+\begin{longtable}{@{}p{0.20\textwidth}p{0.22\textwidth}p{0.16\textwidth}p{0.34\textwidth}@{}}
+\toprule
+\textbf{File / hàm} & \textbf{Đầu vào} & \textbf{Đầu ra} & \textbf{Luồng lỗi} \\
+\midrule
+\texttt{src/main.py} app startup & env vars, model mode, model path & FastAPI app với state đã nạp & model load lỗi sẽ fail startup hoặc degrade theo path \\
+\texttt{src/model/config.py} & params cấu hình & label map, supported languages & config thiếu gây runtime mismatch \\
+\texttt{src/model/onnx\_inference.py} init & ONNX model path, tokenizer path & inference object & artifact thiếu hoặc không tương thích \\
+\bottomrule
+\end{longtable}
+
+Chủ sở hữu: Backend cho orchestration, AI cho model load, Solution cho container và mount artifact.
+
+\subsection{Health Check}
+Route health nằm trong \texttt{src/main.py}. Nó trả trạng thái ứng dụng, mode đang chạy, và danh sách ngôn ngữ hỗ trợ. Output hiện phản ánh cấu hình runtime thật tốt hơn README.
+
+\subsection{Predict}
+Luồng predict:
+\begin{enumerate}[leftmargin=1.4em]
+  \item UI gọi endpoint predict với văn bản.
+  \item Backend validate request model.
+  \item Runtime chọn model path và chạy tokenization.
+  \item ONNX Runtime trả logits.
+  \item Logic hậu xử lý chuyển logits sang probability và label.
+  \item API đóng gói response JSON.
+\end{enumerate}
+Exception path chính: input rỗng, artifact không nạp được, tokenizer mismatch, lỗi ONNX Runtime, hoặc response serialization lỗi.
+
+\subsection{Explain}
+Explain path gọi thêm logic SHAP và/hoặc thông tin hỗ trợ giải thích. Đây là path nặng hơn predict thường. Chi phí khởi tạo và xử lý SHAP có thể làm độ trễ tăng mạnh.
+
+\subsection{Batch Predict}
+Batch path đọc CSV, validate cột văn bản, lặp qua các hàng và chạy dự đoán. Đây là xử lý đồng bộ trong request-response hiện tại. Endpoint \texttt{/batch\_status/\{job\_id\}} tồn tại nhưng không có job orchestration thực sự.
+
+\subsection{Evaluation}
+Route evaluate trong runtime có thể kích hoạt logic đánh giá. Đây là bề mặt admin nhưng hiện chưa có auth. Về vận hành, đây là rủi ro rõ ràng.
+
+\subsection{Training}
+Training được điều phối bởi DVC và script dưới \texttt{src/scripts}. Input là dữ liệu đã tiền xử lý và params; output là checkpoint, metric, và artifact theo dõi trong MLflow.
+
+\subsection{Export ONNX}
+Export path merge adapter với base model rồi sinh artifact ONNX để runtime nạp. Nếu bước này lỗi hoặc artifact không khớp tokenizer/config, runtime sẽ không phục vụ đúng.
+
+\subsection{Sequence diagram}
+\begin{mermaidblock}
+sequenceDiagram
+    participant Boot as Startup
+    participant API as FastAPI
+    participant CFG as ModelConfig
+    participant ORT as ONNXInferenceModel
+
+    Boot->>API: khởi tạo app
+    API->>CFG: đọc cấu hình model
+    API->>ORT: load tokenizer và ONNX session
+    ORT-->>API: model ready
+\end{mermaidblock}
+
+\begin{mermaidblock}
+sequenceDiagram
+    participant FE as Frontend
+    participant API as /predict
+    participant M as Inference
+
+    FE->>API: text
+    API->>M: preprocess + infer
+    M-->>API: label + score
+    API-->>FE: JSON response
+\end{mermaidblock}
+
+\section{Phần 7 - Sổ tay Frontend}
+\subsection{Owner}
+Nguyen Le Hong Nhi là chủ sở hữu chính của frontend Angular và trải nghiệm người dùng.
+
+\subsection{Kiến trúc}
+Frontend nằm trong \texttt{app/sentiment-analysis-chatbot}. Kiến trúc dùng Angular component-service truyền thống, không có state management phức tạp. Trạng thái chủ yếu nằm trong component tree và service gọi API.
+
+\subsection{Components}
+Các component đáng chú ý:
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{app.component.ts}: app shell, orchestration chat flow
+  \item \texttt{chat-input.component.ts}: nhập câu, chọn ngôn ngữ, gửi request
+  \item \texttt{batch-upload.component.ts}: upload CSV để batch predict
+\end{itemize}
+
+\subsection{Services và state flow}
+\texttt{sentiment-analysis.service.ts} là đầu mối API integration. Service này đang là nơi drift xuất hiện: frontend có lựa chọn ngôn ngữ nhưng request predict thường chỉ gửi \texttt{\{text\}} mà không đẩy \texttt{lang} xuống backend.
+
+\subsection{Explainability UI}
+UI có khả năng hiển thị giải thích để tăng niềm tin người dùng. Tuy nhiên chi tiết giải thích phụ thuộc hoàn toàn vào payload backend; frontend không tự tính gì.
+
+\subsection{Batch Upload UI}
+Batch UI phục vụ người dùng tải tệp CSV. Vì backend batch chạy đồng bộ, trải nghiệm người dùng phụ thuộc trực tiếp vào thời gian request; không có polling job thật.
+
+\subsection{Rủi ro chính}
+\begin{itemize}[leftmargin=1.2em]
+  \item Drift giữa option ngôn ngữ UI và ngôn ngữ backend thật.
+  \item Khả năng UI hứa hẹn async behavior nhiều hơn backend cung cấp.
+  \item Tăng blast radius nếu thay đổi response shape mà không cập nhật model frontend.
+\end{itemize}
+
+\subsection{Điểm mở rộng}
+\begin{itemize}[leftmargin=1.2em]
+  \item đồng bộ contract \texttt{lang} với backend
+  \item thêm progress state đúng với batch runtime thật
+  \item tách rõ các chế độ predict nhanh và explain nặng
+\end{itemize}
+
+\section{Phần 8 - Sổ tay Backend}
+\subsection{Owner}
+Pham Duc Long là chủ sở hữu chính của FastAPI runtime và API contract.
+
+\subsection{Cấu trúc FastAPI}
+Backend tập trung phần lớn trong \texttt{src/main.py}. Đây là dấu hiệu một runtime còn tập trung logic ở một nơi, chưa tách route layer, service layer, và admin surface thành module độc lập.
+
+\subsection{Contracts và validation}
+Backend dùng request/response model để validate cơ bản. Tuy vậy, drift giữa \texttt{contracts/README.md}, OpenAPI docs tham chiếu, và route thật vẫn tồn tại. Runtime thật hiện dùng các path gốc như \texttt{/predict}, \texttt{/health}, trong khi frontend-facing path đi qua Nginx với prefix \texttt{/api/}.
+
+\subsection{Bản đồ ownership API}
 \begin{table}[H]
 \centering
-\begin{tabularx}{\textwidth}{@{}lcccccc@{}}
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
 \toprule
-\textbf{Workstream} & \textbf{Tech} & \textbf{ML} & \textbf{AI} & \textbf{Solution} & \textbf{Backend} & \textbf{UI/UX} \\
+\textbf{API} & \textbf{Mục đích} & \textbf{Owner} \\
+\midrule
+\texttt{/health} & báo trạng thái runtime và khả năng model & Backend \\
+\texttt{/predict} & sentiment một câu & Backend + AI \\
+\texttt{/explain} & dự đoán có giải thích & Backend + AI \\
+\texttt{/batch\_predict} & chấm CSV đồng bộ & Backend + AI \\
+\texttt{/batch\_status/\{job\_id\}} & status mock & Backend \\
+\texttt{/evaluate} & kích hoạt đánh giá & Backend + ML \\
+\texttt{/metrics} & expose Prometheus metrics & Backend + Solution \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Xử lý lỗi}
+Lỗi hiện được xử lý ở mức route và runtime, nhưng chưa có error taxonomy mạnh, chưa có auth failure path, và chưa có idempotent job control. Đối với vận hành, điều này có nghĩa là incident sẽ phải đọc log và tái hiện thủ công nhiều hơn.
+
+\subsection{Khoảng trống backend}
+\begin{itemize}[leftmargin=1.2em]
+  \item Not Implemented: authentication
+  \item Not Implemented: authorization
+  \item Not Implemented: durable batch job system
+  \item Not Implemented: persistent request/job state store
+  \item Partial: contract alignment giữa docs, frontend, và runtime
+\end{itemize}
+
+\section{Phần 9 - Sổ tay AI inference}
+\subsection{Owner}
+Do Quoc Trung là chủ sở hữu chính của inference pipeline.
+
+\subsection{Pipeline}
+Pipeline inference đi từ text sang tensor, logits, probability, rồi label. Runtime mặc định dùng ONNX mode, vì vậy hiệu năng và ổn định phụ thuộc lớn vào chất lượng export artifact.
+
+\subsection{Tokenization và tensor}
+Tokenizer chuyển text thành token ids, attention mask và các tensor đầu vào tương thích mô hình. Nếu tokenizer và ONNX artifact không cùng phiên bản logic, kết quả có thể sai lệch âm thầm.
+
+\subsection{ONNX Runtime}
+ONNX Runtime là động cơ serving chính. Đây là điểm tốt về hiệu năng, nhưng cũng là nơi coupling chặt với artifact export và shape mong đợi của mô hình.
+
+\subsection{Logic prediction}
+Sau khi có logits, pipeline tính probability và map sang label. Đây là chỗ logic nghiệp vụ và kỹ thuật gặp nhau: thứ người dùng thấy chỉ là nhãn và confidence, nhưng chất lượng thực nằm ở calibration và evaluation phía sau.
+
+\subsection{ABSA}
+ABSA hiện dùng zero-shot classifier từ Hugging Face. Điều này hữu ích cho demo nhưng chi phí tính toán lớn hơn inference sentiment chính, và độ ổn định phụ thuộc model phụ trợ bên ngoài.
+
+\subsection{SHAP}
+SHAP được dùng cho explainability. Đây là tính năng có giá trị demo và giải thích, nhưng là nguồn chi phí độ trễ đáng kể. Nếu chạy đồng bộ trên request online, nó có thể gây spike latency.
+
+\subsection{Phát hiện ngôn ngữ}
+Language detection có hiện diện trong codebase, nhưng năng lực runtime thực tế vẫn gói quanh tập ngôn ngữ hỗ trợ từ config. Hệ thống thật hiện hỗ trợ \texttt{en} và \texttt{vi}.
+
+\subsection{Phân tích độ trễ}
+\begin{itemize}[leftmargin=1.2em]
+  \item Predict sentiment thuần là path nhanh nhất.
+  \item Batch predict mở rộng gần tuyến tính theo số dòng nếu không có song song hóa backend.
+  \item Explain path đắt hơn do SHAP.
+  \item ABSA cũng đắt hơn predict thường vì dùng model phụ.
+\end{itemize}
+Các test hiệu năng trong \texttt{tests/perf} và \texttt{tests/model} đóng vai trò guardrail nhưng chưa thay thế được benchmarking trên hạ tầng production thật.
+
+\section{Phần 10 - Sổ tay ML}
+\subsection{Owner}
+Duong Binh An là chủ sở hữu chính của vòng đời training và dữ liệu.
+
+\subsection{Chiến lược dữ liệu}
+Repo chứa raw/processed data và pipeline xử lý qua \texttt{src/data}. Chất lượng mô hình phụ thuộc nặng vào validation dữ liệu hơn là vào vài thay đổi nhỏ trong serving.
+
+\subsection{DVC}
+\texttt{dvc.yaml} điều phối pipeline download, preprocess, validate, train, evaluate. Đây là phần quan trọng để tái lập quy trình huấn luyện và để chủ dự án tương lai kiểm toán được đường đi của dữ liệu.
+
+\subsection{MLflow}
+MLflow được dùng để ghi experiment, metric, và trace huấn luyện. Trong Compose, MLflow cũng được dựng như một service riêng.
+
+\subsection{LoRA và PEFT}
+Huấn luyện dùng LoRA/PEFT để tinh chỉnh hiệu quả hơn so với full fine-tuning. Đây là lựa chọn hợp lý cho MVP/Advanced MVP vì tiết kiệm chi phí và giảm kích thước thay đổi cần quản lý.
+
+\subsection{Đánh giá và fairness}
+Codebase có đánh giá metric nhưng fairness chưa thấy thành năng lực vận hành hoàn chỉnh. Vì vậy phải ghi rõ: fairness governance ở mức \textbf{Partial}, chưa phải chương trình kiểm soát sản phẩm hoàn chỉnh.
+
+\subsection{Vòng đời training}
+\begin{mermaidblock}
+flowchart LR
+    Download --> Preprocess
+    Preprocess --> Validate
+    Validate --> Finetune
+    Finetune --> Evaluate
+    Evaluate --> MLflow
+    Finetune --> ExportONNX
+\end{mermaidblock}
+
+\subsection{Khoảng trống ML}
+\begin{itemize}[leftmargin=1.2em]
+  \item Not Implemented: closed-loop feedback ingestion từ production
+  \item Partial: fairness governance
+  \item Partial: artifact promotion governance giữa train và runtime
+  \item Partial: reproducible environment governance ngoài local/compose scope
+\end{itemize}
+
+\section{Phần 11 - Sổ tay Solution Engineering}
+\subsection{Owner}
+Duong Hong Quan là chủ sở hữu chính cho tích hợp end-to-end, kiến trúc triển khai, và readiness vận hành.
+
+\subsection{Tích hợp end-to-end}
+Giá trị của vai trò Solution trong repo này là nối các phần rời rạc thành một chuỗi vận hành thống nhất: UI, proxy, API, model artifact, monitoring, training lineage.
+
+\subsection{Kiến trúc triển khai}
+Compose là bề mặt triển khai chính. Nó phù hợp cho tích hợp cục bộ, demo, và môi trường pilot nhỏ; chưa thể xem là chiến lược production scale hoặc rollout governance đầy đủ.
+
+\subsection{Chiến lược monitoring}
+Prometheus scrape backend metrics và Grafana hiển thị dashboard. Alert rules đã có nhưng sức mạnh thực tế phụ thuộc việc đội ngũ có playbook và ownership phản ứng hay không.
+
+\subsection{Đánh giá readiness vận hành}
+Kiến trúc đủ rõ để vận hành demo và pilot, nhưng còn thiếu:
+\begin{itemize}[leftmargin=1.2em]
+  \item auth và admin boundary
+  \item durable state cho batch hoặc evaluate workflow
+  \item secret management chặt chẽ
+  \item deployment promotion có kiểm soát
+\end{itemize}
+
+\section{Phần 12 - Ma trận ownership}
+\subsection{Ma trận ownership thư mục}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lXlX@{}}
+\toprule
+\textbf{Thư mục} & \textbf{Mục đích} & \textbf{Owner chính} & \textbf{Owner phụ} \\
+\midrule
+\texttt{app/sentiment-analysis-chatbot} & UI runtime & Nguyen Le Hong Nhi & Duong Hong Quan \\
+\texttt{src/main.py} và API runtime & orchestration backend & Pham Duc Long & Do Quoc Trung \\
+\texttt{src/model} & inference và export & Do Quoc Trung & Duong Binh An \\
+\texttt{src/data} & data prep và validation & Duong Binh An & Le Quang Tuyen \\
+\texttt{src/training} & training internals & Duong Binh An & Do Quoc Trung \\
+\texttt{src/scripts} & train/eval/export entrypoints & Duong Binh An & Do Quoc Trung \\
+\texttt{infra} & monitoring và provisioning & Duong Hong Quan & Le Quang Tuyen \\
+\texttt{contracts} & API alignment & Pham Duc Long & Duong Hong Quan \\
+\texttt{docs} & tri thức tổ chức & Le Quang Tuyen & Duong Hong Quan \\
+\texttt{tests} & regression và guardrails & Pham Duc Long & Do Quoc Trung \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Ma trận ownership service}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+\textbf{Service} & \textbf{Phạm vi} & \textbf{Owner} \\
+\midrule
+Angular frontend & UX, state giao diện, API client & UI/UX \\
+Nginx proxy & routing frontend tới backend & Solution \\
+FastAPI backend & request handling, metrics, orchestration & Backend \\
+ONNX inference & model serving path & AI \\
+Training pipeline & fine-tuning và evaluation & ML \\
+Prometheus/Grafana & observability & Solution \\
+Release coordination & thay đổi liên team & Tech Lead \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Operational, security, documentation, knowledge ownership}
+\begin{itemize}[leftmargin=1.2em]
+  \item Operational ownership: Solution dẫn đầu, Backend và AI hỗ trợ theo symptom.
+  \item Security ownership: Tech Lead chịu trách nhiệm quyết định ưu tiên; Backend và Solution sửa implementation; AI/ML sở hữu model artifact hygiene.
+  \item Documentation ownership: Tech Lead sở hữu tài liệu hệ thống; từng lead sở hữu handbook phần mình.
+  \item Knowledge ownership: hiện chưa cân bằng hoàn toàn; cần giảm phụ thuộc vào cá nhân có nhiều ngữ cảnh nhất.
+\end{itemize}
+
+\section{Phần 13 - Ma trận RACI}
+\begin{longtable}{@{}p{0.24\textwidth}P{0.10\textwidth}P{0.10\textwidth}P{0.10\textwidth}P{0.10\textwidth}P{0.10\textwidth}P{0.10\textwidth}@{}}
+\toprule
+\textbf{Hoạt động} & \textbf{Tech Lead} & \textbf{ML} & \textbf{AI} & \textbf{Solution} & \textbf{Backend} & \textbf{UI/UX} \\
 \midrule
 Feature development & A & C & C & C & R & R \\
 Model training & C & A/R & C & I & I & I \\
 Model deployment & A & C & R & R & C & I \\
-API changes & A & I & C & C & R & C \\
+API changes & C & I & C & C & A/R & I \\
 Production release & A & C & C & R & R & C \\
-Incident management & A & C & R & R & R & I \\
 Monitoring & C & I & C & A/R & R & I \\
-Security & A & I & C & R & R & C \\
+Security & A & C & C & R & R & I \\
+Incident response & A & I & R & R & R & I \\
 Architecture changes & A/R & C & C & C & C & C \\
 \bottomrule
-\end{tabularx}
-\end{table}
+\end{longtable}
 
-\section{Data va model lineage}
-\begin{mermaidblock}
-flowchart LR
-  Raw[data/raw/*.csv]
-  Validation1[src.data.downloader.validate_raw_schema]
-  Prep[src.data.pipeline.PreprocessingPipeline.run]
-  Validation2[src.data.validators.DataQualityValidator.validate]
-  Train[src.scripts.run_finetuning.train]
-  Eval[src.model.evaluate hoac src.scripts.evaluate_finetuned]
-  Track[MLflow runs]
-  Export[src.scripts.export_onnx]
-  Runtime[src.main -> BaselineModelInference]
-  Predict[PredictResponse]
-  Raw --> Validation1 --> Prep --> Validation2 --> Train --> Eval --> Track --> Export --> Runtime --> Predict
-\end{mermaidblock}
-
-\section{Security review}
-\begin{longtable}{@{}p{0.26\textwidth}p{0.11\textwidth}p{0.13\textwidth}p{0.40\textwidth}@{}}
+\section{Phần 14 - Data và model lineage}
+\begin{longtable}{@{}p{0.13\textwidth}p{0.18\textwidth}p{0.15\textwidth}p{0.14\textwidth}p{0.28\textwidth}@{}}
 \toprule
-\textbf{Finding} & \textbf{Severity} & \textbf{Owner} & \textbf{Huong khac phuc} \\
+\textbf{Giai đoạn} & \textbf{Producer} & \textbf{Consumer} & \textbf{Owner} & \textbf{Artifact / vòng đời} \\
 \midrule
-\endhead
-Khong co authentication/authorization cho inference va evaluation & Critical & Backend + Solution & them API auth, role-based access cho admin flows, enforce tai gateway \\
-CORS dang mo \texttt{allow\_origins=["*"]} & High & Backend & khoa origins theo environment \\
-Grafana mac dinh password \texttt{admin} & High & Solution & dua secret ra ngoai Compose va bat buoc rotate \\
-Build args chua secret DagsHub & High & Solution & chuyen sang runtime secret hoac CI secret mount \\
-CSV upload chua co file-size/content scanning tot & Medium & Backend & them size limit, content-type check, parser hardening \\
-Public evaluation endpoint & High & Backend & dua vao admin surface hoac bo khoi public runtime \\
-Khong co rate limiting & High & Backend + Solution & them control o proxy va application \\
+Raw data & downloader và nguồn dữ liệu & preprocessing & ML & dữ liệu nguồn thô \\
+Validation & validators & training pipeline & ML & báo cáo chất lượng dữ liệu \\
+Preprocessing & pipeline & finetuning & ML & dataset đã chuẩn hóa \\
+Training & HF trainer + PEFT & evaluation, export & ML & checkpoint adapter và metric \\
+Evaluation & evaluate scripts & MLflow, release decision & ML & metric và confusion outputs \\
+MLflow & training/eval callbacks & con người và governance & ML & lịch sử thí nghiệm \\
+Export & onnx exporter & runtime backend & AI + ML & ONNX model, tokenizer, config \\
+Runtime load & FastAPI startup & predict/explain requests & AI + Backend & model session trong bộ nhớ \\
+Prediction & runtime pipeline & UI và caller & AI + Backend & label, probability, explain payload \\
 \bottomrule
 \end{longtable}
 
-\section{Operations handbook}
-\begin{longtable}{@{}p{0.14\textwidth}p{0.17\textwidth}p{0.20\textwidth}p{0.24\textwidth}p{0.13\textwidth}p{0.12\textwidth}@{}}
+\section{Phần 15 - Security review}
+\begin{longtable}{@{}p{0.25\textwidth}p{0.12\textwidth}p{0.12\textwidth}p{0.41\textwidth}@{}}
 \toprule
-\textbf{Tinh huong} & \textbf{Dau hieu} & \textbf{Nguyen nhan} & \textbf{Buoc debug} & \textbf{Khac phuc} & \textbf{Owner} \\
+\textbf{Vấn đề} & \textbf{Mức độ} & \textbf{Owner} & \textbf{Mitigation} \\
 \midrule
-\endhead
-API down & \texttt{/health} fail, UI loading mai & model load fail, crash, path sai & xem backend logs, check \texttt{MODEL\_MODE}, verify model files & rollback artifact hoac image & Backend + AI \\
-Model failure & 500 tren predict/explain & tokenizer/session mismatch, artifact hong & reproduce API call, inspect \texttt{ModelError} & restore artifact tot cu & AI \\
-Latency spike & p95 tang, Grafana alert & SHAP, ABSA, CPU saturation & tach predict va explain, xem CPU limits & giam heavy path hoac tang tai nguyen & AI + Solution \\
-Monitoring failure & Grafana rong, scrape loi & metrics endpoint hoac config drift & query \texttt{/metrics}, inspect Prometheus targets & sua scrape target hoac datasource & Solution \\
-Batch failure & 400/500 khi upload CSV & malformed CSV, thieu cot \texttt{text} & reproduce voi sample CSV, doc parser error & fix input hoac harden parser & Backend \\
-Deployment failure & Compose services unhealthy & config drift, missing volume, build loi & xem \texttt{docker-compose} logs & restore config, rebuild, revert & Solution \\
+Không có authentication cho API & Critical & Backend + Solution & thêm authn, token/session policy, bảo vệ admin endpoints \\
+Không có authorization cho evaluate/admin-like actions & Critical & Backend + Solution & tách admin surface và policy kiểm soát quyền \\
+CORS mở rộng & High & Backend & giới hạn origin theo môi trường \\
+Grafana mặc định admin/admin & High & Solution & đổi secret, externalize credential, rotate ngay \\
+Secrets quản lý còn sơ khai & High & Solution + Tech Lead & dùng secret store hoặc env governance tốt hơn \\
+Batch upload surface cần kiểm soát file & Medium & Backend & tăng validate MIME, kích thước, schema CSV \\
+Supply-chain risk từ dependency ML và UI & Medium & Tech Lead + Solution & pin version và quét CVE định kỳ \\
+Model artifact integrity chưa có ký/phê duyệt rõ & Medium & AI + ML & thiết lập promotion và checksum governance \\
+Public evaluate endpoint có thể bị lạm dụng & High & Backend & hạn chế truy cập hoặc bỏ khỏi runtime công khai \\
 \bottomrule
 \end{longtable}
 
-\section{Technical debt register}
-\begin{longtable}{@{}p{0.08\textwidth}p{0.28\textwidth}p{0.16\textwidth}p{0.11\textwidth}p{0.10\textwidth}p{0.10\textwidth}p{0.09\textwidth}@{}}
-\toprule
-\textbf{Level} & \textbf{Debt Item} & \textbf{Impact} & \textbf{Risk} & \textbf{Owner} & \textbf{Fix Cost} & \textbf{Priority} \\
-\midrule
-\endhead
-Critical & Public unauthenticated inference va evaluation & enterprise blocking & security/abuse & Backend & Medium & P0 \\
-High & \texttt{/batch\_status} la mock & semantics sai & operational confusion & Backend & Medium & P1 \\
-High & Language selector khong di den backend & user expectation sai & correctness drift & UI/UX & Low & P1 \\
-High & Grafana default credentials va CORS rong & security posture yeu & compromise risk & Solution & Low & P1 \\
-Medium & Evaluation state nam trong memory & continuity yeu & stale status & Backend & Low & P2 \\
-Medium & SHAP khong co guardrails ro & latency spike & runtime instability & AI & Medium & P2 \\
-Low & Frontend test coverage mong & regression detection cham & maintainability & UI/UX & Medium & P3 \\
-\bottomrule
-\end{longtable}
+\section{Phần 16 - Performance review}
+\subsection{Startup Time}
+Startup time chịu chi phối chủ yếu bởi việc nạp tokenizer và ONNX session. Đây là chi phí chấp nhận được cho service đơn lẻ nhưng cần đo lại nếu chuyển sang autoscaling.
 
-\section{Rui ro to chuc}
+\subsection{Memory Usage}
+Memory footprint phụ thuộc artifact model, tokenizer, và các thành phần giải thích. SHAP và ABSA là hai nguồn làm tăng footprint khi bật đầy đủ.
+
+\subsection{CPU Usage}
+Predict sentiment thường là CPU-friendly hơn explain path. Batch path đồng bộ sẽ làm CPU tăng tuyến tính theo số mẫu nếu không có hàng đợi nền.
+
+\subsection{Inference Latency}
+Latency thấp nhất ở predict sentiment đơn thuần. Explain và ABSA là các path đắt hơn rõ rệt. Test hiệu năng có tồn tại nhưng chưa tương đương sản xuất thật.
+
+\subsection{Batch Throughput}
+Theo test benchmark, batch sentiment-only có guardrail throughput. Tuy vậy backend hiện chưa có queue hay worker layer riêng nên throughput sẽ bị giới hạn bởi request handler và tài nguyên container đơn.
+
+\subsection{SHAP Cost}
+SHAP là tính năng đắt nhất về độ trễ trong inference-facing features. Nếu cần scale, nên tách explain thành job hoặc endpoint riêng với SLA khác.
+
+\subsection{ABSA Cost}
+ABSA dựa vào zero-shot classifier nên không rẻ. Nó phù hợp làm capability nâng cao hơn là path mặc định cho mọi request.
+
+\subsection{Giới hạn mở rộng}
 \begin{itemize}[leftmargin=1.2em]
-  \item \textbf{Knowledge silo:} inference internals va artifact promotion dang tap trung vao AI/ML.
-  \item \textbf{Single point of failure:} \texttt{src/model/baseline.py}, \texttt{src/scripts/run\_finetuning.py}, va \texttt{docker-compose.yml}.
-  \item \textbf{Bus factor:} thap cho ONNX export, imbalance logic, observability provisioning.
-  \item \textbf{Cross-team dependencies:} thay doi label set can ML, AI, Backend, UI, va tests cung di chuyen.
-  \item \textbf{Ownership gaps:} chua co security owner ro rang va release manager chinh thuc.
+  \item không có durable asynchronous execution
+  \item không có cache chiến lược cho explain/ABSA
+  \item app state và orchestration tập trung trong một process
+  \item rollout model chưa có version routing hoặc canary
 \end{itemize}
 
-\section{Production readiness review}
+\section{Phần 17 - Sổ tay vận hành}
+\begin{longtable}{@{}p{0.16\textwidth}p{0.17\textwidth}p{0.18\textwidth}p{0.18\textwidth}p{0.23\textwidth}@{}}
+\toprule
+\textbf{Sự cố} & \textbf{Triệu chứng} & \textbf{Nguyên nhân gốc} & \textbf{Bước debug} & \textbf{Hướng xử lý / owner} \\
+\midrule
+API Failure & \texttt{/health} lỗi, UI không trả kết quả & container chết, model load fail, route lỗi & xem log backend, kiểm tra mount model, gọi health trực tiếp & Backend + Solution khôi phục container và config \\
+Model Failure & predict 500 hoặc kết quả vô nghĩa & artifact lỗi, tokenizer mismatch, export hỏng & kiểm tra artifact path, log startup, chạy benchmark cục bộ & AI + ML thay artifact hoặc export lại \\
+Latency Spike & request chậm, timeout batch/explain & SHAP, ABSA, CPU contention, batch lớn & so sánh predict thường với explain, xem metrics latency & AI + Backend giảm tải, giới hạn path nặng \\
+Monitoring Failure & Grafana trống, Prometheus không scrape & config sai, container down, target name đổi & kiểm tra Prometheus targets và datasource & Solution sửa provisioning \\
+Deployment Failure & Compose không dựng đủ stack & image build fail, port clash, env drift & kiểm tra Docker logs, file Compose, env & Solution xử lý build/network \\
+Batch Failure & upload CSV lỗi hoặc status không nhất quán & schema CSV sai, logic sync timeout, status mock & kiểm tra payload, kích thước file, log route batch & Backend sửa validation hoặc chuyển async thật \\
+Data Pipeline Failure & DVC stage fail, train không chạy & thiếu data, params lỗi, dependency drift & chạy từng stage, đọc output validator, xem MLflow & ML khắc phục data hoặc config \\
+\bottomrule
+\end{longtable}
+
+\section{Phần 18 - Sổ đăng ký technical debt}
+\begin{longtable}{@{}p{0.10\textwidth}p{0.26\textwidth}p{0.16\textwidth}p{0.12\textwidth}p{0.28\textwidth}@{}}
+\toprule
+\textbf{Mức} & \textbf{Mô tả} & \textbf{Tác động} & \textbf{Owner} & \textbf{Khuyến nghị} \\
+\midrule
+Critical & Không có auth/authz & không thể mở production an toàn & Backend + Solution & thêm auth, tách admin surface, kiểm soát quyền \\
+Critical & Batch status là mock trong khi batch chạy sync & giao diện và kỳ vọng tích hợp bị lệch & Backend & hoặc bỏ endpoint status, hoặc triển khai job system thật \\
+High & Drift giữa UI, docs, và backend về \texttt{lang} và route shape & bug tích hợp, hiểu sai phạm vi sản phẩm & UI/UX + Backend + Solution & chuẩn hóa contract và test E2E \\
+High & Grafana dùng credential mặc định & rủi ro truy cập trái phép & Solution & đổi secret ngay \\
+High & \texttt{/evaluate} công khai & bề mặt lạm dụng và chi phí vận hành & Backend & chuyển thành admin-only hoặc remove khỏi public runtime \\
+Medium & Logic runtime tập trung nhiều trong \texttt{src/main.py} & khó bảo trì dài hạn & Backend & tách router/service/module boundary \\
+Medium & Chưa có persistent store cho job và feedback & không thể audit/khôi phục tốt & Backend + Solution & thêm DB/queue phù hợp \\
+Medium & Fairness governance chưa hoàn chỉnh & khó mở rộng enterprise & ML & thêm báo cáo fairness vào release gate \\
+Low & README và contract docs cũ hơn implementation & onboarding và due diligence chậm hơn & Tech Lead & cập nhật tài liệu theo code \\
+\bottomrule
+\end{longtable}
+
+\section{Phần 19 - Đánh giá tổ chức}
+\subsection{Cấu trúc đội ngũ}
+Cấu trúc vai trò hiện hợp lý cho một dự án AI ứng dụng: Tech Lead điều phối, ML chịu dữ liệu/training, AI chịu inference/model serving, Backend chịu API, Solution chịu tích hợp và deploy, UI/UX chịu frontend.
+
+\subsection{Phân phối tri thức và bus factor}
+Bus factor hiện chưa cao. Nhiều quyết định quan trọng nằm ở giao điểm giữa AI, ML, và Solution. Nếu một người rời đi mà không có handbook này hoặc không có runbook chi tiết, thời gian phục hồi kiến thức sẽ đáng kể.
+
+\subsection{Khoảng trống ownership}
+\begin{itemize}[leftmargin=1.2em]
+  \item ownership của admin/security surface chưa được thể hiện trong code boundary
+  \item ownership của hợp đồng tích hợp FE-BE chưa có guardrail tự động đủ mạnh
+  \item ownership của artifact promotion từ training sang runtime còn pha trộn giữa AI và ML
+\end{itemize}
+
+\subsection{Khuyến nghị}
+\begin{itemize}[leftmargin=1.2em]
+  \item thiết lập release gate liên team với checklist auth, contract, benchmark, dashboard
+  \item tạo owner rõ cho model promotion và rollback
+  \item yêu cầu mỗi lead duy trì runbook và test tương ứng phạm vi mình sở hữu
+\end{itemize}
+
+\section{Phần 20 - Scorecard production readiness}
 \begin{table}[H]
 \centering
-\begin{tabularx}{\textwidth}{@{}lP{1.2cm}p{1.6cm}X@{}}
+\begin{tabularx}{\textwidth}{@{}lP{0.12\textwidth}X@{}}
 \toprule
-\textbf{Area} & \textbf{Score} & \textbf{Status} & \textbf{Ly do} \\
+\textbf{Hạng mục} & \textbf{Điểm} & \textbf{Nhận xét} \\
 \midrule
-Architecture & 74 & Amber & layering tot nhung runtime va async semantics chua that \\
-Security & 32 & Red & thieu auth, CORS rong, default credentials \\
-Testing & 76 & Amber & Python tests tot, frontend tests mong \\
-Monitoring & 71 & Amber & co Prometheus/Grafana nhung chua co tracing \\
-Performance & 63 & Amber & ONNX co loi ich nhung SHAP/ABSA van dat do \\
-Reliability & 58 & Amber & co health nhung khong co durable queue/state \\
-ML lifecycle & 79 & Amber & DVC, MLflow, training, eval, export kha day du \\
-Deployment & 60 & Amber & Compose hop cho env kiem soat, chua hop enterprise \\
-Operations & 55 & Amber & runbook co the viet duoc nhung tu dong hoa it \\
-Ownership & 70 & Amber & role kha ro sau handbook nhung van phu thuoc ca nhan \\
-\midrule
-\textbf{Overall} & \textbf{64} & \textbf{Amber} & advanced MVP, chua duyet enterprise production \\
+Architecture & 72 & Có cấu trúc đủ rõ, có online/offline split, nhưng boundary chưa đủ chặt. \\
+Security & 28 & Thiếu auth/authz và có secret hygiene yếu. \\
+Reliability & 54 & Có health, metrics, containerization, nhưng state và batch orchestration còn yếu. \\
+Performance & 67 & ONNX là nền tốt; explain và ABSA vẫn đắt. \\
+Testing & 63 & Có API và perf tests, nhưng chưa phủ hết contract drift và security. \\
+Monitoring & 70 & Có Prometheus/Grafana/alerts, nhưng playbook và hardening chưa hoàn thiện. \\
+ML Lifecycle & 78 & DVC, MLflow, PEFT, export ONNX đã thành chuỗi khá tốt. \\
+Deployment & 58 & Compose tốt cho tích hợp, chưa đủ cho production-grade rollout. \\
+Operations & 52 & Có tín hiệu observability nhưng thiếu nhiều control production. \\
+Documentation & 74 & Sau handbook này, tri thức rõ hơn; docs cũ vẫn còn drift. \\
+Ownership & 73 & Vai trò rõ, nhưng cần siết owner ở contract và release gates. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\section{Roadmap}
-\subsection{3 thang}
+\infobox{\textbf{Điểm readiness tổng hợp có trọng số: 62/100.} Kết luận: đủ mạnh cho Advanced MVP và pilot kiểm soát chặt; chưa nên xem là production-ready cho enterprise.}
+
+\section{Phần 21 - Roadmap}
+\subsection{Roadmap 3 tháng}
 \begin{itemize}[leftmargin=1.2em]
-  \item them authentication, rate limiting, CORS theo environment. Owner: Backend + Solution. Priority: P0.
-  \item thay \texttt{/batch\_status} bang durable job tracking. Owner: Backend. Priority: P1.
-  \item sua frontend language propagation va dong bo supported-language UX. Owner: UI/UX + Backend. Priority: P1.
+  \item Triển khai authentication, authorization, và tách admin endpoints. Owner: Backend + Solution. Priority: P1.
+  \item Chuẩn hóa contract giữa frontend, backend và docs, đặc biệt cho \texttt{lang} và batch behavior. Owner: UI/UX + Backend + Solution. Priority: P1.
+  \item Thay credential mặc định, siết secret management, và cập nhật runbook bảo mật. Owner: Solution. Priority: P1.
 \end{itemize}
 
-\subsection{6 thang}
+\subsection{Roadmap 6 tháng}
 \begin{itemize}[leftmargin=1.2em]
-  \item them artifact registry/checksum validation. Owner: AI + ML. Priority: P1.
-  \item them distributed tracing va model SLIs. Owner: Solution. Priority: P2.
-  \item tach admin evaluation khoi public inference deployment. Owner: Backend + Solution. Priority: P1.
+  \item Chuyển batch sang worker/job model có trạng thái bền. Owner: Backend + Solution. Priority: P1.
+  \item Thiết lập artifact promotion, rollback, và checksum governance cho model. Owner: AI + ML. Priority: P1.
+  \item Mở rộng test E2E và release gates cho latency, contract, security. Owner: Tech Lead + Backend + AI. Priority: P2.
 \end{itemize}
 
-\subsection{12 thang}
+\subsection{Roadmap 12 tháng}
 \begin{itemize}[leftmargin=1.2em]
-  \item chuyen khoi Compose-only sang managed deployment co secret va autoscaling. Owner: Solution. Priority: P1.
-  \item formalize model registry, approval gate, rollback policy. Owner: Tech Lead + ML + AI. Priority: P1.
-  \item mo rong multilingual support chi sau khi data, evaluation, UI dong bo that. Owner: ML + AI + UI/UX. Priority: P2.
+  \item Nâng cấp từ Compose sang chiến lược triển khai có secret handling và rollout control tốt hơn. Owner: Solution. Priority: P1.
+  \item Tách SLA giữa predict nhanh và explain/ABSA path nặng. Owner: Backend + AI. Priority: P2.
+  \item Chỉ mở rộng đa ngôn ngữ sau khi data và evaluation parity được chứng minh. Owner: ML + AI + UI/UX. Priority: P2.
 \end{itemize}
 
-\section{Huong dan onboarding}
+\section{Phần 22 - Hướng dẫn onboarding}
 \begin{table}[H]
 \centering
 \begin{tabularx}{\textwidth}{@{}lX@{}}
 \toprule
-\textbf{Moc} & \textbf{Muc tieu onboarding} \\
+\textbf{Vai trò / mốc thời gian} & \textbf{Kế hoạch học} \\
 \midrule
-Day 1 & Doc phan lien quan den vai tro: Backend doc \texttt{src/main.py} va \texttt{contracts/}; AI doc \texttt{src/model/}; ML doc \texttt{src/data/} va \texttt{params.yaml}; UI/UX doc \texttt{app/}; Solution doc Compose va infra. \\
-Day 3 & Chay tests lien quan, trace mot request end-to-end, ghi nhan mot discrepancy giua docs va code. \\
-Day 7 & Lam mot thay doi nho co review va cap nhat test. \\
-Day 14 & Tu minh chay mot workflow day du trong pham vi vai tro. \\
-Day 30 & Co the tu nhan mot issue van hanh trong vung so huu va review thay doi cua nguoi khac. \\
+Tech Lead Day 1 & Đọc \texttt{src/main.py}, \texttt{docker-compose.yml}, \texttt{dvc.yaml}, handbook này, và kiểm tra discrepancy list. \\
+Tech Lead Day 3 & Chạy toàn bộ stack local, xác nhận runtime path, monitoring path, training path. \\
+Tech Lead Day 7 & Review release gate, security debt, ownership matrix. \\
+Tech Lead Day 14 & Dẫn một mini readiness review nội bộ. \\
+Tech Lead Day 30 & Có thể quyết định ưu tiên kiến trúc, bảo mật, và phát hành. \\
+ML Engineer Day 1 & Đọc \texttt{src/data/}, \texttt{src/training/}, \texttt{params.yaml}, \texttt{dvc.yaml}. \\
+ML Engineer Day 3 & Chạy download, preprocess, validate. \\
+ML Engineer Day 7 & Chạy finetune và evaluate một cấu hình nhỏ. \\
+ML Engineer Day 14 & Theo dõi MLflow và xác nhận output export. \\
+ML Engineer Day 30 & Tự vận hành toàn bộ lifecycle training. \\
+AI Engineer Day 1 & Đọc \texttt{src/model/}, benchmark tests, và startup load path. \\
+AI Engineer Day 3 & Chạy predict, explain, benchmark ONNX. \\
+AI Engineer Day 7 & Xác minh tokenizer, ONNX session, latency path. \\
+AI Engineer Day 14 & Điều tra một regression inference giả lập. \\
+AI Engineer Day 30 & Tự xử lý model load, ONNX, SHAP, ABSA, latency. \\
+Backend Engineer Day 1 & Đọc \texttt{src/main.py}, \texttt{contracts/}, \texttt{tests/test\_api.py}. \\
+Backend Engineer Day 3 & Chạy API local và gọi các endpoint chính. \\
+Backend Engineer Day 7 & So sánh route thật với docs và frontend. \\
+Backend Engineer Day 14 & Sửa một thay đổi contract nhỏ kèm test. \\
+Backend Engineer Day 30 & Sở hữu route changes, validation, metrics, failure handling. \\
+Solution Engineer Day 1 & Đọc Dockerfile, Compose, Nginx, Prometheus, Grafana config. \\
+Solution Engineer Day 3 & Dựng stack đầy đủ. \\
+Solution Engineer Day 7 & Kiểm tra dashboard, alert rules, và secret posture. \\
+Solution Engineer Day 14 & Tập xử lý sự cố monitoring hoặc deployment. \\
+Solution Engineer Day 30 & Dẫn vận hành môi trường tích hợp và readiness review. \\
+UI/UX Engineer Day 1 & Đọc app shell, service, components và contract models. \\
+UI/UX Engineer Day 3 & Chạy frontend và test luồng chat/batch. \\
+UI/UX Engineer Day 7 & Kiểm tra language selector và response mapping. \\
+UI/UX Engineer Day 14 & Sửa một thay đổi payload hiển thị. \\
+UI/UX Engineer Day 30 & Sở hữu chat flow, batch UX, explain UX, và contract alignment. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\section{CTO review}
-\subsection{Co phe duyet production launch khong?}
-Khong, neu la production mo hoac enterprise production. Co the phe duyet demo noi bo va pilot rat kiem soat sau khi hardening bao mat co ban.
+\section{Phần 23 - CTO review}
+\subsection{Có phê duyệt production launch không?}
+Không, chưa cho production mở hoặc production enterprise. Có thể phê duyệt cho demo nội bộ và pilot kiểm soát chặt sau khi xử lý các lỗ hổng bảo mật cấp cao.
 
-\subsection{Co phe duyet enterprise customers khong?}
-Khong. Security va operations controls hien tai chua dat muc toi thieu.
+\subsection{Có phê duyệt enterprise customers không?}
+Không. Mức kiểm soát bảo mật, durability, và release governance hiện chưa đủ.
 
-\subsection{Co phe duyet scaling khong?}
-Chua. Kien truc co huong scale duoc, nhung deployment va control plane hien tai chua san sang.
+\subsection{Có phê duyệt scaling không?}
+Chưa. Hướng kiến trúc có thể mở rộng, nhưng mô hình vận hành và job execution hiện chưa sẵn sàng.
 
-\subsection{Dieu dang lo nhat la gi?}
-Nguy hiem nhat la \emph{false confidence}: repo nhin rat giong san pham production, nhung mot so control quan trong van thieu hoac chi la mock.
+\subsection{Điều đáng lo nhất là gì?}
+Điều đáng lo nhất là cảm giác trưởng thành bề ngoài có thể tạo ra tự tin sai. Repository nhìn khá đầy đủ, nhưng nhiều kiểm soát nền tảng còn thiếu hoặc mới ở mức một phần.
 
-\subsection{Nen dau tu tiep vao dau?}
-Uu tien hardening nen tang: authentication, rate limiting, artifact governance, va durable batch execution. Sau do moi dau tu manh hon cho multilingual va model operations.
+\subsection{Khoản đầu tư đầu tiên nên là gì?}
+Đầu tư đầu tiên nên là hardening nền tảng: authentication, authorization, quản lý admin surface, governance artifact model, và release gates liên team.
 
-\section*{Phu luc discrepancy}
-\addcontentsline{toc}{section}{Phu luc discrepancy}
+\section*{Discrepancy implementation}
+\addcontentsline{toc}{section}{Discrepancy implementation}
 \begin{itemize}[leftmargin=1.2em]
-  \item README cho vi du health chi co \texttt{["en"]}, nhung \texttt{ModelConfig.supported\_languages} la \texttt{("en","vi")}. Tac dong: tai lieu noi mot dang, backend support mot dang.
-  \item README mo ta batch theo kieu async job, nhung \texttt{/batch\_predict} thuc te la synchronous va \texttt{/batch\_status} chi la mock. Tac dong: client co the tin vao polling semantics khong ton tai.
-  \item Frontend hien nhieu ngon ngu trong \texttt{ChatInputComponent}, nhung backend chi support \texttt{en} va \texttt{vi}; service layer con bo qua explicit language. Tac dong: affordance vuot qua nang luc that.
-  \item Compose dung \texttt{http://mlflow:5000} noi bo container, host expose \texttt{5005}, trong khi \texttt{params.yaml} default \texttt{http://localhost:5000}. Tac dong: assumptions khac nhau giua local CLI va container runtime.
+  \item README health example chỉ hiện \texttt{["en"]}; implementation thật hỗ trợ \texttt{en} và \texttt{vi}.
+  \item README mô tả batch giống một async job; implementation hiện là request-response đồng bộ và endpoint status là mock.
+  \item Frontend hiển thị nhiều lựa chọn ngôn ngữ; backend thực tế hỗ trợ \texttt{en} và \texttt{vi}; request predict từ frontend thường không gửi \texttt{lang} tường minh.
+  \item Compose dùng MLflow URL nội bộ \texttt{http://mlflow:5000}, host publish \texttt{5005}, trong khi tham số mặc định có chỗ giả định \texttt{http://localhost:5000}; giả định môi trường chưa thống nhất.
+  \item \texttt{contracts/README.md} dùng ví dụ \texttt{/api/v1/*}; implementation thật dùng các route gốc như \texttt{/predict}, \texttt{/health}, và Nginx thêm prefix \texttt{/api/} ở bề mặt frontend.
 \end{itemize}
 
 \end{document}

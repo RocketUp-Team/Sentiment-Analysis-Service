@@ -1,7 +1,7 @@
 \input{handbook/shared/preamble.tex}
 
-\title{\textbf{Sentiment Analysis Service}\\Engineering Handbook and Organizational Ownership Report}
-\author{Implementation-first internal handbook}
+\title{\textbf{Sentiment Analysis Service}\\Deep Engineering Review and Ownership Handbook}
+\author{Implementation-first enterprise handbook}
 \date{2026-06-05}
 
 \begin{document}
@@ -10,10 +10,10 @@
 \thispagestyle{empty}
 \centering
 {\color{NavyBlue}\rule{\linewidth}{3pt}}\\[0.4em]
-{\color{SteelBlue}\rule{\linewidth}{1pt}}\\[1.2cm]
-{\Large\bfseries\color{NavyBlue} SENTIMENT ANALYSIS SERVICE}\\[0.3em]
-{\large\bfseries Engineering Handbook and Organizational Ownership Report}\\[0.3em]
-{\normalsize Internal production-readiness and handover document}\\[1.0cm]
+{\color{SteelBlue}\rule{\linewidth}{1pt}}\\[1.1cm]
+{\Large\bfseries\color{NavyBlue} SENTIMENT ANALYSIS SERVICE}\\[0.25em]
+{\large\bfseries Deep Engineering Review and Ownership Handbook}\\[0.35em]
+{\normalsize CTO review, due diligence, production readiness, handover, onboarding}\\[1.0cm]
 
 \begin{tabular}{@{}ll@{}}
 Tech Lead & Le Quang Tuyen \\
@@ -26,7 +26,19 @@ UI/UX Engineering Lead & Nguyen Le Hong Nhi \\
 
 \vfill
 \infobox{
-\textbf{Source-of-truth rule:} this handbook trusts implementation first, then runtime configuration, then tests, then legacy reports. Where documents and code disagree, the operational truth is the code path currently executed by the repository.
+\textbf{Repository truth order used in this handbook:}
+\newline
+1. Source code
+\newline
+2. Runtime configuration
+\newline
+3. Infrastructure manifests
+\newline
+4. Tests
+\newline
+5. Existing reports
+\newline
+6. README and legacy docs
 }
 \vfill
 {\color{SteelBlue}\rule{\linewidth}{1pt}}\\[0.25em]
@@ -36,109 +48,120 @@ UI/UX Engineering Lead & Nguyen Le Hong Nhi \\
 \tableofcontents
 \newpage
 
-\section{Executive Assessment}
-\subsection{Business Purpose}
-The product turns unstructured customer feedback into structured operational signals: sentiment, aspect-level sentiment, sarcasm cues, and explanation artifacts. The intended business use is review analysis, service-quality monitoring, support triage, and explainable AI demonstration.
+\section{Part 1 - Executive Assessment}
+\subsection{Business Problem}
+The business problem is converting free-form customer feedback into operationally useful signals fast enough to support product analytics, customer-support triage, service-quality monitoring, and AI demonstration use cases. Manual reading does not scale and does not provide structured outputs.
 
 \subsection{Product Purpose}
-The repository contains two products sharing one codebase:
+The repository delivers:
 \begin{itemize}[leftmargin=1.2em]
-  \item an online inference service exposed through Angular and FastAPI
-  \item an offline ML system for data preparation, finetuning, evaluation, MLflow tracking, and ONNX packaging
+  \item an end-user chat and batch UI for sentiment analysis
+  \item a FastAPI inference service for prediction, explanation, batch scoring, health, metrics, and evaluation trigger flows
+  \item an offline ML pipeline for data download, preprocessing, validation, finetuning, evaluation, and ONNX export
 \end{itemize}
 
-\subsection{Technical Purpose}
-The system is designed to prove that the team can operate a full ML delivery chain:
+\subsection{Technical Objective}
+The technical objective is to prove a complete ML-in-production chain:
 \begin{itemize}[leftmargin=1.2em]
-  \item DVC-managed data flow
-  \item Hugging Face and PEFT training
-  \item ONNX runtime serving
-  \item Prometheus and Grafana observability
-  \item containerized deployment through Docker Compose
+  \item DVC for data-pipeline stage orchestration
+  \item MLflow for experiment and evaluation tracking
+  \item PEFT/LoRA for finetuned adapters
+  \item ONNX Runtime for optimized serving
+  \item Prometheus and Grafana for observability
+  \item Docker Compose for integrated deployment
 \end{itemize}
 
-\subsection{Core Value Proposition}
-The main value is not raw model novelty. It is the operational packaging of sentiment inference into a service with explainability, batch processing, monitoring, and artifact lineage.
+\subsection{End Users}
+\begin{itemize}[leftmargin=1.2em]
+  \item product analysts and business stakeholders reviewing sentiment
+  \item demo users interacting with chat-style sentiment explanation
+  \item engineers operating the backend and training flows
+  \item future owners who must maintain runtime and training artifacts
+\end{itemize}
 
-\subsection{Maturity Assessment}
+\subsection{Value Proposition}
+The value is not only prediction accuracy. The stronger proposition is that the system packages inference, batch handling, explainability, monitoring, and artifact lifecycle into one coherent delivery surface.
+
+\subsection{Maturity Classification}
 \begin{table}[H]
 \centering
 \begin{tabularx}{\textwidth}{@{}lX@{}}
 \toprule
-\textbf{Rating} & \textbf{Assessment} \\
+\textbf{Stage} & \textbf{Assessment} \\
 \midrule
-Prototype & Exceeded. The repo has API contracts, tests, monitoring, Docker packaging, DVC, MLflow, and ONNX export. \\
-MVP & Exceeded. Users can run single prediction, explanation, health, metrics, and CSV batch flows. \\
-Advanced MVP & \textbf{Current state}. The service demonstrates end-to-end product behavior and a non-trivial ML lifecycle. \\
-Pre-Production & Partial only. Major production gaps remain: no authentication, permissive CORS, in-memory evaluation state, mocked batch status, and no real job orchestration. \\
-Production Ready & Not approved. The deployment is useful for demos, internal validation, and controlled pilots, but not enterprise production. \\
+Prototype & Exceeded. The repo includes contracts, tests, monitoring, and deployment manifests. \\
+MVP & Exceeded. End-user flows exist for single prediction, explanation, and batch upload. \\
+Advanced MVP & \textbf{Current state}. The codebase supports offline training, online inference, ONNX export, observability, and CI. \\
+Pre-Production & Partial. Security controls, durable jobs, and operational hardening are incomplete. \\
+Production Ready & Not approved. Security, reliability, and ownership controls are below enterprise standard. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\subsection{Why it is not production ready}
+\subsection{Implementation-based Justification}
 \begin{itemize}[leftmargin=1.2em]
-  \item \texttt{src/main.py} exposes all inference and evaluation endpoints without auth.
-  \item \texttt{/batch\_status/\{job\_id\}} returns a mock response and is not backed by a queue or durable store.
-  \item the frontend language selector emits a language but \texttt{SentimentAnalysisService.predict()} drops it and only sends \texttt{\{text\}}.
-  \item Docker Compose ships Grafana with default admin password \texttt{admin}.
-  \item health checks only prove model load, not downstream dependencies such as MLflow, Prometheus scrape health, or artifact integrity.
+  \item \texttt{src/main.py} exposes working inference and evaluation endpoints.
+  \item \texttt{src/model/baseline.py} implements real model orchestration, ABSA, SHAP, and ONNX paths.
+  \item \texttt{dvc.yaml} encodes a real multi-stage ML pipeline.
+  \item \texttt{docker-compose.yml} wires runtime, frontend, Prometheus, Grafana, MLflow, and training profile.
+  \item \texttt{/batch\_status/\{job\_id\}} is mocked, so durable async batch processing is \textbf{Not Implemented}.
+  \item authentication and authorization are \textbf{Not Implemented}.
 \end{itemize}
 
-\section{System Mental Model}
-\subsection{Business View}
+\section{Part 2 - System Mental Model}
+\subsection{Business Mental Model}
 \begin{mermaidblock}
 flowchart LR
-  Customer[Customer or Analyst]
-  UI[Angular Chat UI]
-  API[FastAPI Service]
-  Insight[Sentiment and Aspect Insights]
-  Ops[Monitoring and Reports]
-  Improve[Retraining and Export]
-  Customer --> UI --> API --> Insight --> Ops --> Improve
+  U[User or Analyst]
+  FE[Frontend Experience]
+  API[Inference Service]
+  INS[Structured Insight]
+  OPS[Monitoring and Review]
+  TRAIN[Retraining and Export]
+  U --> FE --> API --> INS --> OPS --> TRAIN
 \end{mermaidblock}
 
-\subsection{Product View}
+\subsection{Product Mental Model}
 \begin{mermaidblock}
 flowchart TB
-  A[Single Predict]
-  B[Explain SHAP]
-  C[Batch CSV Predict]
-  D[Background Evaluate]
-  E[Dashboard and Metrics]
-  UI[Frontend]
-  UI --> A
-  UI --> B
-  UI --> C
-  API[Backend]
-  A --> API
-  B --> API
-  C --> API
-  D --> API
-  API --> E
+  UI[Angular App]
+  P1[Single Prediction]
+  P2[Explain SHAP]
+  P3[Batch CSV]
+  P4[Status and Health]
+  P5[Operational Metrics]
+  UI --> P1
+  UI --> P2
+  UI --> P3
+  UI --> P4
+  P1 --> API[FastAPI]
+  P2 --> API
+  P3 --> API
+  P4 --> API
+  API --> P5
 \end{mermaidblock}
 
-\subsection{Engineering View}
+\subsection{Engineering Mental Model}
 \begin{mermaidblock}
 flowchart LR
   FE[app/sentiment-analysis-chatbot]
+  GW[Nginx /api proxy]
   BE[src/main.py]
-  MODEL[src/model]
+  INF[src/model]
   DATA[src/data]
   TRAIN[src/scripts + src/training]
-  OBS[infra + src/monitoring]
-  FE --> BE --> MODEL
-  DATA --> TRAIN
-  TRAIN --> MODEL
+  OBS[src/monitoring + infra]
+  FE --> GW --> BE --> INF
+  DATA --> TRAIN --> INF
   BE --> OBS
 \end{mermaidblock}
 
-\subsection{Infrastructure View}
+\subsection{Operations Mental Model}
 \begin{mermaidblock}
 flowchart LR
-  Browser --> Nginx[Frontend container :80]
-  Nginx --> FastAPI[fastapi_app :8000]
-  FastAPI --> ML[Model runtime in-process]
+  Browser --> Frontend[:80]
+  Frontend --> Nginx[nginx.conf]
+  Nginx --> FastAPI[:8000]
   FastAPI --> Metrics[/metrics]
   Metrics --> Prometheus[:9091]
   Prometheus --> Grafana[:3000]
@@ -146,283 +169,645 @@ flowchart LR
   Eval --> MLflow[:5005]
 \end{mermaidblock}
 
-\subsection{AI/ML View}
+\subsection{AI/ML Mental Model}
 \begin{mermaidblock}
 flowchart LR
-  Raw[data/raw]
-  Prep[src/data/pipeline.py]
-  Validate[src/data/validators.py]
-  Train[src/scripts/run_finetuning.py]
-  Eval[src/scripts/evaluate_finetuned.py and src/model/evaluate.py]
-  Export[src/scripts/export_onnx.py]
-  Serve[src/model/baseline.py]
-  Raw --> Prep --> Validate --> Train --> Eval --> Export --> Serve
+  RAW[data/raw]
+  PREP[src/data/pipeline.py]
+  VALID[src/data/validators.py]
+  FT[src/scripts/run_finetuning.py]
+  EVAL[src/model/evaluate.py and evaluate_finetuned.py]
+  EXPORT[src/scripts/export_onnx.py]
+  SERVE[src/model/baseline.py]
+  RAW --> PREP --> VALID --> FT --> EVAL --> EXPORT --> SERVE
 \end{mermaidblock}
 
-\section{End-to-End Business Flow}
-\begin{longtable}{@{}p{0.12\textwidth}p{0.22\textwidth}p{0.40\textwidth}p{0.16\textwidth}@{}}
+\subsection{Plain-language Explanation}
+For business stakeholders, the system reads text and returns sentiment plus supporting detail. For engineers, the system is a frontend plus a backend plus an embedded model runtime plus an offline training toolchain. For new team members, the easiest mental model is this: \texttt{app/} is the user surface, \texttt{src/main.py} is the runtime entrypoint, \texttt{src/model/} is the inference core, \texttt{src/data/} and \texttt{src/training/} are the artifact factory, and \texttt{infra/} plus \texttt{docker-compose.yml} are the operating shell around all of it.
+
+\section{Part 3 - Complete End-to-End Flow}
+\subsection{Flow Table}
+\begin{longtable}{@{}p{0.09\textwidth}p{0.17\textwidth}p{0.25\textwidth}p{0.13\textwidth}p{0.17\textwidth}p{0.15\textwidth}@{}}
 \toprule
-\textbf{Step} & \textbf{Business Objective} & \textbf{Technical Implementation} & \textbf{Owner} \\
+\textbf{Step} & \textbf{Objective} & \textbf{Implementation} & \textbf{Owner} & \textbf{Dependencies} & \textbf{Failure Modes} \\
 \midrule
 \endhead
-Customer & Submit text feedback for analysis & User interacts with Angular chat input or CSV upload in \texttt{app/sentiment-analysis-chatbot/src/app/components}. & UI/UX Lead \\
-UI & Collect text, voice transcription, or CSV file & \texttt{ChatInputComponent} emits text events; \texttt{BatchUploadComponent} uploads CSV through multipart form. & UI/UX Lead \\
-API & Validate request and route to the right execution path & \texttt{src/main.py} validates with Pydantic schemas in \texttt{contracts/schemas.py}. & Backend Lead \\
-Inference & Produce sentiment, aspects, sarcasm, or SHAP explanations & \texttt{BaselineModelInference} dispatches to HF or ONNX runtime and ABSA pipeline. & AI Lead \\
-Result & Return structured response to UI or API caller & \texttt{PredictResponse}, \texttt{ExplainResponse}, and batch response schemas serialize outputs. & Backend Lead \\
-Monitoring & Capture request count and latency & \texttt{src/monitoring/metrics.py} middleware and Prometheus scrape endpoint. & Solution Lead \\
-Feedback & Review metrics and evaluation artifacts & Grafana dashboards, MLflow runs, JSON reports under \texttt{reports/} and \texttt{data/reports/}. & Solution Lead / ML Lead \\
-Retraining & Improve adapters with new or revised datasets & \texttt{src/scripts/run\_finetuning.py}, task configs, class weights, and LoRA adapters. & ML Lead \\
-Deployment & Package updated runtime artifacts for serving & Dockerfiles, Docker Compose, ONNX export scripts, and mounted model directories. & Solution Lead / Backend Lead \\
+User & submit text or CSV & chat input, voice transcription, or file upload in Angular & UI/UX & browser, local state & invalid input, upload abandonment \\
+Frontend & collect and send requests & \texttt{app.component.ts}, service, components, \texttt{message.model.ts} & UI/UX & Angular, HttpClient, Nginx & stale UI state, contract drift \\
+API Gateway & route UI traffic & Nginx \texttt{/api/} proxy in \texttt{nginx.conf} & Solution & frontend container, backend service DNS & timeout, buffering issues, file-size issues \\
+Backend & validate and route & \texttt{src/main.py}, Pydantic schemas & Backend & FastAPI, contracts, model dependency & 400s, 500s, startup failure \\
+Inference Layer & normalize language and execute model path & language resolution plus \texttt{BaselineModelInference} & AI & model artifacts, tokenizer, runtime mode & unsupported language, load failure \\
+Model & produce logits, labels, ABSA, SHAP & HF or ONNX plus zero-shot classifier and SHAP explainer & AI & ONNX/HF artifacts, CPU/GPU, libraries & latency spikes, artifact mismatch \\
+Response & return structured payload & response models from \texttt{contracts/schemas.py} & Backend & model outputs & schema mismatch, missing fields \\
+Monitoring & observe traffic and latency & middleware and Prometheus / Grafana stack & Solution & metrics endpoint, scrape config & silent monitoring blind spot \\
+Feedback & inspect reports and dashboard signals & Grafana panels, MLflow, JSON reports & Solution + ML & observability stack, report files & stale metrics, missing artifact context \\
+Training & improve runtime artifacts & DVC stages and training scripts & ML & raw data, params, libraries & data failure, imbalance issues \\
+Deployment & move serving artifact into runtime image & Dockerfiles, Compose, DVC pull, ONNX export & Solution + AI + Backend & image build, secrets, model files & bad image, bad artifact, secret leak \\
 \bottomrule
 \end{longtable}
 
-\section{Architecture Deep Dive}
-\subsection{Frontend}
-\textbf{Responsibilities:} message composition, voice capture, history persistence, explain trigger, batch upload, theme control.\\
-\textbf{Dependencies:} Angular, HttpClient, local storage, backend \texttt{/api/*} routes via Nginx.\\
-\textbf{Risks:} contract drift, hidden language-selector bug, limited frontend test depth.\\
-\textbf{Ownership:} UI/UX Lead primary, Backend Lead secondary for API coupling.
+\subsection{Primary Runtime Sequence}
+\begin{mermaidblock}
+sequenceDiagram
+  participant User
+  participant UI as Angular UI
+  participant GW as Nginx Gateway
+  participant API as FastAPI
+  participant LD as LanguageDetector
+  participant INF as BaselineModelInference
+  participant OBS as Prometheus Metrics
+  User->>UI: submit text
+  UI->>GW: POST /api/predict
+  GW->>API: forward request
+  API->>LD: resolve_request_language()
+  API->>INF: predict_single(text, lang)
+  INF-->>API: PredictionResult
+  API->>OBS: increment counters and latency
+  API-->>GW: PredictResponse
+  GW-->>UI: JSON response
+  UI-->>User: sentiment and aspects
+\end{mermaidblock}
 
-\subsection{Backend}
-\textbf{Responsibilities:} startup lifecycle, dependency injection, schema validation, exception mapping, health, metrics, evaluate trigger, batch orchestration.\\
-\textbf{Dependencies:} FastAPI, pandas, model interface, monitoring middleware, background tasks.\\
-\textbf{Risks:} single-process bottleneck, synchronous expensive paths, no auth, in-memory state.\\
-\textbf{Ownership:} Backend Lead primary, Solution Lead secondary.
+\subsection{Training-to-Serving Sequence}
+\begin{mermaidblock}
+sequenceDiagram
+  participant DVC
+  participant Data as src/data
+  participant Train as run_finetuning.py
+  participant Eval as evaluate_finetuned.py
+  participant Export as export_onnx.py
+  participant Runtime as Docker runtime image
+  DVC->>Data: download and preprocess
+  Data->>Train: produce normalized train data
+  Train->>Eval: adapters for validation
+  Eval->>Export: approved finetuned adapters
+  Export->>Runtime: ONNX artifacts
+\end{mermaidblock}
 
-\subsection{Inference Layer}
-\textbf{Responsibilities:} sentiment scoring, sarcasm adapter path, ABSA extraction, SHAP explanation, ONNX session loading, language validation.\\
-\textbf{Dependencies:} Hugging Face, PEFT, SHAP, onnxruntime, tokenizer artifacts, exported models.\\
-\textbf{Risks:} startup latency, SHAP cost, ABSA latency, artifact mismatch, HF model download dependence.\\
-\textbf{Ownership:} AI Lead primary, ML Lead secondary.
-
-\subsection{Training Layer}
-\textbf{Responsibilities:} dataset loading, deduplication, split strategy, imbalance handling, LoRA config, trainer setup, MLflow logging.\\
-\textbf{Dependencies:} Datasets, Transformers, PEFT, sklearn, task configs, params.\\
-\textbf{Risks:} data skew, limited reproducibility outside configured data files, implicit dependence on raw file availability.\\
-\textbf{Ownership:} ML Lead primary, AI Lead secondary.
-
-\subsection{Monitoring Layer}
-\textbf{Responsibilities:} request metrics, dashboard provisioning, alert rule definitions.\\
-\textbf{Dependencies:} Prometheus, Grafana, middleware instrumentation.\\
-\textbf{Risks:} no tracing, limited model-level business metrics, alerts cover only a narrow failure set.\\
-\textbf{Ownership:} Solution Lead primary, Backend Lead secondary.
-
-\subsection{Deployment Layer}
-\textbf{Responsibilities:} image build, service topology, ports, resource limits, network and mounted storage.\\
-\textbf{Dependencies:} Dockerfile, Dockerfile.train, docker-compose, model and data directories.\\
-\textbf{Risks:} no orchestration beyond Compose, secret handling through build args, default credentials, no blue/green or rollback automation.\\
-\textbf{Ownership:} Solution Lead primary, Backend Lead secondary.
-
-\section{Repository Ownership Map}
-\begin{longtable}{@{}p{0.19\textwidth}p{0.20\textwidth}p{0.12\textwidth}p{0.12\textwidth}p{0.13\textwidth}p{0.11\textwidth}p{0.08\textwidth}@{}}
+\section{Part 4 - Repository Reverse Engineering}
+\subsection{Major Folder Analysis}
+\begin{longtable}{@{}p{0.16\textwidth}p{0.23\textwidth}p{0.16\textwidth}p{0.16\textwidth}p{0.12\textwidth}p{0.10\textwidth}@{}}
 \toprule
-\textbf{Folder} & \textbf{Purpose} & \textbf{Primary} & \textbf{Secondary} & \textbf{Business Impact} & \textbf{Modification Risk} & \textbf{Knowledge Risk} \\
+\textbf{Folder} & \textbf{Purpose} & \textbf{Runtime Relevance} & \textbf{Business Relevance} & \textbf{Owner} & \textbf{Risk} \\
 \midrule
 \endhead
-\texttt{app/} & Angular customer-facing UI & UI/UX & Backend & High & Medium & Medium \\
-\texttt{contracts/} & Shared API and model contracts & Backend & AI & High & High & Medium \\
-\texttt{data/} & Raw, processed, eval, and report artifacts & ML & AI & High & High & High \\
-\texttt{docs/} & Legacy reports and handbook outputs & Tech Lead & All leads & Medium & Low & Low \\
-\texttt{infra/} & Prometheus and Grafana provisioning & Solution & Backend & High & Medium & Medium \\
-\texttt{mlruns/} & MLflow local experiment store & ML & Solution & Medium & Low & Medium \\
-\texttt{models/} & Adapters and ONNX artifacts & AI & ML & High & High & High \\
-\texttt{notebooks/} & Colab/manual pipeline execution & ML & AI & Medium & Medium & High \\
-\texttt{reports/} & Evaluation and benchmark outputs & ML & AI & Medium & Low & Medium \\
-\texttt{src/data/} & Download, preprocess, validate flows & ML & AI & High & High & Medium \\
-\texttt{src/model/} & Runtime inference and export logic & AI & ML & High & High & High \\
-\texttt{src/monitoring/} & Prometheus instrumentation & Solution & Backend & Medium & Low & Low \\
-\texttt{src/scripts/} & Operational CLI entrypoints & ML & AI & High & Medium & Medium \\
-\texttt{src/training/} & Reusable training internals & ML & AI & High & Medium & Medium \\
-\texttt{tests/} & Regression safety net & Tech Lead & Owning team & High & Medium & Medium \\
-\texttt{.github/} & CI behavior & Backend & Tech Lead & High & Medium & Medium \\
+\texttt{app/} & frontend user experience and API client & direct & direct & UI/UX Lead & Medium \\
+\texttt{contracts/} & shared request, response, and model contracts & direct & direct & Backend Lead & High \\
+\texttt{data/} & raw, processed, and eval data artifacts & indirect at runtime, direct for training & high & ML Lead & High \\
+\texttt{docs/} & reports, handbook outputs, legacy architecture docs & indirect & medium & Tech Lead & Low \\
+\texttt{infra/} & Prometheus and Grafana provisioning & direct & medium & Solution Lead & Medium \\
+\texttt{mlruns/} & local MLflow tracking store & indirect & medium & ML Lead & Low \\
+\texttt{models/} & adapters and ONNX artifacts & direct & high & AI Lead & High \\
+\texttt{notebooks/} & ad hoc or Colab execution path & indirect & medium & ML Lead & Medium \\
+\texttt{reports/} & generated evaluation and benchmark reports & indirect & medium & ML Lead & Low \\
+\texttt{src/data/} & download, preprocess, validate logic & training-critical & high & ML Lead & High \\
+\texttt{src/model/} & runtime inference and export logic & runtime-critical & high & AI Lead & Critical \\
+\texttt{src/monitoring/} & API metrics middleware & runtime-critical & medium & Solution Lead & Medium \\
+\texttt{src/scripts/} & CLI entrypoints for training and export & training-critical & high & ML Lead & High \\
+\texttt{src/training/} & reusable training internals & training-critical & high & ML Lead & High \\
+\texttt{tests/} & regression safety net & indirect & high & Tech Lead & Medium \\
 \bottomrule
 \end{longtable}
 
-\subsection{Folder Ownership Matrix}
+\subsection{Folder Dependency Graph}
+\begin{mermaidblock}
+flowchart LR
+  app --> contracts
+  app --> src_main[src/main.py]
+  src_main --> contracts
+  src_main --> src_model[src/model]
+  src_model --> models
+  src_scripts[src/scripts] --> src_training[src/training]
+  src_scripts --> src_data[src/data]
+  src_scripts --> src_model
+  infra --> src_main
+  docker[docker-compose.yml] --> app
+  docker --> src_main
+  docker --> infra
+\end{mermaidblock}
+
+\subsection{Runtime Dependency Graph}
+\begin{mermaidblock}
+flowchart LR
+  Browser --> Angular
+  Angular --> Nginx
+  Nginx --> FastAPI
+  FastAPI --> Contracts
+  FastAPI --> Monitoring
+  FastAPI --> BaselineModel
+  BaselineModel --> ONNXArtifacts
+  BaselineModel --> ABSAZeroShot
+  BaselineModel --> SHAP
+\end{mermaidblock}
+
+\subsection{Training Dependency Graph}
+\begin{mermaidblock}
+flowchart LR
+  RawData --> Downloader
+  Downloader --> Preprocess
+  Preprocess --> Validator
+  Validator --> Finetuning
+  Finetuning --> Evaluation
+  Evaluation --> MLflow
+  Finetuning --> Adapters
+  Adapters --> ONNXExport
+\end{mermaidblock}
+
+\subsection{Deployment Dependency Graph}
+\begin{mermaidblock}
+flowchart LR
+  Dockerfile --> RuntimeImage
+  Dockerfile_train[Dockerfile.train] --> TrainingImage
+  dvc_pull[DVC pull in model stage] --> RuntimeImage
+  docker_compose --> RuntimeImage
+  docker_compose --> FrontendImage
+  docker_compose --> Prometheus
+  docker_compose --> Grafana
+  docker_compose --> MLflow
+\end{mermaidblock}
+
+\section{Part 5 - File-by-File Critical Analysis}
+\subsection{Top 50 Most Important Files}
+\begin{longtable}{@{}p{0.04\textwidth}p{0.22\textwidth}p{0.17\textwidth}p{0.13\textwidth}p{0.16\textwidth}p{0.11\textwidth}p{0.11\textwidth}@{}}
+\toprule
+\textbf{\#} & \textbf{File} & \textbf{Why it exists} & \textbf{When it executes} & \textbf{What breaks if removed} & \textbf{Owner} & \textbf{Risk} \\
+\midrule
+\endhead
+1 & \texttt{src/main.py} & runtime entrypoint and API surface & startup and every request & service does not run & Backend & Critical \\
+2 & \texttt{src/model/baseline.py} & core inference orchestration & startup, predict, explain, batch, eval & no prediction path & AI & Critical \\
+3 & \texttt{src/model/config.py} & model mode and artifact paths & startup and model creation & runtime cannot resolve artifacts & AI & High \\
+4 & \texttt{src/model/onnx\_inference.py} & ONNX session wrapper & onnx startup and inference & ONNX mode fails & AI & High \\
+5 & \texttt{src/model/onnx\_exporter.py} & merge and export adapters & export workflow & no ONNX promotion path & AI & High \\
+6 & \texttt{src/model/evaluate.py} & baseline evaluation and MLflow logging & offline eval and background eval & no baseline scoring path & ML & High \\
+7 & \texttt{src/model/language\_detector.py} & request language fallback & predict and explain without explicit lang & unsupported auto-detect path & AI & Medium \\
+8 & \texttt{src/model/device.py} & device selection & model load and export & runtime hardware selection breaks & AI & Medium \\
+9 & \texttt{src/model/download\_models.py} & preload HF assets in image build & Docker build & image startup becomes network-dependent & AI & Medium \\
+10 & \texttt{src/data/pipeline.py} & preprocessing chain & DVC preprocess stage & processed data not generated & ML & High \\
+11 & \texttt{src/data/downloader.py} & raw dataset acquisition & download stages & training inputs unavailable & ML & High \\
+12 & \texttt{src/data/validators.py} & quality gates and MLflow data reporting & validate stage & data quality checks disappear & ML & High \\
+13 & \texttt{src/scripts/run\_finetuning.py} & finetuning CLI entrypoint & training stage & no adapter training path & ML & Critical \\
+14 & \texttt{src/scripts/evaluate\_finetuned.py} & finetuned adapter evaluation & DVC evaluate stage & no post-finetune scorecard & ML & High \\
+15 & \texttt{src/scripts/export\_onnx.py} & ONNX export CLI wrapper & export stage & no deployment artifact export command & AI & High \\
+16 & \texttt{src/scripts/prepare\_eval.py} & build eval datasets & prepare\_eval stage & finetuned eval inputs missing & ML & Medium \\
+17 & \texttt{src/scripts/benchmark\_onnx.py} & benchmark PyTorch vs ONNX modes & benchmark stage & no benchmark refresh path & AI & Medium \\
+18 & \texttt{src/training/task\_configs.py} & task registry for sentiment and sarcasm & training and eval & task metadata fragments & ML & High \\
+19 & \texttt{src/training/dataset\_builder.py} & dedup and oversampling helpers & training & split and balance behavior drifts & ML & High \\
+20 & \texttt{src/training/metrics.py} & fairness-aware metrics payloads & evaluation & no consistent per-language metrics & ML & High \\
+21 & \texttt{src/training/weighted\_trainer.py} & weighted loss trainer & training when class weights enabled & imbalance mitigation weakens & ML & Medium \\
+22 & \texttt{src/training/class\_weights.py} & inverse-frequency class weights & training & weighted loss inputs break & ML & Medium \\
+23 & \texttt{src/training/lora\_config.py} & LoRA config creation & training & adapter config cannot be built & ML & Medium \\
+24 & \texttt{src/training/mlflow\_callback.py} & tracking URI and run-tag helpers & training and eval & MLflow behavior fragments & ML & Medium \\
+25 & \texttt{src/monitoring/metrics.py} & middleware and Prometheus metric objects & every request and metrics scrape & operational visibility drops & Solution & High \\
+26 & \texttt{contracts/schemas.py} & HTTP request and response contracts & request parsing and docs generation & API contract breaks & Backend & Critical \\
+27 & \texttt{contracts/model\_interface.py} & model abstraction and shared dataclasses & backend-model boundary & coupling explodes and tests fail & Backend + AI & High \\
+28 & \texttt{contracts/errors.py} & shared model exception types & runtime error mapping & error handling becomes inconsistent & Backend + AI & Medium \\
+29 & \texttt{app/sentiment-analysis-chatbot/src/app/app.component.ts} & main frontend shell & every UI session & chat UX collapses & UI/UX & High \\
+30 & \texttt{app/sentiment-analysis-chatbot/src/app/services/sentiment-analysis.service.ts} & API client and message state & every UI request & UI cannot call backend & UI/UX & Critical \\
+31 & \texttt{app/sentiment-analysis-chatbot/src/app/components/chat-input/chat-input.component.ts} & text and voice capture & user interaction & main input path breaks & UI/UX & High \\
+32 & \texttt{app/sentiment-analysis-chatbot/src/app/components/batch-upload/batch-upload.component.ts} & CSV upload and result table & batch UI flow & batch UX disappears & UI/UX & High \\
+33 & \texttt{app/sentiment-analysis-chatbot/src/app/models/message.model.ts} & typed frontend contract mirror & compile time and runtime assumptions & type drift and UI bugs & UI/UX & Medium \\
+34 & \texttt{app/sentiment-analysis-chatbot/nginx.conf} & gateway and static hosting config & frontend container runtime & API routing and uploads fail & Solution & High \\
+35 & \texttt{docker-compose.yml} & full stack orchestration & integrated deployment & no standard local stack & Solution & Critical \\
+36 & \texttt{Dockerfile} & backend runtime image build & image build & deployable runtime missing & Solution & Critical \\
+37 & \texttt{Dockerfile.train} & training image build & training container use & reproducible training container missing & Solution + ML & High \\
+38 & \texttt{dvc.yaml} & end-to-end ML pipeline DAG & DVC execution & stage orchestration disappears & ML & Critical \\
+39 & \texttt{params.yaml} & shared config for data, eval, training, MLflow & data and eval stages & config defaults fragment & ML & High \\
+40 & \texttt{requirements.txt} & Python dependency set & install and CI & environment build fails & Tech Lead & High \\
+41 & \texttt{.github/workflows/ci.yml} & automated regression gate & CI runs & change safety drops & Backend & Medium \\
+42 & \texttt{infra/prometheus/prometheus.yml} & scrape target config & monitoring runtime & metrics stop scraping & Solution & Medium \\
+43 & \texttt{infra/prometheus/alert\_rules.yml} & alert thresholds & monitoring runtime & alerting disappears & Solution & Medium \\
+44 & \texttt{infra/grafana/provisioning/datasources/datasource.yml} & Grafana datasource bootstrap & Grafana startup & dashboard queries fail & Solution & Medium \\
+45 & \texttt{infra/grafana/provisioning/dashboards/files/sentiment\_dashboard.json} & operational dashboards & Grafana startup and runtime & no default dashboard view & Solution & Medium \\
+46 & \texttt{tests/test\_api.py} & end-to-end API regression tests & CI and local test runs & route regressions escape faster & Backend & Medium \\
+47 & \texttt{tests/scripts/test\_run\_finetuning.py} & training CLI regression coverage & CI and local test runs & training regressions escape faster & ML & Medium \\
+48 & \texttt{tests/data/test\_validators.py} & data quality guard regression tests & CI and local test runs & quality-rule drift escapes faster & ML & Medium \\
+49 & \texttt{tests/model/test\_batch\_throughput.py} & throughput target evidence & benchmark test runs & perf expectations lose executable proof & AI & Medium \\
+50 & \texttt{app/sentiment-analysis-chatbot/package.json} & frontend dependency and script manifest & frontend install and build & UI cannot build reproducibly & UI/UX & Medium \\
+\bottomrule
+\end{longtable}
+
+\subsection{Criticality Notes}
+The highest criticality cluster is \texttt{src/main.py}, \texttt{src/model/baseline.py}, \texttt{contracts/schemas.py}, \texttt{docker-compose.yml}, \texttt{Dockerfile}, \texttt{dvc.yaml}, and \texttt{src/scripts/run\_finetuning.py}. These files define the runtime contract, the model execution path, and the artifact-production lifecycle.
+
+\section{Part 6 - Execution Trace}
+\subsection{Application Startup}
+\begin{enumerate}[leftmargin=1.4em]
+  \item Uvicorn imports \texttt{src.main:app}.
+  \item FastAPI registers middleware, routes, and exception handlers.
+  \item lifespan handler reads environment variable \texttt{MODEL\_MODE}; default is \texttt{onnx}.
+  \item \texttt{ModelConfig(mode=mode)} is created.
+  \item \texttt{BaselineModelInference(config)} is instantiated.
+  \item \texttt{BaselineModelInference.\_load\_model()} loads either ONNX sessions or Hugging Face/PEFT model state.
+  \item \texttt{preload()} eagerly loads the ABSA pipeline.
+\end{enumerate}
+
+\subsection{Health Check}
+\begin{itemize}[leftmargin=1.2em]
+  \item File: \texttt{src/main.py}
+  \item Function: \texttt{health\_check()}
+  \item Input: HTTP GET
+  \item Output: \texttt{HealthResponse}
+  \item Exception path: dependency raises 503 if global model is not ready
+  \item Owner: Backend
+\end{itemize}
+
+\subsection{Predict}
+\begin{itemize}[leftmargin=1.2em]
+  \item File: \texttt{src/main.py}
+  \item Functions: \texttt{predict()}, \texttt{resolve\_request\_language()}
+  \item Core model function: \texttt{BaselineModelInference.predict\_single()}
+  \item Input: \texttt{PredictRequest(text, lang)}
+  \item Output: \texttt{PredictResponse}
+  \item Exception path: 400 on unsupported language, 500 on model failure
+  \item Owner: Backend + AI
+\end{itemize}
+
+\subsection{Explain}
+\begin{itemize}[leftmargin=1.2em]
+  \item File: \texttt{src/main.py}
+  \item Function: \texttt{explain()}
+  \item Core model function: \texttt{get\_shap\_explanation()}
+  \item Input: \texttt{ExplainRequest}
+  \item Output: token list, SHAP values, base value, latency
+  \item Exception path: model error, tokenizer absence, SHAP runtime error
+  \item Owner: Backend + AI
+\end{itemize}
+
+\subsection{Batch Predict}
+\begin{itemize}[leftmargin=1.2em]
+  \item File: \texttt{src/main.py}
+  \item Function: \texttt{batch\_predict()}
+  \item Input: multipart CSV upload
+  \item Output: synchronous \texttt{BatchPredictResponse}
+  \item Notes: row cap 500; empty rows converted to failed results; ABSA skipped for performance
+  \item Exception path: invalid CSV, missing \texttt{text} column, model batch failure
+  \item Owner: Backend
+\end{itemize}
+
+\subsection{Evaluation}
+\begin{itemize}[leftmargin=1.2em]
+  \item Runtime trigger file: \texttt{src/main.py}
+  \item Background imports: \texttt{src/model/evaluate.py}
+  \item Input: POST no body
+  \item Output: immediate started status and separate in-memory status endpoint
+  \item Gap: persistent job tracking is \textbf{Not Implemented}
+  \item Owner: Backend + ML
+\end{itemize}
+
+\subsection{Training}
+\begin{itemize}[leftmargin=1.2em]
+  \item File: \texttt{src/scripts/run\_finetuning.py}
+  \item Main flow: parse args, resolve task config, load raw data, dedup, stratify, oversample, tokenize, build PEFT model, train, evaluate, save adapter, log MLflow
+  \item Inputs: task name, raw CSVs, params, environment
+  \item Outputs: adapter directory, metrics, MLflow run
+  \item Owner: ML
+\end{itemize}
+
+\subsection{ONNX Export}
+\begin{itemize}[leftmargin=1.2em]
+  \item CLI file: \texttt{src/scripts/export\_onnx.py}
+  \item Export implementation: \texttt{src/model/onnx\_exporter.py}
+  \item Steps: load base model, load adapter, merge, save temp merged model, export FP32 ONNX, quantize to INT8
+  \item Outputs: \texttt{models/onnx/*}
+  \item Owner: AI
+\end{itemize}
+
+\subsection{Sequence Diagrams}
+\begin{mermaidblock}
+sequenceDiagram
+  participant App as FastAPI app
+  participant Life as lifespan()
+  participant Model as BaselineModelInference
+  participant ONNX as OnnxInferenceSession or HF
+  App->>Life: startup
+  Life->>Model: instantiate with MODEL_MODE
+  Model->>ONNX: load artifacts
+  Life->>Model: preload ABSA
+  Life-->>App: ready
+\end{mermaidblock}
+
+\begin{mermaidblock}
+sequenceDiagram
+  participant FE as Frontend
+  participant API as /predict
+  participant LD as LanguageDetector
+  participant INF as BaselineModelInference
+  FE->>API: PredictRequest
+  API->>LD: detect if lang missing
+  API->>INF: predict_single()
+  INF-->>API: PredictionResult
+  API-->>FE: PredictResponse
+\end{mermaidblock}
+
+\begin{mermaidblock}
+sequenceDiagram
+  participant CSV as Uploaded CSV
+  participant API as /batch_predict
+  participant PD as pandas
+  participant INF as BaselineModelInference
+  CSV->>API: multipart file
+  API->>PD: read_csv()
+  API->>INF: predict_batch(skip_absa=true)
+  INF-->>API: result list
+  API-->>CSV: BatchPredictResponse
+\end{mermaidblock}
+
+\begin{mermaidblock}
+sequenceDiagram
+  participant DVC
+  participant Train as run_finetuning.py
+  participant Eval as evaluate_finetuned.py
+  participant Export as export_onnx.py
+  DVC->>Train: finetune task
+  Train-->>Eval: adapters
+  Eval-->>Export: accepted adapter output
+\end{mermaidblock}
+
+\section{Part 7 - Frontend Handbook}
+\subsection{Owner}
+Nguyen Le Hong Nhi
+
+\subsection{Architecture}
+The frontend is an Angular standalone-component application. The key pattern is a thin app shell plus a single service maintaining the message stream.
+
+\subsection{Components}
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{AppComponent}: layout, health polling, history, overlay control, message rendering
+  \item \texttt{ChatInputComponent}: text input, language selector, browser speech recognition, send events
+  \item \texttt{BatchUploadComponent}: CSV upload, summary cards, results export
+  \item \texttt{MessageBubbleComponent}: message rendering and explainability display
+\end{itemize}
+
+\subsection{Services and State Flow}
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{SentimentAnalysisService} stores messages in a signal and persists history in local storage.
+  \item API calls go to Nginx-relative paths such as \texttt{/api/predict}, \texttt{/api/explain}, and \texttt{/api/batch\_predict}.
+  \item health polling runs from the app shell until the backend returns healthy.
+\end{itemize}
+
+\subsection{Explainability UI}
+Explain is not precomputed in the UI. The service finds the preceding user message for a bot reply and then calls \texttt{/api/explain}. That means explanation depends on chat history order, not on a stable backend-issued prediction id.
+
+\subsection{Batch Upload UI}
+Batch upload is modal-driven. CSV selection is local, upload is synchronous, and the result table is rendered in memory. A durable batch-job UX is \textbf{Not Implemented}.
+
+\subsection{Key Risks}
+\begin{itemize}[leftmargin=1.2em]
+  \item The language selector emits \texttt{lang} but the service drops it on prediction requests.
+  \item The UI offers many languages while backend runtime supports only \texttt{en} and \texttt{vi}.
+  \item Message history persistence can hide backend readiness by reusing prior chat state.
+  \item Automated frontend coverage is limited.
+\end{itemize}
+
+\subsection{Extension Points}
+\begin{itemize}[leftmargin=1.2em]
+  \item wire explicit language end-to-end
+  \item add true batch job polling and downloadable artifacts
+  \item attach explain requests to prediction ids instead of chat adjacency
+  \item split operational settings into authenticated admin surfaces
+\end{itemize}
+
+\section{Part 8 - Backend Handbook}
+\subsection{Owner}
+Pham Duc Long
+
+\subsection{FastAPI Structure}
+The backend is a single FastAPI app in \texttt{src/main.py}. It owns:
+\begin{itemize}[leftmargin=1.2em]
+  \item startup and global model lifecycle
+  \item request validation through Pydantic schemas
+  \item dependency injection for model access
+  \item exception mapping
+  \item monitoring middleware registration
+\end{itemize}
+
+\subsection{Contracts and Validation}
+Contracts live in \texttt{contracts/schemas.py}. The backend trusts these schemas for OpenAPI and runtime parsing. Health, predict, explain, batch, and evaluation surfaces are all defined through this contract layer.
+
+\subsection{API Ownership Map}
 \begin{table}[H]
 \centering
-\begin{tabularx}{\textwidth}{@{}lXXXXX@{}}
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
 \toprule
-\textbf{Lead} & \textbf{Core folders} & \textbf{Review triggers} & \textbf{Single-point-of-failure risk} & \textbf{Backup owner} & \textbf{Notes} \\
+\textbf{Endpoint} & \textbf{Purpose} & \textbf{Owner} \\
 \midrule
-Tech Lead & \texttt{docs/}, \texttt{tests/}, cross-cutting changes & architecture, security, readiness & Medium & Solution Lead & final approver for major changes \\
-ML Lead & \texttt{src/data/}, \texttt{src/training/}, \texttt{data/} & datasets, training params, evaluation metrics & High & AI Lead & owns data quality gates \\
-AI Lead & \texttt{src/model/}, \texttt{models/} & inference mode, ABSA, SHAP, ONNX & High & ML Lead & highest artifact coupling \\
-Solution Lead & \texttt{infra/}, \texttt{docker-compose.yml}, deployment docs & observability and runtime topology & Medium & Backend Lead & owns end-to-end ops fit \\
-Backend Lead & \texttt{src/main.py}, \texttt{contracts/}, CI & API routes, schemas, error handling & Medium & Solution Lead & owns request semantics \\
-UI/UX Lead & \texttt{app/} & user flows, upload UX, explain UX & Medium & Backend Lead & tightly coupled to response schema \\
+\texttt{GET /health} & readiness and model state & Backend \\
+\texttt{POST /predict} & main single-text inference & Backend + AI \\
+\texttt{POST /explain} & SHAP explanation path & Backend + AI \\
+\texttt{POST /batch\_predict} & synchronous CSV batch scoring & Backend \\
+\texttt{GET /batch\_status/\{job\_id\}} & mocked status response & Backend \\
+\texttt{POST /evaluate} & trigger background baseline evaluation & Backend + ML \\
+\texttt{GET /evaluate/status} & in-memory evaluation status & Backend \\
+\texttt{GET /metrics} & Prometheus metrics scrape & Backend + Solution \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\section{Runtime Execution Trace}
-\subsection{Execution Tables}
-\begin{longtable}{@{}p{0.12\textwidth}p{0.18\textwidth}p{0.20\textwidth}p{0.14\textwidth}p{0.14\textwidth}p{0.12\textwidth}p{0.10\textwidth}@{}}
+\subsection{Error Handling}
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{UnsupportedLanguageError} maps to HTTP 400.
+  \item \texttt{ModelError} maps to HTTP 500.
+  \item batch parsing failures raise HTTP 400.
+  \item evaluate conflict raises HTTP 409 if a run is already active.
+\end{itemize}
+
+\subsection{Backend Gaps}
+\begin{itemize}[leftmargin=1.2em]
+  \item Authentication: \textbf{Not Implemented}
+  \item Authorization: \textbf{Not Implemented}
+  \item Durable evaluation status store: \textbf{Not Implemented}
+  \item Durable async batch processing: \textbf{Not Implemented}
+  \item Request rate limiting: \textbf{Not Implemented}
+\end{itemize}
+
+\section{Part 9 - AI Inference Handbook}
+\subsection{Owner}
+Do Quoc Trung
+
+\subsection{Pipeline}
+Input text follows this path:
+\begin{center}
+Input text $\rightarrow$ language selection $\rightarrow$ tokenization $\rightarrow$ tensors or NumPy arrays $\rightarrow$ logits $\rightarrow$ softmax probabilities $\rightarrow$ label selection $\rightarrow$ optional ABSA and sarcasm $\rightarrow$ optional SHAP
+\end{center}
+
+\subsection{Tokenization and Tensors}
+\begin{itemize}[leftmargin=1.2em]
+  \item HF mode: tokenizer returns PyTorch tensors, truncated at \texttt{max\_length}
+  \item ONNX mode: tokenizer returns NumPy arrays for \texttt{onnxruntime}
+  \item batching uses padding only when predicting lists of texts
+\end{itemize}
+
+\subsection{ONNX Runtime}
+\begin{itemize}[leftmargin=1.2em]
+  \item provider selection prefers CUDA, then CoreML for MPS, then CPU
+  \item sentiment and sarcasm ONNX sessions are loaded separately if available
+  \item INT8 path exists through quantized exported models
+\end{itemize}
+
+\subsection{Prediction Logic}
+\begin{itemize}[leftmargin=1.2em]
+  \item sentiment label map is index-based: negative, neutral, positive
+  \item sarcasm in finetuned mode uses a dedicated adapter or ONNX session
+  \item sarcasm training uses a 3-logit shared-head design while runtime only consumes the first two logits
+\end{itemize}
+
+\subsection{ABSA}
+ABSA is implemented through a zero-shot classification pipeline, not through a dedicated aspect model trained in-repo. Aspect detection and aspect-sentiment inference each require extra zero-shot passes, which is why batch mode disables ABSA.
+
+\subsection{SHAP}
+SHAP is built on demand using a prediction callback and tokenizer. There is no caching, no precomputation, and no request budgeting beyond general route execution time.
+
+\subsection{Language Detection}
+Language detection is lightweight and heuristic. It uses Vietnamese diacritic detection and token-count minimums. This is sufficient for a fallback but is not enterprise-grade language identification.
+
+\subsection{Latency Analysis}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lX@{}}
 \toprule
-\textbf{Flow} & \textbf{File / Class} & \textbf{Function} & \textbf{Input} & \textbf{Output} & \textbf{Exception Path} & \textbf{Owner} \\
+\textbf{Path} & \textbf{Latency implication} \\
 \midrule
-\endhead
-Startup & \texttt{src/main.py} / module & \texttt{lifespan()} & env \texttt{MODEL\_MODE} & initialized \texttt{ml\_model} & \texttt{ModelError} on load failure & Backend + AI \\
-Health & \texttt{src/main.py} / API & \texttt{health\_check()} & HTTP GET & \texttt{HealthResponse} & 503 if model not ready through dependency & Backend \\
-Predict & \texttt{src/main.py} / API & \texttt{predict()} & \texttt{PredictRequest} & \texttt{PredictResponse} & 400 unsupported language, 500 model error & Backend \\
-Predict core & \texttt{src/model/baseline.py} / \texttt{BaselineModelInference} & \texttt{predict\_single()} & text, lang & \texttt{PredictionResult} & \texttt{UnsupportedLanguageError}, \texttt{ModelError} & AI \\
-Explain & \texttt{src/main.py} / API & \texttt{explain()} & \texttt{ExplainRequest} & \texttt{ExplainResponse} & 400 unsupported language, 500 explainer failure & Backend + AI \\
-Batch Predict & \texttt{src/main.py} / API & \texttt{batch\_predict()} & uploaded CSV & \texttt{BatchPredictResponse} & 400 invalid CSV or missing column, 500 batch failure & Backend \\
-Batch core & \texttt{src/model/baseline.py} / \texttt{BaselineModelInference} & \texttt{predict\_batch()} & list of texts & list of \texttt{PredictionResult} & \texttt{ValueError} invalid batch size & AI \\
-Evaluate trigger & \texttt{src/main.py} / API & \texttt{run\_evaluate()} & POST no body & status JSON & 409 already running; background \texttt{last\_error} on failure & Backend + ML \\
-Evaluate status & \texttt{src/main.py} / API & \texttt{evaluate\_status()} & HTTP GET & in-memory state JSON & stale state after restart & Backend \\
-Offline eval & \texttt{src/model/evaluate.py} & \texttt{evaluate\_on\_dataset()} & processed test frame & metrics dict & returns error payload when split empty & ML + AI \\
+Startup & highest cost is model/session load plus ABSA warm-up \\
+Single predict, sentiment only & moderate; bounded by tokenizer + model forward \\
+Single predict with ABSA & high; multiple zero-shot passes added \\
+Explain SHAP & very high; explainer construction and repeated model calls \\
+Batch predict with \texttt{skip\_absa=true} & throughput-oriented and benchmarked in tests \\
+Batch predict with ABSA & intentionally avoided in backend implementation \\
 \bottomrule
-\end{longtable}
+\end{tabularx}
+\end{table}
 
-\subsection{Sequence Diagrams}
-\textbf{Startup}
+\section{Part 10 - ML Handbook}
+\subsection{Owner}
+Duong Binh An
+
+\subsection{Dataset Strategy}
+\begin{itemize}[leftmargin=1.2em]
+  \item SemEval restaurant XML is used for aspect sentiment data
+  \item tweet\_eval irony is used for sarcasm
+  \item multilingual-sentiments English plus UIT-VSFC Vietnamese are used for sentiment finetuning
+\end{itemize}
+
+\subsection{DVC}
+\texttt{dvc.yaml} is the real training and evaluation backbone. It orchestrates download, preprocess, validate, baseline evaluation, multilingual sentiment and sarcasm download, eval preparation, finetuning, finetuned evaluation, ONNX export, and benchmark stages.
+
+\subsection{MLflow}
+MLflow is used in two different ways:
+\begin{itemize}[leftmargin=1.2em]
+  \item baseline evaluation logs metrics and artifacts
+  \item finetuning runs log training metadata and parameters
+\end{itemize}
+Tracking URI resolution differs between runtime, local CLI, and Docker training contexts.
+
+\subsection{LoRA and PEFT}
+Finetuning uses PEFT adapters on top of \texttt{xlm-roberta-base}. LoRA config is centralized. This keeps artifact size smaller than full-model copies and supports separate sentiment and sarcasm adapters.
+
+\subsection{Evaluation and Fairness}
+Evaluation produces:
+\begin{itemize}[leftmargin=1.2em]
+  \item overall macro-F1
+  \item per-language F1
+  \item per-language gap
+  \item confusion matrices
+  \item classification reports
+\end{itemize}
+Fairness here means language-slice disparity inspection, not a broader governance framework.
+
+\subsection{Training Lifecycle}
 \begin{mermaidblock}
-sequenceDiagram
-  participant U as Uvicorn/FastAPI
-  participant A as src.main.lifespan
-  participant C as ModelConfig
-  participant M as BaselineModelInference
-  participant O as OnnxInferenceSession or HF model
-  U->>A: app startup
-  A->>C: read MODEL_MODE
-  A->>M: instantiate
-  M->>O: load tokenizer/model/session
-  A->>M: preload()
-  M->>M: warm ABSA pipeline
-  A-->>U: app ready
+flowchart LR
+  Raw --> Normalize
+  Normalize --> Validate
+  Validate --> Split
+  Split --> Balance
+  Balance --> Tokenize
+  Tokenize --> Train
+  Train --> Evaluate
+  Evaluate --> SaveAdapter
+  SaveAdapter --> ExportONNX
 \end{mermaidblock}
 
-\textbf{Predict}
-\begin{mermaidblock}
-sequenceDiagram
-  participant User
-  participant FE as Angular UI
-  participant API as FastAPI /predict
-  participant LD as LanguageDetector
-  participant MI as BaselineModelInference
-  participant ABSA as Zero-shot pipeline
-  User->>FE: enter text
-  FE->>API: POST /api/predict {text}
-  API->>LD: resolve_request_language()
-  API->>MI: predict_single(text, lang)
-  MI->>MI: sentiment logits
-  MI->>ABSA: optional aspect extraction
-  MI-->>API: PredictionResult
-  API-->>FE: PredictResponse
-  FE-->>User: render sentiment and aspects
-\end{mermaidblock}
+\subsection{ML Gaps}
+\begin{itemize}[leftmargin=1.2em]
+  \item Model registry: \textbf{Not Implemented}
+  \item Formal promotion approval workflow: \textbf{Not Implemented}
+  \item Signed artifacts or checksum verification: \textbf{Not Implemented}
+\end{itemize}
 
-\textbf{Explain}
-\begin{mermaidblock}
-sequenceDiagram
-  participant FE as Angular UI
-  participant API as FastAPI /explain
-  participant MI as BaselineModelInference
-  participant SH as SHAP Explainer
-  FE->>API: POST /api/explain {text}
-  API->>MI: get_shap_explanation()
-  MI->>SH: build explainer and score text
-  SH-->>MI: token values
-  MI-->>API: SHAPResult
-  API-->>FE: ExplainResponse
-\end{mermaidblock}
+\section{Part 11 - Solution Engineering Handbook}
+\subsection{Owner}
+Duong Hong Quan
 
-\textbf{Batch Predict}
-\begin{mermaidblock}
-sequenceDiagram
-  participant User
-  participant FE as BatchUploadComponent
-  participant API as FastAPI /batch_predict
-  participant PD as pandas.read_csv
-  participant MI as BaselineModelInference
-  User->>FE: upload CSV
-  FE->>API: multipart file
-  API->>PD: parse CSV bytes
-  API->>MI: predict_batch(valid_texts, skip_absa=true)
-  MI-->>API: prediction list
-  API-->>FE: batch response with row results
-\end{mermaidblock}
+\subsection{End-to-End Integration}
+Solution engineering owns the integration story more than any single code module: frontend routing, backend availability, observability, Compose topology, and environment coherence.
 
-\textbf{Evaluate}
-\begin{mermaidblock}
-sequenceDiagram
-  participant Caller
-  participant API as FastAPI /evaluate
-  participant BG as Background task
-  participant Eval as src.model.evaluate
-  participant MLF as MLflow
-  Caller->>API: POST /evaluate
-  API-->>Caller: started
-  API->>BG: add task
-  BG->>Eval: evaluate_on_dataset()
-  Eval->>MLF: log_to_mlflow()
-  BG-->>API: update in-memory state
-\end{mermaidblock}
+\subsection{Deployment Architecture}
+\begin{itemize}[leftmargin=1.2em]
+  \item frontend container serves Angular through Nginx
+  \item backend container runs FastAPI with model artifacts and processed data
+  \item Prometheus scrapes the backend
+  \item Grafana reads Prometheus
+  \item MLflow runs as a separate service
+  \item training container is profile-gated and separate from inference runtime
+\end{itemize}
 
-\section{Team Handbooks}
-\subsection{7.1 Tech Lead Handbook}
-\textbf{Owner:} Le Quang Tuyen\\
-\textbf{Responsibilities:} architecture direction, code-review bar, readiness approvals, cross-team conflict resolution.\\
-\textbf{Systems owned:} whole-system architecture, standards, release quality gates.\\
-\textbf{Files owned:} handbook, test strategy, cross-cutting config changes.\\
-\textbf{Operational duties:} production-readiness review, incident commander for Sev-1.\\
-\textbf{Release duties:} approve contract changes, security exceptions, and go-live checklist.\\
-\textbf{Risks:} architecture drift and unclear ownership boundaries.\\
-\textbf{KPIs:} escaped-defect rate, release predictability, review cycle time, readiness score trend.
+\subsection{Monitoring Strategy}
+Current monitoring covers:
+\begin{itemize}[leftmargin=1.2em]
+  \item request count by method, endpoint, status
+  \item request latency
+  \item model inference latency by language label
+  \item simple alerts for high 5xx rate and high inference latency
+\end{itemize}
+Tracing, structured request logs, and SLO dashboards are \textbf{Not Implemented}.
 
-\subsection{7.2 ML Engineering Handbook}
-\textbf{Owner:} Duong Binh An\\
-\textbf{Responsibilities:} datasets, preprocessing, validation thresholds, finetuning, evaluation design, MLflow.\\
-\textbf{Systems owned:} \texttt{src/data/}, \texttt{src/training/}, training scripts, \texttt{data/}, \texttt{reports/}.\\
-\textbf{Files owned:} \texttt{src/scripts/run\_finetuning.py}, \texttt{src/data/validators.py}, \texttt{params.yaml}, \texttt{dvc.yaml}.\\
-\textbf{Operational duties:} maintain dataset integrity and evaluation reproducibility.\\
-\textbf{Release duties:} validate metrics before artifact promotion.\\
-\textbf{Risks:} knowledge silo around data lineage and imbalance logic.\\
-\textbf{KPIs:} macro F1, per-language F1, reproducibility success, validation pass rate.
+\subsection{Operational Readiness Assessment}
+The stack is good for local integration, internal demo, and controlled pilot. It is not ready for enterprise-grade multi-environment operations because secret handling, auth, durable job control, and deployment rollout strategy are incomplete.
 
-\subsection{7.3 AI Engineering Handbook}
-\textbf{Owner:} Do Quoc Trung\\
-\textbf{Responsibilities:} inference behavior, ONNX runtime, ABSA, sarcasm flag, SHAP, language detection.\\
-\textbf{Systems owned:} \texttt{src/model/}, \texttt{models/}.\\
-\textbf{Files owned:} \texttt{baseline.py}, \texttt{onnx\_inference.py}, \texttt{onnx\_exporter.py}, \texttt{language\_detector.py}.\\
-\textbf{Operational duties:} model load diagnostics, runtime latency tuning, artifact compatibility checks.\\
-\textbf{Release duties:} sign off on model artifact integrity and inference regression tests.\\
-\textbf{Risks:} artifact mismatch, SHAP cost explosions, hidden provider issues.\\
-\textbf{KPIs:} p95 latency, model load success, inference error rate, benchmark stability.
+\section{Part 12 - Ownership Matrix}
+\subsection{Folder Ownership Matrix}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+\textbf{Scope} & \textbf{Primary folders} & \textbf{Owner} \\
+\midrule
+UI surface & \texttt{app/} & UI/UX Lead \\
+Backend contract and routes & \texttt{src/main.py}, \texttt{contracts/} & Backend Lead \\
+Inference runtime & \texttt{src/model/}, \texttt{models/} & AI Lead \\
+Data and training & \texttt{src/data/}, \texttt{src/training/}, \texttt{src/scripts/}, \texttt{data/} & ML Lead \\
+Deployment and observability & \texttt{infra/}, \texttt{docker-compose.yml}, Dockerfiles & Solution Lead \\
+Cross-cutting quality & \texttt{tests/}, \texttt{docs/} & Tech Lead \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{7.4 Solution Engineering Handbook}
-\textbf{Owner:} Duong Hong Quan\\
-\textbf{Responsibilities:} end-to-end integration, monitoring stack, deployment topology, service packaging.\\
-\textbf{Systems owned:} \texttt{infra/}, Compose topology, release runbooks.\\
-\textbf{Files owned:} \texttt{docker-compose.yml}, \texttt{Dockerfile}, \texttt{Dockerfile.train}, Prometheus and Grafana configs.\\
-\textbf{Operational duties:} maintain observability and environment consistency.\\
-\textbf{Release duties:} verify service health, ports, mounted volumes, and dashboards.\\
-\textbf{Risks:} dependency drift, insecure defaults, manual deployment steps.\\
-\textbf{KPIs:} deployment success rate, monitoring freshness, incident MTTR.
+\subsection{Service Ownership Matrix}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+\textbf{Service} & \textbf{Responsibility} & \textbf{Owner} \\
+\midrule
+Angular + Nginx frontend & user interaction and gateway routing & UI/UX + Solution \\
+FastAPI runtime & API availability and contract & Backend \\
+Model runtime in-process & inference correctness and latency & AI \\
+Training profile container & adapter production & ML \\
+Prometheus / Grafana & monitoring and alerts & Solution \\
+MLflow & experiment visibility & ML \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{7.5 Backend Engineering Handbook}
-\textbf{Owner:} Pham Duc Long\\
-\textbf{Responsibilities:} API semantics, request validation, exception handling, evaluate and batch endpoints.\\
-\textbf{Systems owned:} \texttt{src/main.py}, \texttt{contracts/}, backend CI and tests.\\
-\textbf{Files owned:} \texttt{src/main.py}, \texttt{contracts/schemas.py}, \texttt{contracts/errors.py}.\\
-\textbf{Operational duties:} endpoint health, error triage, backward compatibility.\\
-\textbf{Release duties:} maintain OpenAPI correctness and contract stability.\\
-\textbf{Risks:} route drift, in-memory state, unbounded expensive calls.\\
-\textbf{KPIs:} 5xx rate, schema-change defect rate, endpoint coverage.
+\subsection{Operational, Security, Documentation, and Knowledge Ownership}
+\begin{itemize}[leftmargin=1.2em]
+  \item operational ownership: Solution Lead primary, Backend and AI secondary
+  \item security ownership: currently shared; explicit security owner is \textbf{Not Implemented}
+  \item documentation ownership: Tech Lead primary, area leads secondary
+  \item knowledge ownership: AI and ML currently hold the deepest artifact knowledge; bus factor is low
+\end{itemize}
 
-\subsection{7.6 UI/UX Engineering Handbook}
-\textbf{Owner:} Nguyen Le Hong Nhi\\
-\textbf{Responsibilities:} user journey, interaction quality, input capture, explain visualization, batch results UX.\\
-\textbf{Systems owned:} Angular application and related styles.\\
-\textbf{Files owned:} \texttt{app.component.ts}, components, services, models.\\
-\textbf{Operational duties:} validate client behavior against backend contract.\\
-\textbf{Release duties:} ensure visible features map to real backend support.\\
-\textbf{Risks:} hidden contract mismatch, low automated coverage, local storage state issues.\\
-\textbf{KPIs:} task completion rate, UI defect rate, batch UX success, explain usage.
-
-\section{RACI Matrix}
+\section{Part 13 - RACI Matrix}
 \begin{table}[H]
 \centering
 \begin{tabularx}{\textwidth}{@{}lcccccc@{}}
@@ -434,199 +819,257 @@ Model training & C & A/R & C & I & I & I \\
 Model deployment & A & C & R & R & C & I \\
 API changes & A & I & C & C & R & C \\
 Production release & A & C & C & R & R & C \\
-Incident management & A & C & R & R & R & I \\
 Monitoring & C & I & C & A/R & R & I \\
 Security & A & I & C & R & R & C \\
+Incident response & A & C & R & R & R & I \\
 Architecture changes & A/R & C & C & C & C & C \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\section{Data and Model Lineage}
+\section{Part 14 - Data and Model Lineage}
 \begin{mermaidblock}
 flowchart LR
-  Raw[data/raw/*.csv]
-  Validation1[src.data.downloader.validate_raw_schema]
-  Prep[src.data.pipeline.PreprocessingPipeline.run]
-  Validation2[src.data.validators.DataQualityValidator.validate]
-  Train[src.scripts.run_finetuning.train]
-  Eval[src.model.evaluate or src.scripts.evaluate_finetuned]
-  Track[MLflow runs]
-  Export[src.scripts.export_onnx]
-  Runtime[src.main -> BaselineModelInference]
-  Predict[PredictResponse]
-  Raw --> Validation1 --> Prep --> Validation2 --> Train --> Eval --> Track --> Export --> Runtime --> Predict
+  Raw[Raw Data]
+  Validation1[Raw Schema Validation]
+  Preprocess[Preprocessing]
+  Validation2[Processed Quality Validation]
+  Training[Finetuning]
+  Evaluation[Evaluation]
+  MLflow[MLflow]
+  Export[Export]
+  ONNX[ONNX Artifacts]
+  Runtime[Runtime Load]
+  Prediction[Prediction]
+  Raw --> Validation1 --> Preprocess --> Validation2 --> Training --> Evaluation --> MLflow --> Export --> ONNX --> Runtime --> Prediction
 \end{mermaidblock}
 
+\begin{longtable}{@{}p{0.14\textwidth}p{0.23\textwidth}p{0.19\textwidth}p{0.14\textwidth}p{0.22\textwidth}@{}}
+\toprule
+\textbf{Stage} & \textbf{Producer} & \textbf{Consumer} & \textbf{Owner} & \textbf{Artifact / Lifecycle} \\
+\midrule
+\endhead
+Raw data & \texttt{src/data/downloader.py} & preprocessing and training & ML & CSV files in \texttt{data/raw/} \\
+Validation & raw schema and processed validator & training and review & ML & reports under \texttt{data/reports/} \\
+Preprocessing & \texttt{PreprocessingPipeline.run()} & baseline eval and training & ML & \texttt{data/processed/} \\
+Training & \texttt{run\_finetuning.py} & evaluation and export & ML & adapters in \texttt{models/adapters/} \\
+Evaluation & \texttt{evaluate.py}, \texttt{evaluate\_finetuned.py} & MLflow and reports & ML + AI & metrics JSON and artifacts \\
+MLflow & baseline and training flows & engineers and reviewers & ML & local or service-tracked runs \\
+Export & \texttt{onnx\_exporter.py} & runtime container & AI & FP32 and INT8 ONNX dirs \\
+Runtime load & \texttt{BaselineModelInference.\_load\_model()} & predict, explain, batch & AI & in-memory session or model state \\
+Prediction & \texttt{predict\_single()}, \texttt{predict\_batch()} & frontend and callers & AI + Backend & response payloads \\
+\bottomrule
+\end{longtable}
+
+\section{Part 15 - Security Review}
+\begin{longtable}{@{}p{0.28\textwidth}p{0.10\textwidth}p{0.13\textwidth}p{0.39\textwidth}@{}}
+\toprule
+\textbf{Finding} & \textbf{Severity} & \textbf{Owner} & \textbf{Mitigation} \\
+\midrule
+\endhead
+Authentication on API surface & Critical & Backend + Solution & Not Implemented; add authenticated gateway and token enforcement \\
+Authorization for admin-like evaluation flow & High & Backend & Not Implemented; restrict \texttt{/evaluate} and status to authorized operators \\
+Permissive CORS wildcard & High & Backend & replace with environment allowlist \\
+Default Grafana admin password & High & Solution & move to secrets management and rotate at bootstrap \\
+Build-time DVC/DagsHub credentials & High & Solution & stop passing long-lived secrets as build args \\
+Supply chain exposure through broad dependency install & Medium & Tech Lead & pin and scan dependencies regularly \\
+CSV upload content trust & Medium & Backend & add file-size, MIME, and row-policy validation at gateway and app layer \\
+Model artifact integrity verification & Medium & AI + ML & add checksum and promotion gates \\
+Container hardening beyond default slim images & Medium & Solution & run as non-root, tighten permissions, add image scanning \\
+Rate limiting and abuse control & High & Backend + Solution & Not Implemented; enforce at gateway and app \\
+\bottomrule
+\end{longtable}
+
+\section{Part 16 - Performance Review}
+\subsection{Startup Time}
+Exact startup measurements are \textbf{Not Implemented} as committed telemetry. Source analysis shows the dominant costs are model/session loading and ABSA pipeline preload.
+
+\subsection{Memory Usage}
+Exact memory profiling is \textbf{Not Implemented}. Likely dominant memory holders are model weights, tokenizer assets, ONNX sessions, and zero-shot model state.
+
+\subsection{CPU Usage}
+The runtime is CPU-oriented by default in Dockerfiles. Compose explicitly allocates high CPU limits to the backend. SHAP and ABSA are the most CPU-expensive paths.
+
+\subsection{Inference Latency}
+Source and tests indicate:
+\begin{itemize}[leftmargin=1.2em]
+  \item sentiment-only batch throughput target is at least 100 samples/sec in benchmark tests
+  \item full pipeline throughput with ABSA is intentionally much slower
+  \item Prometheus alerting considers average inference latency above 500 ms a warning
+\end{itemize}
+
+\subsection{Batch Throughput}
+Batch predict is synchronous and uses \texttt{asyncio.to\_thread()} for backend responsiveness. It still performs CPU-bound inference in-process. There is no distributed worker model.
+
+\subsection{SHAP Cost}
+SHAP is high cost because it builds an explainer on demand and performs repeated model evaluations. This path is suitable for explain-on-demand, not for high-throughput production.
+
+\subsection{ABSA Cost}
+ABSA uses zero-shot classification for both aspect detection and sentiment-per-aspect. That makes it accurate enough for a demo architecture but expensive for scale.
+
+\subsection{Scalability Limits}
+\begin{itemize}[leftmargin=1.2em]
+  \item single backend process owns model state
+  \item no horizontal job partitioning
+  \item no queue-backed batch workers
+  \item no caching for SHAP or aspect extraction
+\end{itemize}
+
+\section{Part 17 - Operations Handbook}
+\begin{longtable}{@{}p{0.13\textwidth}p{0.15\textwidth}p{0.20\textwidth}p{0.23\textwidth}p{0.14\textwidth}p{0.11\textwidth}@{}}
+\toprule
+\textbf{Incident} & \textbf{Symptoms} & \textbf{Root Cause} & \textbf{Debug Steps} & \textbf{Resolution} & \textbf{Owner} \\
+\midrule
+\endhead
+API failure & health fails, UI overlay never clears & model load failure, crash, bad image & inspect backend logs, call \texttt{/health}, verify artifacts and \texttt{MODEL\_MODE} & restore valid image or artifacts & Backend \\
+Model failure & 500 on predict or explain & corrupted tokenizer, adapter, or ONNX file & reproduce request, inspect stack, test local model init & redeploy last known-good artifact & AI \\
+Latency spike & alert fires, user response slows & ABSA/SHAP cost, CPU saturation, large batch & compare route latency, inspect active route mix, check host CPU & temporarily disable heavy paths or scale runtime & AI + Solution \\
+Monitoring failure & empty dashboard or no alerts & scrape config drift, metrics endpoint failure & hit \texttt{/metrics}, check Prometheus target status, inspect datasource & restore scrape target or dashboard config & Solution \\
+Deployment failure & one or more services unhealthy & config drift, secret issue, missing data mount & inspect Compose logs and service order & revert deployment input or image & Solution \\
+Batch failure & CSV upload returns 400 or 500 & malformed CSV or missing text column & validate sample input, inspect parser exception, check Nginx limit & repair input validation or backend parser & Backend \\
+Data pipeline failure & DVC stage stops & missing raw files, validation failure, path drift & run stage locally, inspect report JSON and file existence & correct data or configuration & ML \\
+\bottomrule
+\end{longtable}
+
+\section{Part 18 - Technical Debt Register}
+\begin{longtable}{@{}p{0.08\textwidth}p{0.24\textwidth}p{0.16\textwidth}p{0.12\textwidth}p{0.10\textwidth}p{0.18\textwidth}p{0.08\textwidth}@{}}
+\toprule
+\textbf{Level} & \textbf{Description} & \textbf{Evidence} & \textbf{Impact} & \textbf{Owner} & \textbf{Recommended Fix} & \textbf{Priority} \\
+\midrule
+\endhead
+Critical & Public unauthenticated runtime & no auth code in backend or gateway & enterprise blocker & Backend & add authn/authz & P0 \\
+High & Mocked batch status contract & \texttt{/batch\_status} returns hardcoded completed payload & misleading async semantics & Backend & implement queue or remove endpoint & P1 \\
+High & Frontend language selection gap & event carries \texttt{lang}; service drops it & user expectation mismatch & UI/UX & pass \texttt{lang} end-to-end & P1 \\
+High & Default Grafana password & Compose sets \texttt{GF\_SECURITY\_ADMIN\_PASSWORD=admin} & security risk & Solution & move to secret store & P1 \\
+High & Public evaluation trigger & \texttt{/evaluate} accessible without guard & abuse and data leakage risk & Backend & restrict to operator role & P1 \\
+Medium & In-memory evaluation status & state resets on process restart & operator confusion & Backend & use durable status store & P2 \\
+Medium & No tracing & only Prometheus counters and histograms exist & reduced incident visibility & Solution & add tracing and correlation ids & P2 \\
+Medium & Artifact integrity is implicit & no checksum or signature verification & bad model promotion risk & AI + ML & add artifact validation & P2 \\
+Medium & Frontend explain is chat-order dependent & previous user message lookup in service & fragile UX semantics & UI/UX & use prediction id mapping & P2 \\
+Low & Legacy docs still overstate behavior & README and contract docs drift from implementation & onboarding friction & Tech Lead & clean doc set and deprecate stale docs & P3 \\
+\bottomrule
+\end{longtable}
+
+\section{Part 19 - Organizational Review}
+\subsection{Team Structure}
+The team structure is reasonable for a compact ML product: one lead per major discipline. The weakness is not the structure itself; it is the concentration of low-level system knowledge in a few files and a few owners.
+
+\subsection{Knowledge Distribution and Bus Factor}
+\begin{itemize}[leftmargin=1.2em]
+  \item bus factor for inference internals is low
+  \item bus factor for training and artifact promotion is low
+  \item bus factor for deployment and observability is moderate
+  \item UI ownership is clearer but still coupled to backend response details
+\end{itemize}
+
+\subsection{Ownership Gaps}
+\begin{itemize}[leftmargin=1.2em]
+  \item dedicated security owner: \textbf{Not Implemented}
+  \item formal release manager role: \textbf{Not Implemented}
+  \item model promotion board or approval workflow: \textbf{Not Implemented}
+\end{itemize}
+
+\subsection{Recommendations}
+\begin{itemize}[leftmargin=1.2em]
+  \item add CODEOWNERS by folder
+  \item require backup reviewer across AI/ML and Backend/Solution boundaries
+  \item create a formal artifact-promotion checklist
+  \item make security accountability explicit
+\end{itemize}
+
+\section{Part 20 - Production Readiness Scorecard}
 \begin{table}[H]
 \centering
-\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\begin{tabularx}{\textwidth}{@{}lP{1.2cm}p{1.7cm}X@{}}
 \toprule
-\textbf{Stage} & \textbf{Implementation} & \textbf{Owner} \\
+\textbf{Area} & \textbf{Score} & \textbf{Weight} & \textbf{Reason} \\
 \midrule
-Raw data & \texttt{src/data/downloader.py} writes \texttt{data/raw/*} & ML Lead \\
-Validation & raw-schema checks and processed-data validator & ML Lead \\
-Training & \texttt{src/scripts/run\_finetuning.py} + \texttt{src/training/*} & ML Lead \\
-Evaluation & \texttt{src/model/evaluate.py} and finetuned evaluation scripts & ML Lead + AI Lead \\
-MLflow & tracking URI resolution and logged metrics/artifacts & ML Lead \\
-ONNX export & \texttt{src/model/onnx\_exporter.py} via CLI script & AI Lead \\
-Runtime load & \texttt{BaselineModelInference.\_load\_model()} & AI Lead \\
-Prediction & \texttt{predict\_single()} and \texttt{predict\_batch()} & AI Lead \\
+Architecture & 74 & 0.12 & coherent layering and artifact separation, but single-process constraints remain \\
+Security & 30 & 0.15 & major blocking gaps remain \\
+Reliability & 58 & 0.10 & health exists, durability does not \\
+Performance & 63 & 0.10 & ONNX and batching help, SHAP and ABSA are expensive \\
+Testing & 76 & 0.10 & good Python coverage, thin frontend coverage \\
+Monitoring & 71 & 0.08 & Prometheus and Grafana exist, tracing absent \\
+ML Lifecycle & 79 & 0.10 & DVC, MLflow, training, eval, export are real \\
+Deployment & 60 & 0.08 & Compose is functional but not enterprise-grade \\
+Operations & 56 & 0.08 & basic runbooks are possible, automation is limited \\
+Documentation & 72 & 0.04 & improved by this handbook, legacy drift still exists \\
+Ownership & 69 & 0.05 & lead mapping is clear, knowledge concentration remains \\
+\midrule
+\textbf{Weighted Final Score} & \textbf{63} & \textbf{1.00} & advanced MVP, not enterprise production ready \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\section{Security Review}
-\begin{longtable}{@{}p{0.26\textwidth}p{0.11\textwidth}p{0.13\textwidth}p{0.40\textwidth}@{}}
-\toprule
-\textbf{Finding} & \textbf{Severity} & \textbf{Owner} & \textbf{Remediation Plan} \\
-\midrule
-\endhead
-No authentication or authorization on inference and evaluation endpoints & Critical & Backend + Solution & add API auth, role-based access for evaluation/admin flows, and gateway-level enforcement \\
-Permissive CORS \texttt{allow\_origins=["*"]} & High & Backend & restrict origins by environment and disable credentials with wildcard patterns \\
-Grafana default password in Compose & High & Solution & move admin secret to environment secret store and require first-run rotation \\
-Build args for DagsHub credentials & High & Solution & stop baking secrets into build context; use runtime secrets or CI secret mount only \\
-CSV upload without content scanning or size control beyond row cap & Medium & Backend & enforce content-type, file size limit, and structured upload validation \\
-Model artifact trust boundary is weak & Medium & AI + ML & add checksum verification and signed artifact promotion \\
-Background evaluation exposed as public API & High & Backend & place behind admin auth or remove from public runtime surface \\
-No rate limiting & High & Backend + Solution & add reverse-proxy and app-level controls for expensive routes \\
-\bottomrule
-\end{longtable}
-
-\section{Operations Handbook}
-\begin{longtable}{@{}p{0.14\textwidth}p{0.17\textwidth}p{0.20\textwidth}p{0.24\textwidth}p{0.13\textwidth}p{0.12\textwidth}@{}}
-\toprule
-\textbf{Scenario} & \textbf{Symptoms} & \textbf{Likely Root Cause} & \textbf{Debug Steps} & \textbf{Resolution} & \textbf{Owner} \\
-\midrule
-\endhead
-API down & \texttt{/health} fails, UI overlay never clears & model load failure, container crash, bad artifact path & inspect backend logs, confirm \texttt{MODEL\_MODE}, verify model files, call container directly & restore valid artifacts or roll back image & Backend + AI \\
-Model failure & 500 on predict or explain & tokenizer/session mismatch, corrupted adapter or ONNX file & run targeted API call, inspect \texttt{ModelError}, test local load in shell & redeploy last known-good model artifact & AI \\
-Latency spike & p95 request latency rises, Grafana alert fires & SHAP use, ABSA overhead, CPU saturation & compare \texttt{/predict} vs \texttt{/explain}, inspect CPU limits, review batch load & disable heavy paths or scale runtime resources & AI + Solution \\
-Monitoring failure & Grafana empty, Prometheus scrape errors & broken metrics endpoint or config drift & query \texttt{/metrics}, inspect Prometheus targets, check provisioning files & fix scrape target or dashboard datasource & Solution \\
-Batch failure & 400 or 500 on CSV upload & malformed CSV, missing \texttt{text} column, runtime error & reproduce with sample CSV, inspect parser error, check row content & fix client file or harden parser path & Backend \\
-Deployment failure & one or more Compose services unhealthy & secret/config drift, missing volume data, bad image build & inspect \texttt{docker-compose} logs and env injection & restore config, rebuild, or revert & Solution \\
-\bottomrule
-\end{longtable}
-
-\section{Technical Debt Register}
-\begin{longtable}{@{}p{0.08\textwidth}p{0.28\textwidth}p{0.16\textwidth}p{0.11\textwidth}p{0.10\textwidth}p{0.10\textwidth}p{0.09\textwidth}@{}}
-\toprule
-\textbf{Level} & \textbf{Debt Item} & \textbf{Impact} & \textbf{Risk} & \textbf{Owner} & \textbf{Fix Cost} & \textbf{Priority} \\
-\midrule
-\endhead
-Critical & Public unauthenticated inference and admin-like evaluation surface & enterprise blocking & security and abuse & Backend & Medium & P0 \\
-High & Mocked \texttt{/batch\_status} endpoint with no durable jobs & misleading product semantics & operational confusion & Backend & Medium & P1 \\
-High & Frontend language selector not propagated to backend & wrong user expectation and false multilingual UX & correctness drift & UI/UX & Low & P1 \\
-High & Default Grafana credentials and broad CORS & security posture failure & compromise risk & Solution & Low & P1 \\
-Medium & In-memory evaluation state lost on restart & weak operational continuity & status inconsistency & Backend & Low & P2 \\
-Medium & SHAP created on demand without caching or guardrails & latency and memory spikes & runtime instability & AI & Medium & P2 \\
-Medium & Docs claim broader readiness than implementation proves & handover confusion & decision error & Tech Lead & Low & P2 \\
-Low & Frontend automated coverage is thin & slower UI regression detection & maintainability & UI/UX & Medium & P3 \\
-\bottomrule
-\end{longtable}
-
-\section{Organizational Risk Review}
-\begin{itemize}[leftmargin=1.2em]
-  \item \textbf{Knowledge silos:} inference internals and artifact promotion are concentrated in AI/ML ownership.
-  \item \textbf{Single points of failure:} \texttt{src/model/baseline.py}, \texttt{src/scripts/run\_finetuning.py}, and \texttt{docker-compose.yml} are each central files with broad blast radius.
-  \item \textbf{Bus factor:} effectively low for ONNX export, imbalance handling, and observability provisioning.
-  \item \textbf{Cross-team dependencies:} label-set changes require ML, AI, backend, contracts, UI, and tests to move together.
-  \item \textbf{Ownership gaps:} no explicit security owner and no explicit release manager beyond implied lead roles.
-\end{itemize}
-
-\textbf{Mitigations}
-\begin{itemize}[leftmargin=1.2em]
-  \item require backup reviewer on every model-runtime and deployment change
-  \item document artifact promotion and rollback as a formal runbook
-  \item create ownership CODEOWNERS by folder
-  \item add release checklist with named accountable approver
-  \item schedule cross-training for AI/ML and Solution/Backend boundaries
-\end{itemize}
-
-\section{Production Readiness Review}
-\begin{table}[H]
-\centering
-\begin{tabularx}{\textwidth}{@{}lP{1.2cm}p{1.6cm}X@{}}
-\toprule
-\textbf{Area} & \textbf{Score} & \textbf{Status} & \textbf{Reason} \\
-\midrule
-Architecture & 74 & Amber & good layering, but single-process runtime and mocked async semantics \\
-Security & 32 & Red & no auth, permissive CORS, default credentials, public eval endpoint \\
-Testing & 76 & Amber & broad Python test coverage, weak frontend depth, limited system tests \\
-Monitoring & 71 & Amber & Prometheus and Grafana exist, but tracing and business SLIs are missing \\
-Performance & 63 & Amber & ONNX path helps, but SHAP and ABSA remain expensive and unbounded \\
-Reliability & 58 & Amber & health exists, but no durable queue/state, no rollback automation \\
-ML lifecycle & 79 & Amber & DVC, MLflow, training, evaluation, export are well represented \\
-Deployment & 60 & Amber & Compose works for controlled environments, not enterprise operations \\
-Operations & 55 & Amber & basic runbooks possible, but automation and security are thin \\
-Ownership & 70 & Amber & roles are clear enough after this handbook, but still person-heavy \\
-\midrule
-\textbf{Overall} & \textbf{64} & \textbf{Amber} & advanced MVP, not approved for enterprise production \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-\section{Roadmap}
+\section{Part 21 - Roadmap}
 \subsection{3-Month Roadmap}
 \begin{itemize}[leftmargin=1.2em]
-  \item add authentication, rate limiting, and environment-specific CORS. Owner: Backend + Solution. Priority: P0. Business value: unblock secure pilot use. Technical value: closes major risk surface.
-  \item replace mocked batch status with durable job tracking. Owner: Backend. Priority: P1. Risk reduction: removes false async contract.
-  \item fix frontend language propagation and align supported-language UX. Owner: UI/UX + Backend. Priority: P1. Business value: trust in multilingual story.
+  \item Authentication, authorization, and rate limiting. Owner: Backend + Solution. Priority: P0. Business value: unblock secure pilot.
+  \item Replace mocked batch status with durable batch architecture. Owner: Backend. Priority: P1. Risk reduction: removes false operational promise.
+  \item Fix language propagation and supported-language UX. Owner: UI/UX + Backend + AI. Priority: P1. Business value: trust and correctness.
 \end{itemize}
 
 \subsection{6-Month Roadmap}
 \begin{itemize}[leftmargin=1.2em]
-  \item add artifact registry and checksum validation for model promotion. Owner: AI + ML. Priority: P1.
-  \item add distributed tracing and richer model SLIs. Owner: Solution. Priority: P2.
-  \item separate admin evaluation flows from public inference deployment. Owner: Backend + Solution. Priority: P1.
+  \item Add artifact registry, integrity checks, and promotion workflow. Owner: AI + ML. Priority: P1.
+  \item Add tracing and operational correlation identifiers. Owner: Solution + Backend. Priority: P2.
+  \item Isolate admin evaluation functions from public runtime. Owner: Backend + Solution. Priority: P1.
 \end{itemize}
 
 \subsection{12-Month Roadmap}
 \begin{itemize}[leftmargin=1.2em]
-  \item move from Compose-only deployment to managed environment with secure secrets and autoscaling. Owner: Solution. Priority: P1.
-  \item formalize model registry, approval gates, and rollback policy. Owner: Tech Lead + ML + AI. Priority: P1.
-  \item expand multilingual support only after true data, evaluation, and UI parity. Owner: ML + AI + UI/UX. Priority: P2.
+  \item Move beyond Compose to managed deployment with stronger secret handling and rollout control. Owner: Solution. Priority: P1.
+  \item Add scalable worker pattern for batch and explainability-heavy jobs. Owner: Backend + AI. Priority: P2.
+  \item Formalize multilingual roadmap only after data and evaluation parity is demonstrable. Owner: ML + AI + UI/UX. Priority: P2.
 \end{itemize}
 
-\section{Engineer Onboarding Guide}
+\section{Part 22 - Onboarding Handbook}
 \begin{table}[H]
 \centering
 \begin{tabularx}{\textwidth}{@{}lX@{}}
 \toprule
-\textbf{Milestone} & \textbf{Expected onboarding outcomes by role} \\
+\textbf{Role and Milestone} & \textbf{Learning Plan} \\
 \midrule
-Day 1 & Tech Lead: review architecture and debt register. ML: read \texttt{src/data/} and \texttt{params.yaml}. AI: read \texttt{src/model/}. Backend: read \texttt{src/main.py} and \texttt{contracts/}. UI/UX: run Angular app and inspect service/component flow. Solution: read Compose and infra configs. \\
-Day 3 & Run tests relevant to the role. Trace one live request end to end. Review one discrepancy between docs and code. \\
-Day 7 & Make a small supervised change in owned area and update tests. Learn rollback path for that subsystem. \\
-Day 14 & Execute one full workflow: training or inference or deployment, depending on role. Present risks and dependencies to the team. \\
-Day 30 & Be able to own one production-style issue in the area, explain runtime and artifact lineage, and review another engineer's change in that domain. \\
+Tech Lead Day 1 & Read \texttt{src/main.py}, \texttt{docker-compose.yml}, \texttt{dvc.yaml}, this handbook. \\
+Tech Lead Day 30 & Be able to arbitrate architecture, security, and release decisions. \\
+ML Engineer Day 1 & Read \texttt{src/data/}, \texttt{src/training/}, \texttt{params.yaml}, \texttt{dvc.yaml}. \\
+ML Engineer Day 30 & Run download, preprocess, validate, finetune, evaluate, and explain lineage. \\
+AI Engineer Day 1 & Read \texttt{src/model/} and benchmark-related tests. \\
+AI Engineer Day 30 & Diagnose model load, ONNX, SHAP, ABSA, and latency regressions independently. \\
+Backend Engineer Day 1 & Read \texttt{src/main.py}, \texttt{contracts/}, \texttt{tests/test\_api.py}. \\
+Backend Engineer Day 30 & Own route changes, validation, metrics, and failure handling. \\
+Solution Engineer Day 1 & Read Dockerfiles, Compose, Nginx config, Prometheus and Grafana provisioning. \\
+Solution Engineer Day 30 & Operate the full local stack and lead deployment debugging. \\
+UI/UX Engineer Day 1 & Read app shell, service, input, batch, and model contracts. \\
+UI/UX Engineer Day 30 & Own chat flow, batch UX, explain UX, and contract alignment. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-\section{CTO Review}
+\section{Part 23 - CTO Review}
 \subsection{Would I approve production launch?}
-No, not for open or enterprise production. I would approve internal demo, teaching use, and a tightly controlled pilot after basic security hardening.
+No, not for open production or enterprise production. I would approve internal demonstration and a tightly controlled pilot after security hardening.
 
 \subsection{Would I approve enterprise customers?}
-No. The current security and operational controls are below enterprise minimums.
+No. Security and operational durability are not sufficient yet.
 
 \subsection{Would I approve scaling?}
-Not yet. The architecture can scale conceptually, but the current deployment and control plane are not ready for it.
+Not yet. The architecture is directionally scalable, but the current operating model is not.
 
 \subsection{What concerns me most?}
-The biggest concern is false confidence: the repository looks production-shaped, but several critical controls are still absent or mocked. That gap is more dangerous than an obviously early-stage system.
+The main concern is appearance-versus-reality. The repository looks mature enough to create false confidence, but critical controls remain missing or partially implemented.
 
-\subsection{What investment should happen next?}
-Invest first in platform hardening: authentication, rate limiting, artifact governance, and durable batch execution. After that, invest in multilingual correctness and traceable model operations.
+\subsection{What would be my first investment?}
+My first investment would be platform hardening: authentication, rate limiting, admin-surface isolation, and artifact-governance improvements. That creates the foundation for every later business decision.
 
-\section*{Implementation Discrepancies Appendix}
-\addcontentsline{toc}{section}{Implementation Discrepancies Appendix}
+\section*{Implementation Discrepancies}
+\addcontentsline{toc}{section}{Implementation Discrepancies}
 \begin{itemize}[leftmargin=1.2em]
-  \item README health example says supported languages are only \texttt{["en"]}; \texttt{ModelConfig.supported\_languages} is actually \texttt{("en","vi")}. Operational impact: docs understate backend capability, but frontend does not safely expose it.
-  \item README presents batch processing as async job style; implementation of \texttt{/batch\_predict} is synchronous request-response, while \texttt{/batch\_status} is mocked. Operational impact: clients may assume durability and polling behavior that do not exist.
-  \item frontend exposes many language choices in \texttt{ChatInputComponent}, but backend only supports \texttt{en} and \texttt{vi}; the service layer also drops explicit language on predict. Operational impact: user-visible multilingual affordance exceeds real supported runtime.
-  \item Compose exposes MLflow on host port \texttt{5005} while service-internal tracking uses \texttt{http://mlflow:5000}; params default to \texttt{http://localhost:5000}. Operational impact: local CLI and container runtime use different connection assumptions.
+  \item README health example lists only \texttt{["en"]}; implementation supports \texttt{en} and \texttt{vi}.
+  \item README describes batch processing like an async job; implementation is synchronous request-response and the status endpoint is mocked.
+  \item frontend exposes many language options; backend supports only \texttt{en} and \texttt{vi}; frontend prediction requests usually omit explicit \texttt{lang}.
+  \item Compose uses internal MLflow URL \texttt{http://mlflow:5000}, host publishes \texttt{5005}, and params default to \texttt{http://localhost:5000}. Local and container assumptions are not unified.
+  \item \texttt{contracts/README.md} shows \texttt{/api/v1/*} examples; implementation uses root paths such as \texttt{/predict} and \texttt{/health}, with Nginx adding the frontend-facing \texttt{/api/} prefix.
 \end{itemize}
 
 \end{document}
