@@ -1,0 +1,117 @@
+\documentclass[11pt,a4paper]{article}
+
+% --- Encoding / language support ---
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+  \usepackage[T1]{fontenc}
+  \usepackage{lmodern}
+\else
+  \usepackage{fontspec}
+  \defaultfontfeatures{Ligatures=TeX}
+  \setmainfont{Times New Roman}
+  \setsansfont{Arial}
+  \setmonofont{Courier New}
+\fi
+
+% --- Layout ---
+\usepackage[top=2.5cm,bottom=2.5cm,left=2.75cm,right=2.75cm,headheight=15pt]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{microtype}
+\usepackage{parskip}
+\setlength{\emergencystretch}{3em}
+\sloppy
+
+% --- Core packages ---
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage[dvipsnames,svgnames,x11names]{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric,shadows}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{listings}
+\usepackage{fvextra}
+\usepackage{url}
+\usepackage[hidelinks,colorlinks=true,linkcolor=NavyBlue,urlcolor=NavyBlue,citecolor=NavyBlue]{hyperref}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{ifthen}
+
+% --- Table helpers ---
+\newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
+\AtBeginEnvironment{tabularx}{\small}
+\AtBeginEnvironment{tabular}{\small}
+\AtBeginEnvironment{longtable}{\small}
+
+% --- Code listings ---
+\definecolor{codegreen}{rgb}{0.2,0.6,0.2}
+\definecolor{codegray}{rgb}{0.45,0.45,0.45}
+\definecolor{codepurple}{rgb}{0.5,0,0.65}
+\definecolor{backcolour}{RGB}{248,248,248}
+\lstdefinestyle{reportstyle}{
+  backgroundcolor=\color{backcolour},
+  commentstyle=\color{codegray}\itshape,
+  keywordstyle=\color{NavyBlue}\bfseries,
+  stringstyle=\color{codegreen},
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  breakatwhitespace=false,
+  captionpos=b,
+  keepspaces=true,
+  numbers=left,
+  numbersep=6pt,
+  showspaces=false,
+  showstringspaces=false,
+  tabsize=4,
+  frame=single,
+  rulecolor=\color{gray!40},
+  xleftmargin=1.5em,
+  columns=fullflexible,
+}
+\lstset{style=reportstyle}
+
+\DefineVerbatimEnvironment{mermaidblock}{Verbatim}{
+  fontsize=\footnotesize,
+  frame=single,
+  rulecolor=\color{gray!40},
+  numbers=left,
+  numbersep=6pt,
+  xleftmargin=1.5em,
+  breaklines=true,
+  breaksymbolleft={},
+}
+
+
+% --- Section styling ---
+\titleformat{\section}[block]{\Large\bfseries\color{NavyBlue}}{{\thesection}}{1em}{}[\vspace{0.1em}\titlerule]
+\titleformat{\subsection}[block]{\large\bfseries\color{MidnightBlue}}{{\thesubsection}}{1em}{}
+\titleformat{\subsubsection}[block]{\normalsize\bfseries}{{\thesubsubsection}}{1em}{}
+
+% --- Header / footer ---
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small Sentiment Analysis Service}
+\lhead{\small Engineering Handbook}
+\rfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Diagram / block helpers ---
+\newcommand{\infobox}[1]{%
+  \begin{center}
+  \fcolorbox{NavyBlue!40}{NavyBlue!3}{%
+    \begin{minipage}{0.95\linewidth}
+      #1
+    \end{minipage}
+  }
+  \end{center}
+}

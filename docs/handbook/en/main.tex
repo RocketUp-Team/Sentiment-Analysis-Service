@@ -1,0 +1,632 @@
+\input{handbook/shared/preamble.tex}
+
+\title{\textbf{Sentiment Analysis Service}\\Engineering Handbook and Organizational Ownership Report}
+\author{Implementation-first internal handbook}
+\date{2026-06-05}
+
+\begin{document}
+
+\begin{titlepage}
+\thispagestyle{empty}
+\centering
+{\color{NavyBlue}\rule{\linewidth}{3pt}}\\[0.4em]
+{\color{SteelBlue}\rule{\linewidth}{1pt}}\\[1.2cm]
+{\Large\bfseries\color{NavyBlue} SENTIMENT ANALYSIS SERVICE}\\[0.3em]
+{\large\bfseries Engineering Handbook and Organizational Ownership Report}\\[0.3em]
+{\normalsize Internal production-readiness and handover document}\\[1.0cm]
+
+\begin{tabular}{@{}ll@{}}
+Tech Lead & Le Quang Tuyen \\
+ML Engineering Lead & Duong Binh An \\
+AI Engineering Lead & Do Quoc Trung \\
+Solution Engineering Lead & Duong Hong Quan \\
+Backend Engineering Lead & Pham Duc Long \\
+UI/UX Engineering Lead & Nguyen Le Hong Nhi \\
+\end{tabular}
+
+\vfill
+\infobox{
+\textbf{Source-of-truth rule:} this handbook trusts implementation first, then runtime configuration, then tests, then legacy reports. Where documents and code disagree, the operational truth is the code path currently executed by the repository.
+}
+\vfill
+{\color{SteelBlue}\rule{\linewidth}{1pt}}\\[0.25em]
+{\color{NavyBlue}\rule{\linewidth}{3pt}}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+\section{Executive Assessment}
+\subsection{Business Purpose}
+The product turns unstructured customer feedback into structured operational signals: sentiment, aspect-level sentiment, sarcasm cues, and explanation artifacts. The intended business use is review analysis, service-quality monitoring, support triage, and explainable AI demonstration.
+
+\subsection{Product Purpose}
+The repository contains two products sharing one codebase:
+\begin{itemize}[leftmargin=1.2em]
+  \item an online inference service exposed through Angular and FastAPI
+  \item an offline ML system for data preparation, finetuning, evaluation, MLflow tracking, and ONNX packaging
+\end{itemize}
+
+\subsection{Technical Purpose}
+The system is designed to prove that the team can operate a full ML delivery chain:
+\begin{itemize}[leftmargin=1.2em]
+  \item DVC-managed data flow
+  \item Hugging Face and PEFT training
+  \item ONNX runtime serving
+  \item Prometheus and Grafana observability
+  \item containerized deployment through Docker Compose
+\end{itemize}
+
+\subsection{Core Value Proposition}
+The main value is not raw model novelty. It is the operational packaging of sentiment inference into a service with explainability, batch processing, monitoring, and artifact lineage.
+
+\subsection{Maturity Assessment}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Rating} & \textbf{Assessment} \\
+\midrule
+Prototype & Exceeded. The repo has API contracts, tests, monitoring, Docker packaging, DVC, MLflow, and ONNX export. \\
+MVP & Exceeded. Users can run single prediction, explanation, health, metrics, and CSV batch flows. \\
+Advanced MVP & \textbf{Current state}. The service demonstrates end-to-end product behavior and a non-trivial ML lifecycle. \\
+Pre-Production & Partial only. Major production gaps remain: no authentication, permissive CORS, in-memory evaluation state, mocked batch status, and no real job orchestration. \\
+Production Ready & Not approved. The deployment is useful for demos, internal validation, and controlled pilots, but not enterprise production. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Why it is not production ready}
+\begin{itemize}[leftmargin=1.2em]
+  \item \texttt{src/main.py} exposes all inference and evaluation endpoints without auth.
+  \item \texttt{/batch\_status/\{job\_id\}} returns a mock response and is not backed by a queue or durable store.
+  \item the frontend language selector emits a language but \texttt{SentimentAnalysisService.predict()} drops it and only sends \texttt{\{text\}}.
+  \item Docker Compose ships Grafana with default admin password \texttt{admin}.
+  \item health checks only prove model load, not downstream dependencies such as MLflow, Prometheus scrape health, or artifact integrity.
+\end{itemize}
+
+\section{System Mental Model}
+\subsection{Business View}
+\begin{mermaidblock}
+flowchart LR
+  Customer[Customer or Analyst]
+  UI[Angular Chat UI]
+  API[FastAPI Service]
+  Insight[Sentiment and Aspect Insights]
+  Ops[Monitoring and Reports]
+  Improve[Retraining and Export]
+  Customer --> UI --> API --> Insight --> Ops --> Improve
+\end{mermaidblock}
+
+\subsection{Product View}
+\begin{mermaidblock}
+flowchart TB
+  A[Single Predict]
+  B[Explain SHAP]
+  C[Batch CSV Predict]
+  D[Background Evaluate]
+  E[Dashboard and Metrics]
+  UI[Frontend]
+  UI --> A
+  UI --> B
+  UI --> C
+  API[Backend]
+  A --> API
+  B --> API
+  C --> API
+  D --> API
+  API --> E
+\end{mermaidblock}
+
+\subsection{Engineering View}
+\begin{mermaidblock}
+flowchart LR
+  FE[app/sentiment-analysis-chatbot]
+  BE[src/main.py]
+  MODEL[src/model]
+  DATA[src/data]
+  TRAIN[src/scripts + src/training]
+  OBS[infra + src/monitoring]
+  FE --> BE --> MODEL
+  DATA --> TRAIN
+  TRAIN --> MODEL
+  BE --> OBS
+\end{mermaidblock}
+
+\subsection{Infrastructure View}
+\begin{mermaidblock}
+flowchart LR
+  Browser --> Nginx[Frontend container :80]
+  Nginx --> FastAPI[fastapi_app :8000]
+  FastAPI --> ML[Model runtime in-process]
+  FastAPI --> Metrics[/metrics]
+  Metrics --> Prometheus[:9091]
+  Prometheus --> Grafana[:3000]
+  FastAPI --> Eval[/evaluate]
+  Eval --> MLflow[:5005]
+\end{mermaidblock}
+
+\subsection{AI/ML View}
+\begin{mermaidblock}
+flowchart LR
+  Raw[data/raw]
+  Prep[src/data/pipeline.py]
+  Validate[src/data/validators.py]
+  Train[src/scripts/run_finetuning.py]
+  Eval[src/scripts/evaluate_finetuned.py and src/model/evaluate.py]
+  Export[src/scripts/export_onnx.py]
+  Serve[src/model/baseline.py]
+  Raw --> Prep --> Validate --> Train --> Eval --> Export --> Serve
+\end{mermaidblock}
+
+\section{End-to-End Business Flow}
+\begin{longtable}{@{}p{0.12\textwidth}p{0.22\textwidth}p{0.40\textwidth}p{0.16\textwidth}@{}}
+\toprule
+\textbf{Step} & \textbf{Business Objective} & \textbf{Technical Implementation} & \textbf{Owner} \\
+\midrule
+\endhead
+Customer & Submit text feedback for analysis & User interacts with Angular chat input or CSV upload in \texttt{app/sentiment-analysis-chatbot/src/app/components}. & UI/UX Lead \\
+UI & Collect text, voice transcription, or CSV file & \texttt{ChatInputComponent} emits text events; \texttt{BatchUploadComponent} uploads CSV through multipart form. & UI/UX Lead \\
+API & Validate request and route to the right execution path & \texttt{src/main.py} validates with Pydantic schemas in \texttt{contracts/schemas.py}. & Backend Lead \\
+Inference & Produce sentiment, aspects, sarcasm, or SHAP explanations & \texttt{BaselineModelInference} dispatches to HF or ONNX runtime and ABSA pipeline. & AI Lead \\
+Result & Return structured response to UI or API caller & \texttt{PredictResponse}, \texttt{ExplainResponse}, and batch response schemas serialize outputs. & Backend Lead \\
+Monitoring & Capture request count and latency & \texttt{src/monitoring/metrics.py} middleware and Prometheus scrape endpoint. & Solution Lead \\
+Feedback & Review metrics and evaluation artifacts & Grafana dashboards, MLflow runs, JSON reports under \texttt{reports/} and \texttt{data/reports/}. & Solution Lead / ML Lead \\
+Retraining & Improve adapters with new or revised datasets & \texttt{src/scripts/run\_finetuning.py}, task configs, class weights, and LoRA adapters. & ML Lead \\
+Deployment & Package updated runtime artifacts for serving & Dockerfiles, Docker Compose, ONNX export scripts, and mounted model directories. & Solution Lead / Backend Lead \\
+\bottomrule
+\end{longtable}
+
+\section{Architecture Deep Dive}
+\subsection{Frontend}
+\textbf{Responsibilities:} message composition, voice capture, history persistence, explain trigger, batch upload, theme control.\\
+\textbf{Dependencies:} Angular, HttpClient, local storage, backend \texttt{/api/*} routes via Nginx.\\
+\textbf{Risks:} contract drift, hidden language-selector bug, limited frontend test depth.\\
+\textbf{Ownership:} UI/UX Lead primary, Backend Lead secondary for API coupling.
+
+\subsection{Backend}
+\textbf{Responsibilities:} startup lifecycle, dependency injection, schema validation, exception mapping, health, metrics, evaluate trigger, batch orchestration.\\
+\textbf{Dependencies:} FastAPI, pandas, model interface, monitoring middleware, background tasks.\\
+\textbf{Risks:} single-process bottleneck, synchronous expensive paths, no auth, in-memory state.\\
+\textbf{Ownership:} Backend Lead primary, Solution Lead secondary.
+
+\subsection{Inference Layer}
+\textbf{Responsibilities:} sentiment scoring, sarcasm adapter path, ABSA extraction, SHAP explanation, ONNX session loading, language validation.\\
+\textbf{Dependencies:} Hugging Face, PEFT, SHAP, onnxruntime, tokenizer artifacts, exported models.\\
+\textbf{Risks:} startup latency, SHAP cost, ABSA latency, artifact mismatch, HF model download dependence.\\
+\textbf{Ownership:} AI Lead primary, ML Lead secondary.
+
+\subsection{Training Layer}
+\textbf{Responsibilities:} dataset loading, deduplication, split strategy, imbalance handling, LoRA config, trainer setup, MLflow logging.\\
+\textbf{Dependencies:} Datasets, Transformers, PEFT, sklearn, task configs, params.\\
+\textbf{Risks:} data skew, limited reproducibility outside configured data files, implicit dependence on raw file availability.\\
+\textbf{Ownership:} ML Lead primary, AI Lead secondary.
+
+\subsection{Monitoring Layer}
+\textbf{Responsibilities:} request metrics, dashboard provisioning, alert rule definitions.\\
+\textbf{Dependencies:} Prometheus, Grafana, middleware instrumentation.\\
+\textbf{Risks:} no tracing, limited model-level business metrics, alerts cover only a narrow failure set.\\
+\textbf{Ownership:} Solution Lead primary, Backend Lead secondary.
+
+\subsection{Deployment Layer}
+\textbf{Responsibilities:} image build, service topology, ports, resource limits, network and mounted storage.\\
+\textbf{Dependencies:} Dockerfile, Dockerfile.train, docker-compose, model and data directories.\\
+\textbf{Risks:} no orchestration beyond Compose, secret handling through build args, default credentials, no blue/green or rollback automation.\\
+\textbf{Ownership:} Solution Lead primary, Backend Lead secondary.
+
+\section{Repository Ownership Map}
+\begin{longtable}{@{}p{0.19\textwidth}p{0.20\textwidth}p{0.12\textwidth}p{0.12\textwidth}p{0.13\textwidth}p{0.11\textwidth}p{0.08\textwidth}@{}}
+\toprule
+\textbf{Folder} & \textbf{Purpose} & \textbf{Primary} & \textbf{Secondary} & \textbf{Business Impact} & \textbf{Modification Risk} & \textbf{Knowledge Risk} \\
+\midrule
+\endhead
+\texttt{app/} & Angular customer-facing UI & UI/UX & Backend & High & Medium & Medium \\
+\texttt{contracts/} & Shared API and model contracts & Backend & AI & High & High & Medium \\
+\texttt{data/} & Raw, processed, eval, and report artifacts & ML & AI & High & High & High \\
+\texttt{docs/} & Legacy reports and handbook outputs & Tech Lead & All leads & Medium & Low & Low \\
+\texttt{infra/} & Prometheus and Grafana provisioning & Solution & Backend & High & Medium & Medium \\
+\texttt{mlruns/} & MLflow local experiment store & ML & Solution & Medium & Low & Medium \\
+\texttt{models/} & Adapters and ONNX artifacts & AI & ML & High & High & High \\
+\texttt{notebooks/} & Colab/manual pipeline execution & ML & AI & Medium & Medium & High \\
+\texttt{reports/} & Evaluation and benchmark outputs & ML & AI & Medium & Low & Medium \\
+\texttt{src/data/} & Download, preprocess, validate flows & ML & AI & High & High & Medium \\
+\texttt{src/model/} & Runtime inference and export logic & AI & ML & High & High & High \\
+\texttt{src/monitoring/} & Prometheus instrumentation & Solution & Backend & Medium & Low & Low \\
+\texttt{src/scripts/} & Operational CLI entrypoints & ML & AI & High & Medium & Medium \\
+\texttt{src/training/} & Reusable training internals & ML & AI & High & Medium & Medium \\
+\texttt{tests/} & Regression safety net & Tech Lead & Owning team & High & Medium & Medium \\
+\texttt{.github/} & CI behavior & Backend & Tech Lead & High & Medium & Medium \\
+\bottomrule
+\end{longtable}
+
+\subsection{Folder Ownership Matrix}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lXXXXX@{}}
+\toprule
+\textbf{Lead} & \textbf{Core folders} & \textbf{Review triggers} & \textbf{Single-point-of-failure risk} & \textbf{Backup owner} & \textbf{Notes} \\
+\midrule
+Tech Lead & \texttt{docs/}, \texttt{tests/}, cross-cutting changes & architecture, security, readiness & Medium & Solution Lead & final approver for major changes \\
+ML Lead & \texttt{src/data/}, \texttt{src/training/}, \texttt{data/} & datasets, training params, evaluation metrics & High & AI Lead & owns data quality gates \\
+AI Lead & \texttt{src/model/}, \texttt{models/} & inference mode, ABSA, SHAP, ONNX & High & ML Lead & highest artifact coupling \\
+Solution Lead & \texttt{infra/}, \texttt{docker-compose.yml}, deployment docs & observability and runtime topology & Medium & Backend Lead & owns end-to-end ops fit \\
+Backend Lead & \texttt{src/main.py}, \texttt{contracts/}, CI & API routes, schemas, error handling & Medium & Solution Lead & owns request semantics \\
+UI/UX Lead & \texttt{app/} & user flows, upload UX, explain UX & Medium & Backend Lead & tightly coupled to response schema \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Runtime Execution Trace}
+\subsection{Execution Tables}
+\begin{longtable}{@{}p{0.12\textwidth}p{0.18\textwidth}p{0.20\textwidth}p{0.14\textwidth}p{0.14\textwidth}p{0.12\textwidth}p{0.10\textwidth}@{}}
+\toprule
+\textbf{Flow} & \textbf{File / Class} & \textbf{Function} & \textbf{Input} & \textbf{Output} & \textbf{Exception Path} & \textbf{Owner} \\
+\midrule
+\endhead
+Startup & \texttt{src/main.py} / module & \texttt{lifespan()} & env \texttt{MODEL\_MODE} & initialized \texttt{ml\_model} & \texttt{ModelError} on load failure & Backend + AI \\
+Health & \texttt{src/main.py} / API & \texttt{health\_check()} & HTTP GET & \texttt{HealthResponse} & 503 if model not ready through dependency & Backend \\
+Predict & \texttt{src/main.py} / API & \texttt{predict()} & \texttt{PredictRequest} & \texttt{PredictResponse} & 400 unsupported language, 500 model error & Backend \\
+Predict core & \texttt{src/model/baseline.py} / \texttt{BaselineModelInference} & \texttt{predict\_single()} & text, lang & \texttt{PredictionResult} & \texttt{UnsupportedLanguageError}, \texttt{ModelError} & AI \\
+Explain & \texttt{src/main.py} / API & \texttt{explain()} & \texttt{ExplainRequest} & \texttt{ExplainResponse} & 400 unsupported language, 500 explainer failure & Backend + AI \\
+Batch Predict & \texttt{src/main.py} / API & \texttt{batch\_predict()} & uploaded CSV & \texttt{BatchPredictResponse} & 400 invalid CSV or missing column, 500 batch failure & Backend \\
+Batch core & \texttt{src/model/baseline.py} / \texttt{BaselineModelInference} & \texttt{predict\_batch()} & list of texts & list of \texttt{PredictionResult} & \texttt{ValueError} invalid batch size & AI \\
+Evaluate trigger & \texttt{src/main.py} / API & \texttt{run\_evaluate()} & POST no body & status JSON & 409 already running; background \texttt{last\_error} on failure & Backend + ML \\
+Evaluate status & \texttt{src/main.py} / API & \texttt{evaluate\_status()} & HTTP GET & in-memory state JSON & stale state after restart & Backend \\
+Offline eval & \texttt{src/model/evaluate.py} & \texttt{evaluate\_on\_dataset()} & processed test frame & metrics dict & returns error payload when split empty & ML + AI \\
+\bottomrule
+\end{longtable}
+
+\subsection{Sequence Diagrams}
+\textbf{Startup}
+\begin{mermaidblock}
+sequenceDiagram
+  participant U as Uvicorn/FastAPI
+  participant A as src.main.lifespan
+  participant C as ModelConfig
+  participant M as BaselineModelInference
+  participant O as OnnxInferenceSession or HF model
+  U->>A: app startup
+  A->>C: read MODEL_MODE
+  A->>M: instantiate
+  M->>O: load tokenizer/model/session
+  A->>M: preload()
+  M->>M: warm ABSA pipeline
+  A-->>U: app ready
+\end{mermaidblock}
+
+\textbf{Predict}
+\begin{mermaidblock}
+sequenceDiagram
+  participant User
+  participant FE as Angular UI
+  participant API as FastAPI /predict
+  participant LD as LanguageDetector
+  participant MI as BaselineModelInference
+  participant ABSA as Zero-shot pipeline
+  User->>FE: enter text
+  FE->>API: POST /api/predict {text}
+  API->>LD: resolve_request_language()
+  API->>MI: predict_single(text, lang)
+  MI->>MI: sentiment logits
+  MI->>ABSA: optional aspect extraction
+  MI-->>API: PredictionResult
+  API-->>FE: PredictResponse
+  FE-->>User: render sentiment and aspects
+\end{mermaidblock}
+
+\textbf{Explain}
+\begin{mermaidblock}
+sequenceDiagram
+  participant FE as Angular UI
+  participant API as FastAPI /explain
+  participant MI as BaselineModelInference
+  participant SH as SHAP Explainer
+  FE->>API: POST /api/explain {text}
+  API->>MI: get_shap_explanation()
+  MI->>SH: build explainer and score text
+  SH-->>MI: token values
+  MI-->>API: SHAPResult
+  API-->>FE: ExplainResponse
+\end{mermaidblock}
+
+\textbf{Batch Predict}
+\begin{mermaidblock}
+sequenceDiagram
+  participant User
+  participant FE as BatchUploadComponent
+  participant API as FastAPI /batch_predict
+  participant PD as pandas.read_csv
+  participant MI as BaselineModelInference
+  User->>FE: upload CSV
+  FE->>API: multipart file
+  API->>PD: parse CSV bytes
+  API->>MI: predict_batch(valid_texts, skip_absa=true)
+  MI-->>API: prediction list
+  API-->>FE: batch response with row results
+\end{mermaidblock}
+
+\textbf{Evaluate}
+\begin{mermaidblock}
+sequenceDiagram
+  participant Caller
+  participant API as FastAPI /evaluate
+  participant BG as Background task
+  participant Eval as src.model.evaluate
+  participant MLF as MLflow
+  Caller->>API: POST /evaluate
+  API-->>Caller: started
+  API->>BG: add task
+  BG->>Eval: evaluate_on_dataset()
+  Eval->>MLF: log_to_mlflow()
+  BG-->>API: update in-memory state
+\end{mermaidblock}
+
+\section{Team Handbooks}
+\subsection{7.1 Tech Lead Handbook}
+\textbf{Owner:} Le Quang Tuyen\\
+\textbf{Responsibilities:} architecture direction, code-review bar, readiness approvals, cross-team conflict resolution.\\
+\textbf{Systems owned:} whole-system architecture, standards, release quality gates.\\
+\textbf{Files owned:} handbook, test strategy, cross-cutting config changes.\\
+\textbf{Operational duties:} production-readiness review, incident commander for Sev-1.\\
+\textbf{Release duties:} approve contract changes, security exceptions, and go-live checklist.\\
+\textbf{Risks:} architecture drift and unclear ownership boundaries.\\
+\textbf{KPIs:} escaped-defect rate, release predictability, review cycle time, readiness score trend.
+
+\subsection{7.2 ML Engineering Handbook}
+\textbf{Owner:} Duong Binh An\\
+\textbf{Responsibilities:} datasets, preprocessing, validation thresholds, finetuning, evaluation design, MLflow.\\
+\textbf{Systems owned:} \texttt{src/data/}, \texttt{src/training/}, training scripts, \texttt{data/}, \texttt{reports/}.\\
+\textbf{Files owned:} \texttt{src/scripts/run\_finetuning.py}, \texttt{src/data/validators.py}, \texttt{params.yaml}, \texttt{dvc.yaml}.\\
+\textbf{Operational duties:} maintain dataset integrity and evaluation reproducibility.\\
+\textbf{Release duties:} validate metrics before artifact promotion.\\
+\textbf{Risks:} knowledge silo around data lineage and imbalance logic.\\
+\textbf{KPIs:} macro F1, per-language F1, reproducibility success, validation pass rate.
+
+\subsection{7.3 AI Engineering Handbook}
+\textbf{Owner:} Do Quoc Trung\\
+\textbf{Responsibilities:} inference behavior, ONNX runtime, ABSA, sarcasm flag, SHAP, language detection.\\
+\textbf{Systems owned:} \texttt{src/model/}, \texttt{models/}.\\
+\textbf{Files owned:} \texttt{baseline.py}, \texttt{onnx\_inference.py}, \texttt{onnx\_exporter.py}, \texttt{language\_detector.py}.\\
+\textbf{Operational duties:} model load diagnostics, runtime latency tuning, artifact compatibility checks.\\
+\textbf{Release duties:} sign off on model artifact integrity and inference regression tests.\\
+\textbf{Risks:} artifact mismatch, SHAP cost explosions, hidden provider issues.\\
+\textbf{KPIs:} p95 latency, model load success, inference error rate, benchmark stability.
+
+\subsection{7.4 Solution Engineering Handbook}
+\textbf{Owner:} Duong Hong Quan\\
+\textbf{Responsibilities:} end-to-end integration, monitoring stack, deployment topology, service packaging.\\
+\textbf{Systems owned:} \texttt{infra/}, Compose topology, release runbooks.\\
+\textbf{Files owned:} \texttt{docker-compose.yml}, \texttt{Dockerfile}, \texttt{Dockerfile.train}, Prometheus and Grafana configs.\\
+\textbf{Operational duties:} maintain observability and environment consistency.\\
+\textbf{Release duties:} verify service health, ports, mounted volumes, and dashboards.\\
+\textbf{Risks:} dependency drift, insecure defaults, manual deployment steps.\\
+\textbf{KPIs:} deployment success rate, monitoring freshness, incident MTTR.
+
+\subsection{7.5 Backend Engineering Handbook}
+\textbf{Owner:} Pham Duc Long\\
+\textbf{Responsibilities:} API semantics, request validation, exception handling, evaluate and batch endpoints.\\
+\textbf{Systems owned:} \texttt{src/main.py}, \texttt{contracts/}, backend CI and tests.\\
+\textbf{Files owned:} \texttt{src/main.py}, \texttt{contracts/schemas.py}, \texttt{contracts/errors.py}.\\
+\textbf{Operational duties:} endpoint health, error triage, backward compatibility.\\
+\textbf{Release duties:} maintain OpenAPI correctness and contract stability.\\
+\textbf{Risks:} route drift, in-memory state, unbounded expensive calls.\\
+\textbf{KPIs:} 5xx rate, schema-change defect rate, endpoint coverage.
+
+\subsection{7.6 UI/UX Engineering Handbook}
+\textbf{Owner:} Nguyen Le Hong Nhi\\
+\textbf{Responsibilities:} user journey, interaction quality, input capture, explain visualization, batch results UX.\\
+\textbf{Systems owned:} Angular application and related styles.\\
+\textbf{Files owned:} \texttt{app.component.ts}, components, services, models.\\
+\textbf{Operational duties:} validate client behavior against backend contract.\\
+\textbf{Release duties:} ensure visible features map to real backend support.\\
+\textbf{Risks:} hidden contract mismatch, low automated coverage, local storage state issues.\\
+\textbf{KPIs:} task completion rate, UI defect rate, batch UX success, explain usage.
+
+\section{RACI Matrix}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lcccccc@{}}
+\toprule
+\textbf{Workstream} & \textbf{Tech} & \textbf{ML} & \textbf{AI} & \textbf{Solution} & \textbf{Backend} & \textbf{UI/UX} \\
+\midrule
+Feature development & A & C & C & C & R & R \\
+Model training & C & A/R & C & I & I & I \\
+Model deployment & A & C & R & R & C & I \\
+API changes & A & I & C & C & R & C \\
+Production release & A & C & C & R & R & C \\
+Incident management & A & C & R & R & R & I \\
+Monitoring & C & I & C & A/R & R & I \\
+Security & A & I & C & R & R & C \\
+Architecture changes & A/R & C & C & C & C & C \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Data and Model Lineage}
+\begin{mermaidblock}
+flowchart LR
+  Raw[data/raw/*.csv]
+  Validation1[src.data.downloader.validate_raw_schema]
+  Prep[src.data.pipeline.PreprocessingPipeline.run]
+  Validation2[src.data.validators.DataQualityValidator.validate]
+  Train[src.scripts.run_finetuning.train]
+  Eval[src.model.evaluate or src.scripts.evaluate_finetuned]
+  Track[MLflow runs]
+  Export[src.scripts.export_onnx]
+  Runtime[src.main -> BaselineModelInference]
+  Predict[PredictResponse]
+  Raw --> Validation1 --> Prep --> Validation2 --> Train --> Eval --> Track --> Export --> Runtime --> Predict
+\end{mermaidblock}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lXl@{}}
+\toprule
+\textbf{Stage} & \textbf{Implementation} & \textbf{Owner} \\
+\midrule
+Raw data & \texttt{src/data/downloader.py} writes \texttt{data/raw/*} & ML Lead \\
+Validation & raw-schema checks and processed-data validator & ML Lead \\
+Training & \texttt{src/scripts/run\_finetuning.py} + \texttt{src/training/*} & ML Lead \\
+Evaluation & \texttt{src/model/evaluate.py} and finetuned evaluation scripts & ML Lead + AI Lead \\
+MLflow & tracking URI resolution and logged metrics/artifacts & ML Lead \\
+ONNX export & \texttt{src/model/onnx\_exporter.py} via CLI script & AI Lead \\
+Runtime load & \texttt{BaselineModelInference.\_load\_model()} & AI Lead \\
+Prediction & \texttt{predict\_single()} and \texttt{predict\_batch()} & AI Lead \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Security Review}
+\begin{longtable}{@{}p{0.26\textwidth}p{0.11\textwidth}p{0.13\textwidth}p{0.40\textwidth}@{}}
+\toprule
+\textbf{Finding} & \textbf{Severity} & \textbf{Owner} & \textbf{Remediation Plan} \\
+\midrule
+\endhead
+No authentication or authorization on inference and evaluation endpoints & Critical & Backend + Solution & add API auth, role-based access for evaluation/admin flows, and gateway-level enforcement \\
+Permissive CORS \texttt{allow\_origins=["*"]} & High & Backend & restrict origins by environment and disable credentials with wildcard patterns \\
+Grafana default password in Compose & High & Solution & move admin secret to environment secret store and require first-run rotation \\
+Build args for DagsHub credentials & High & Solution & stop baking secrets into build context; use runtime secrets or CI secret mount only \\
+CSV upload without content scanning or size control beyond row cap & Medium & Backend & enforce content-type, file size limit, and structured upload validation \\
+Model artifact trust boundary is weak & Medium & AI + ML & add checksum verification and signed artifact promotion \\
+Background evaluation exposed as public API & High & Backend & place behind admin auth or remove from public runtime surface \\
+No rate limiting & High & Backend + Solution & add reverse-proxy and app-level controls for expensive routes \\
+\bottomrule
+\end{longtable}
+
+\section{Operations Handbook}
+\begin{longtable}{@{}p{0.14\textwidth}p{0.17\textwidth}p{0.20\textwidth}p{0.24\textwidth}p{0.13\textwidth}p{0.12\textwidth}@{}}
+\toprule
+\textbf{Scenario} & \textbf{Symptoms} & \textbf{Likely Root Cause} & \textbf{Debug Steps} & \textbf{Resolution} & \textbf{Owner} \\
+\midrule
+\endhead
+API down & \texttt{/health} fails, UI overlay never clears & model load failure, container crash, bad artifact path & inspect backend logs, confirm \texttt{MODEL\_MODE}, verify model files, call container directly & restore valid artifacts or roll back image & Backend + AI \\
+Model failure & 500 on predict or explain & tokenizer/session mismatch, corrupted adapter or ONNX file & run targeted API call, inspect \texttt{ModelError}, test local load in shell & redeploy last known-good model artifact & AI \\
+Latency spike & p95 request latency rises, Grafana alert fires & SHAP use, ABSA overhead, CPU saturation & compare \texttt{/predict} vs \texttt{/explain}, inspect CPU limits, review batch load & disable heavy paths or scale runtime resources & AI + Solution \\
+Monitoring failure & Grafana empty, Prometheus scrape errors & broken metrics endpoint or config drift & query \texttt{/metrics}, inspect Prometheus targets, check provisioning files & fix scrape target or dashboard datasource & Solution \\
+Batch failure & 400 or 500 on CSV upload & malformed CSV, missing \texttt{text} column, runtime error & reproduce with sample CSV, inspect parser error, check row content & fix client file or harden parser path & Backend \\
+Deployment failure & one or more Compose services unhealthy & secret/config drift, missing volume data, bad image build & inspect \texttt{docker-compose} logs and env injection & restore config, rebuild, or revert & Solution \\
+\bottomrule
+\end{longtable}
+
+\section{Technical Debt Register}
+\begin{longtable}{@{}p{0.08\textwidth}p{0.28\textwidth}p{0.16\textwidth}p{0.11\textwidth}p{0.10\textwidth}p{0.10\textwidth}p{0.09\textwidth}@{}}
+\toprule
+\textbf{Level} & \textbf{Debt Item} & \textbf{Impact} & \textbf{Risk} & \textbf{Owner} & \textbf{Fix Cost} & \textbf{Priority} \\
+\midrule
+\endhead
+Critical & Public unauthenticated inference and admin-like evaluation surface & enterprise blocking & security and abuse & Backend & Medium & P0 \\
+High & Mocked \texttt{/batch\_status} endpoint with no durable jobs & misleading product semantics & operational confusion & Backend & Medium & P1 \\
+High & Frontend language selector not propagated to backend & wrong user expectation and false multilingual UX & correctness drift & UI/UX & Low & P1 \\
+High & Default Grafana credentials and broad CORS & security posture failure & compromise risk & Solution & Low & P1 \\
+Medium & In-memory evaluation state lost on restart & weak operational continuity & status inconsistency & Backend & Low & P2 \\
+Medium & SHAP created on demand without caching or guardrails & latency and memory spikes & runtime instability & AI & Medium & P2 \\
+Medium & Docs claim broader readiness than implementation proves & handover confusion & decision error & Tech Lead & Low & P2 \\
+Low & Frontend automated coverage is thin & slower UI regression detection & maintainability & UI/UX & Medium & P3 \\
+\bottomrule
+\end{longtable}
+
+\section{Organizational Risk Review}
+\begin{itemize}[leftmargin=1.2em]
+  \item \textbf{Knowledge silos:} inference internals and artifact promotion are concentrated in AI/ML ownership.
+  \item \textbf{Single points of failure:} \texttt{src/model/baseline.py}, \texttt{src/scripts/run\_finetuning.py}, and \texttt{docker-compose.yml} are each central files with broad blast radius.
+  \item \textbf{Bus factor:} effectively low for ONNX export, imbalance handling, and observability provisioning.
+  \item \textbf{Cross-team dependencies:} label-set changes require ML, AI, backend, contracts, UI, and tests to move together.
+  \item \textbf{Ownership gaps:} no explicit security owner and no explicit release manager beyond implied lead roles.
+\end{itemize}
+
+\textbf{Mitigations}
+\begin{itemize}[leftmargin=1.2em]
+  \item require backup reviewer on every model-runtime and deployment change
+  \item document artifact promotion and rollback as a formal runbook
+  \item create ownership CODEOWNERS by folder
+  \item add release checklist with named accountable approver
+  \item schedule cross-training for AI/ML and Solution/Backend boundaries
+\end{itemize}
+
+\section{Production Readiness Review}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lP{1.2cm}p{1.6cm}X@{}}
+\toprule
+\textbf{Area} & \textbf{Score} & \textbf{Status} & \textbf{Reason} \\
+\midrule
+Architecture & 74 & Amber & good layering, but single-process runtime and mocked async semantics \\
+Security & 32 & Red & no auth, permissive CORS, default credentials, public eval endpoint \\
+Testing & 76 & Amber & broad Python test coverage, weak frontend depth, limited system tests \\
+Monitoring & 71 & Amber & Prometheus and Grafana exist, but tracing and business SLIs are missing \\
+Performance & 63 & Amber & ONNX path helps, but SHAP and ABSA remain expensive and unbounded \\
+Reliability & 58 & Amber & health exists, but no durable queue/state, no rollback automation \\
+ML lifecycle & 79 & Amber & DVC, MLflow, training, evaluation, export are well represented \\
+Deployment & 60 & Amber & Compose works for controlled environments, not enterprise operations \\
+Operations & 55 & Amber & basic runbooks possible, but automation and security are thin \\
+Ownership & 70 & Amber & roles are clear enough after this handbook, but still person-heavy \\
+\midrule
+\textbf{Overall} & \textbf{64} & \textbf{Amber} & advanced MVP, not approved for enterprise production \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Roadmap}
+\subsection{3-Month Roadmap}
+\begin{itemize}[leftmargin=1.2em]
+  \item add authentication, rate limiting, and environment-specific CORS. Owner: Backend + Solution. Priority: P0. Business value: unblock secure pilot use. Technical value: closes major risk surface.
+  \item replace mocked batch status with durable job tracking. Owner: Backend. Priority: P1. Risk reduction: removes false async contract.
+  \item fix frontend language propagation and align supported-language UX. Owner: UI/UX + Backend. Priority: P1. Business value: trust in multilingual story.
+\end{itemize}
+
+\subsection{6-Month Roadmap}
+\begin{itemize}[leftmargin=1.2em]
+  \item add artifact registry and checksum validation for model promotion. Owner: AI + ML. Priority: P1.
+  \item add distributed tracing and richer model SLIs. Owner: Solution. Priority: P2.
+  \item separate admin evaluation flows from public inference deployment. Owner: Backend + Solution. Priority: P1.
+\end{itemize}
+
+\subsection{12-Month Roadmap}
+\begin{itemize}[leftmargin=1.2em]
+  \item move from Compose-only deployment to managed environment with secure secrets and autoscaling. Owner: Solution. Priority: P1.
+  \item formalize model registry, approval gates, and rollback policy. Owner: Tech Lead + ML + AI. Priority: P1.
+  \item expand multilingual support only after true data, evaluation, and UI parity. Owner: ML + AI + UI/UX. Priority: P2.
+\end{itemize}
+
+\section{Engineer Onboarding Guide}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Milestone} & \textbf{Expected onboarding outcomes by role} \\
+\midrule
+Day 1 & Tech Lead: review architecture and debt register. ML: read \texttt{src/data/} and \texttt{params.yaml}. AI: read \texttt{src/model/}. Backend: read \texttt{src/main.py} and \texttt{contracts/}. UI/UX: run Angular app and inspect service/component flow. Solution: read Compose and infra configs. \\
+Day 3 & Run tests relevant to the role. Trace one live request end to end. Review one discrepancy between docs and code. \\
+Day 7 & Make a small supervised change in owned area and update tests. Learn rollback path for that subsystem. \\
+Day 14 & Execute one full workflow: training or inference or deployment, depending on role. Present risks and dependencies to the team. \\
+Day 30 & Be able to own one production-style issue in the area, explain runtime and artifact lineage, and review another engineer's change in that domain. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{CTO Review}
+\subsection{Would I approve production launch?}
+No, not for open or enterprise production. I would approve internal demo, teaching use, and a tightly controlled pilot after basic security hardening.
+
+\subsection{Would I approve enterprise customers?}
+No. The current security and operational controls are below enterprise minimums.
+
+\subsection{Would I approve scaling?}
+Not yet. The architecture can scale conceptually, but the current deployment and control plane are not ready for it.
+
+\subsection{What concerns me most?}
+The biggest concern is false confidence: the repository looks production-shaped, but several critical controls are still absent or mocked. That gap is more dangerous than an obviously early-stage system.
+
+\subsection{What investment should happen next?}
+Invest first in platform hardening: authentication, rate limiting, artifact governance, and durable batch execution. After that, invest in multilingual correctness and traceable model operations.
+
+\section*{Implementation Discrepancies Appendix}
+\addcontentsline{toc}{section}{Implementation Discrepancies Appendix}
+\begin{itemize}[leftmargin=1.2em]
+  \item README health example says supported languages are only \texttt{["en"]}; \texttt{ModelConfig.supported\_languages} is actually \texttt{("en","vi")}. Operational impact: docs understate backend capability, but frontend does not safely expose it.
+  \item README presents batch processing as async job style; implementation of \texttt{/batch\_predict} is synchronous request-response, while \texttt{/batch\_status} is mocked. Operational impact: clients may assume durability and polling behavior that do not exist.
+  \item frontend exposes many language choices in \texttt{ChatInputComponent}, but backend only supports \texttt{en} and \texttt{vi}; the service layer also drops explicit language on predict. Operational impact: user-visible multilingual affordance exceeds real supported runtime.
+  \item Compose exposes MLflow on host port \texttt{5005} while service-internal tracking uses \texttt{http://mlflow:5000}; params default to \texttt{http://localhost:5000}. Operational impact: local CLI and container runtime use different connection assumptions.
+\end{itemize}
+
+\end{document}
