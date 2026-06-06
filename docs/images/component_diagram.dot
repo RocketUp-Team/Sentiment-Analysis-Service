@@ -1,0 +1,26 @@
+
+    digraph G {
+    rankdir=LR;
+    graph [fontname="Helvetica", bgcolor="white", pad="0.3", nodesep="0.6", ranksep="0.8"]
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#EFF6FF", color="#1D4ED8", penwidth=1.2]
+    edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+    api [label="API Layer
+src/main.py
+contracts/schemas.py"];
+    model [label="Inference Engine
+src/model/baseline.py"];
+    data [label="Data Pipeline
+src/data/*"];
+    train [label="Training
+src/scripts/run_finetuning.py
+src/training/*"];
+    front [label="Frontend
+Angular components"];
+    mon [label="Monitoring
+src/monitoring/metrics.py"];
+    api -> model;
+    api -> mon;
+    data -> train;
+    train -> model;
+    front -> api;
+    }

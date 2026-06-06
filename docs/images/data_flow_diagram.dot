@@ -1,0 +1,20 @@
+
+    digraph G {
+    rankdir=LR;
+
+graph [fontname="Helvetica", bgcolor="white", pad="0.3", nodesep="0.5", ranksep="0.7"]
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#EFF6FF", color="#1D4ED8", penwidth=1.3]
+edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+
+    raw [label="Raw inputs
+XML / CSV / Parquet", fillcolor="#F8FAFC", color="#64748B"];
+    dl [label="Download stage", fillcolor="#E0F2FE", color="#0284C7"];
+    prep [label="Preprocess stage", fillcolor="#E0F2FE", color="#0284C7"];
+    val [label="Validate stage", fillcolor="#E0F2FE", color="#0284C7"];
+    train [label="Training datasets", fillcolor="#DBEAFE", color="#1D4ED8"];
+    ft [label="LoRA finetuning", fillcolor="#DBEAFE", color="#1D4ED8"];
+    eval [label="Evaluation", fillcolor="#DBEAFE", color="#1D4ED8"];
+    onnx [label="ONNX export", fillcolor="#DBEAFE", color="#1D4ED8"];
+    runtime [label="Runtime inference", fillcolor="#DBEAFE", color="#1D4ED8"];
+    raw -> dl -> prep -> val -> train -> ft -> eval -> onnx -> runtime;
+    }

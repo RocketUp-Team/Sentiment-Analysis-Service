@@ -1,0 +1,34 @@
+
+    digraph G {
+    rankdir=TB;
+
+graph [fontname="Helvetica", bgcolor="white", pad="0.3", nodesep="0.5", ranksep="0.7"]
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#EFF6FF", color="#1D4ED8", penwidth=1.3]
+edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+
+    user [label="User / Browser", fillcolor="#F8FAFC", color="#64748B"];
+    fe [label="Angular Frontend
+(:80)"];
+    api [label="FastAPI Application
+(:8000)"];
+    model [label="Model Inference Engine
+RoBERTa / XLM-R / ONNX"];
+    absa [label="Zero-shot ABSA
+DeBERTa v3"];
+    shap [label="SHAP Explainer"];
+    mlflow [label="MLflow
+(:5005)", fillcolor="#FFF7ED", color="#C2410C"];
+    prom [label="Prometheus
+(:9091)", fillcolor="#F0FDFA", color="#0F766E"];
+    graf [label="Grafana
+(:3000)", fillcolor="#F5F3FF", color="#6D28D9"];
+
+    user -> fe -> api;
+    api -> model;
+    model -> absa;
+    model -> shap;
+    api -> prom;
+    prom -> graf;
+    api -> mlflow;
+    {rank=same; prom; mlflow; graf}
+    }

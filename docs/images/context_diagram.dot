@@ -1,0 +1,18 @@
+
+    digraph G {
+    rankdir=LR;
+
+graph [fontname="Helvetica", bgcolor="white", pad="0.3", nodesep="0.5", ranksep="0.7"]
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#EFF6FF", color="#1D4ED8", penwidth=1.3]
+edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+
+    user [label="Users", fillcolor="#F8FAFC", color="#64748B"];
+    admin [label="Administrators", fillcolor="#F8FAFC", color="#64748B"];
+    dev [label="Developers", fillcolor="#F8FAFC", color="#64748B"];
+    researcher [label="Researchers", fillcolor="#F8FAFC", color="#64748B"];
+    system [label="Sentiment Analysis Platform", fillcolor="#DBEAFE", color="#1D4ED8", penwidth=1.8];
+    user -> system [label="predict / explain / batch"];
+    admin -> system [label="monitor / operate"];
+    dev -> system [label="build / train / deploy"];
+    researcher -> system [label="evaluate / analyze"];
+    }

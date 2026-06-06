@@ -1,0 +1,25 @@
+
+    digraph G {
+    rankdir=LR;
+
+graph [fontname="Helvetica", bgcolor="white", pad="0.3", nodesep="0.5", ranksep="0.7"]
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#EFF6FF", color="#1D4ED8", penwidth=1.3]
+edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+
+    user [label="User", fillcolor="#F8FAFC", color="#64748B"];
+    admin [label="Administrator", fillcolor="#F8FAFC", color="#64748B"];
+    dev [label="Developer", fillcolor="#F8FAFC", color="#64748B"];
+    researcher [label="Researcher", fillcolor="#F8FAFC", color="#64748B"];
+    predict [label="Predict sentiment"];
+    explain [label="Explain prediction"];
+    batch [label="Batch CSV prediction"];
+    observe [label="Inspect metrics / dashboards"];
+    train [label="Run training / evaluation"];
+    analyze [label="Review reports / artifacts"];
+    user -> predict;
+    user -> explain;
+    user -> batch;
+    admin -> observe;
+    dev -> train;
+    researcher -> analyze;
+    }
