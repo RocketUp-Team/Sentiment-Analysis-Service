@@ -29,6 +29,27 @@
 \usepackage[dvipsnames,svgnames,x11names]{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc,fit,backgrounds,shapes.geometric,shadows}
+\tikzset{
+  diagrambox/.style={
+    draw,
+    rounded corners=2pt,
+    fill=NavyBlue!5,
+    align=center,
+    inner sep=5pt,
+    minimum height=8mm,
+    font=\footnotesize
+  },
+  diagramblock/.style={
+    draw,
+    rounded corners=2pt,
+    fill=SteelBlue!6,
+    align=center,
+    inner sep=5pt,
+    font=\footnotesize
+  },
+  diagramarrow/.style={-{Latex[length=2mm]},thick,draw=Gray},
+  diagramlink/.style={-{Latex[length=2mm]},thick,draw=NavyBlue}
+}
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{multirow}
@@ -48,6 +69,7 @@
 
 % --- Table helpers ---
 \newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcolumntype{R}{>{\raggedleft\arraybackslash}X}
 \AtBeginEnvironment{tabularx}{\small}
 \AtBeginEnvironment{tabular}{\small}
@@ -77,6 +99,17 @@
   rulecolor=\color{gray!40},
   xleftmargin=1.5em,
   columns=fullflexible,
+  inputencoding=utf8,
+  extendedchars=true,
+  literate=
+    {—}{{---}}1
+    {’}{{'}}1
+    {“}{{``}}1
+    {”}{{''}}1
+    {→}{{$\to$}}1
+    {─}{{-}}1
+    {├}{{|}}1
+    {└}{{|}}1,
 }
 \lstset{style=reportstyle}
 
@@ -100,8 +133,8 @@
 % --- Header / footer ---
 \pagestyle{fancy}
 \fancyhf{}
-\rhead{\small Sentiment Analysis Service}
-\lhead{\small Technical Analysis Report}
+\rhead{\small Natural Language Processing}
+\lhead{\small Enterprise Technical Assessment Report}
 \rfoot{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 
