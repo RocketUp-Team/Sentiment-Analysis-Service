@@ -1,0 +1,17 @@
+
+digraph G {
+rankdir=LR;
+graph [fontname="Helvetica", bgcolor="white", pad="0.25", nodesep="0.55", ranksep="0.65"]
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#F8FAFC", color="#64748B", penwidth=1.1]
+edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+build [label="Build images"];
+pull [label="DVC pull artifacts"];
+runtime [label="Start API runtime"];
+frontend [label="Start Angular/Nginx"];
+prom [label="Start Prometheus"];
+graf [label="Start Grafana"];
+mlflow [label="Start MLflow"];
+build -> pull -> runtime -> frontend;
+runtime -> prom -> graf;
+runtime -> mlflow;
+}

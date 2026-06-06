@@ -1,0 +1,27 @@
+
+    digraph G {
+    rankdir=TB;
+
+graph [fontname="Helvetica", bgcolor="white", pad="0.3", nodesep="0.5", ranksep="0.7"]
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#EFF6FF", color="#1D4ED8", penwidth=1.3]
+edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+
+    subgraph cluster_compose {
+      label="Docker Compose";
+      style="rounded,dashed";
+      color="#94A3B8";
+      fe [label="frontend
+Angular/Nginx", fillcolor="#EEF2FF", color="#6366F1"];
+      api [label="fastapi_app
+Uvicorn", fillcolor="#DBEAFE", color="#1D4ED8"];
+      prom [label="prometheus", fillcolor="#ECFDF5", color="#0F766E"];
+      graf [label="grafana", fillcolor="#F5F3FF", color="#6D28D9"];
+      mlflow [label="mlflow", fillcolor="#FFF7ED", color="#C2410C"];
+      trainer [label="trainer profile", fillcolor="#FEF3C7", color="#B45309"];
+      fe -> api;
+      api -> prom;
+      prom -> graf;
+      api -> mlflow;
+      trainer -> api [style=dashed, label="finetune / export"];
+    }
+    }

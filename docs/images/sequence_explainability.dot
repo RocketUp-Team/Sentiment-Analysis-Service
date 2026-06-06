@@ -1,0 +1,18 @@
+digraph G {
+rankdir=LR;
+
+    graph [rankdir=LR, fontname="Helvetica", bgcolor="white", pad="0.25", nodesep="0.45", ranksep="0.55"]
+    node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#F8FAFC", color="#64748B", penwidth=1.1]
+    edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+
+user [label="User"]
+front [label="Frontend"]
+api [label="FastAPI"]
+model [label="Model"]
+
+user -> front [label="Click Explain"];
+front -> api [label="POST /explain"];
+api -> model [label="get_shap_explanation(text, lang)"];
+model -> api [label="tokens + SHAP values"];
+api -> front [label="ExplainResponse"];
+}

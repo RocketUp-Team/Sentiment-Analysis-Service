@@ -1,0 +1,23 @@
+digraph G {
+rankdir=LR;
+
+graph [fontname="Helvetica", bgcolor="white", pad="0.3", nodesep="0.45", ranksep="0.65"]
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#EFF6FF", color="#1D4ED8", penwidth=1.2]
+edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+
+download [label="Download datasets"];
+preprocess [label="Preprocess and clean"];
+validate [label="Validate quality"];
+baseline [label="Evaluate baseline"];
+sarcasm [label="Train sarcasm adapter"];
+sentiment [label="Train sentiment adapter"];
+export_sarcasm [label="Export sarcasm ONNX"];
+export_sentiment [label="Export sentiment ONNX"];
+benchmark [label="Benchmark ONNX runtime"];
+
+download -> preprocess -> validate -> baseline;
+download -> sarcasm;
+download -> sentiment;
+sarcasm -> export_sarcasm -> benchmark;
+sentiment -> export_sentiment -> benchmark;
+}

@@ -1,0 +1,31 @@
+
+    digraph G {
+    rankdir=LR;
+
+graph [fontname="Helvetica", bgcolor="white", pad="0.3", nodesep="0.5", ranksep="0.7"]
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#EFF6FF", color="#1D4ED8", penwidth=1.3]
+edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+
+    xml [label="SemEval XML", fillcolor="#F8FAFC", color="#64748B"];
+    raw1 [label="data/raw/sentences.csv"];
+    raw2 [label="data/raw/aspects.csv"];
+    hf1 [label="tweet_eval irony"];
+    hf2 [label="multilingual sentiment"];
+    raw3 [label="data/raw/sarcasm.csv"];
+    raw4 [label="data/raw/sentiment_en.csv"];
+    raw5 [label="data/raw/sentiment_vi.csv"];
+    proc [label="data/processed/", fillcolor="#DBEAFE", color="#1D4ED8"];
+    val [label="quality_report.json", fillcolor="#ECFDF5", color="#0F766E"];
+    train [label="Adapter training", fillcolor="#FEF3C7", color="#B45309"];
+    xml -> raw1;
+    xml -> raw2;
+    hf1 -> raw3;
+    hf2 -> raw4;
+    hf2 -> raw5;
+    raw1 -> proc;
+    raw2 -> proc;
+    proc -> val;
+    raw3 -> train;
+    raw4 -> train;
+    raw5 -> train;
+    }

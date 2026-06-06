@@ -1,0 +1,14 @@
+digraph G {
+rankdir=LR;
+
+graph [fontname="Helvetica", bgcolor="white", pad="0.3", nodesep="0.45", ranksep="0.6"]
+node [shape=box, style="rounded,filled", fontname="Helvetica", fillcolor="#EFF6FF", color="#1D4ED8", penwidth=1.2]
+edge [fontname="Helvetica", color="#1F2937", arrowsize=0.8]
+
+short [label="Short-term\nStabilize batch jobs\nExpand validation\nImprove UI consistency"];
+medium [label="Medium-term\nAuth/RBAC\nQueue-backed jobs\nCentralized logging"];
+long [label="Long-term\nContinuous learning\nModel registry\nBroader multilingual support"];
+research [label="Research\nABSA comparison\nExplainability metrics\nAdapter composition"];
+
+short -> medium -> long -> research;
+}
