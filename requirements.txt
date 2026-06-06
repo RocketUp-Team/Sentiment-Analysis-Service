@@ -16,7 +16,9 @@ python-dotenv>=1.0.1
 # Hard pin avoided — a CPU-only wheel is silently installed if the pin mismatches Colab's CUDA.
 torch>=2.4.1,<2.7.0
 torchvision>=0.11
-transformers>=4.30.0
+# Keep Transformers on the 4.x line: 5.x imports features that expect newer
+# Torch float8 APIs than the Docker image installs.
+transformers>=4.30.0,<5.0.0
 shap>=0.42.0
 matplotlib>=3.7.0
 peft>=0.7.0,<0.20.0
