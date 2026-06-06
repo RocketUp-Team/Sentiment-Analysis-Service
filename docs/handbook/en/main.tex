@@ -369,40 +369,69 @@ Security & CORS, secrets, artifact access, trust boundaries & runtime config and
 \end{longtable}
 
 \subsection{Dependency Graph}
-\begin{mermaidblock}
-flowchart LR
-  APP --> CONTRACTS
-  APP --> API[src/main.py]
-  API --> CONTRACTS
-  API --> MODEL[src/model]
-  API --> MON[src/monitoring]
-  MODEL --> CFG[src/model/config.py]
-  MODEL --> ONNX[src/model/onnx_inference.py]
-  SCRIPTS[src/scripts] --> TRAIN[src/training]
-  SCRIPTS --> DATA[src/data]
-  SCRIPTS --> MODEL
-  DVC[dvc.yaml] --> SCRIPTS
-  DVC --> DATA
-  DVC --> TRAIN
-  MODEL --> ART[models/]
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.97\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (app) {app/};
+  \node[diagrambox, right=of app] (api) {\texttt{src/main.py}};
+  \node[diagrambox, right=of api] (model) {\texttt{src/model/}};
+  \node[diagrambox, below=of api] (contracts) {contracts/};
+  \node[diagrambox, below=of model] (mon) {src/monitoring/};
+  \node[diagrambox, below=of app] (scripts) {src/scripts/};
+  \node[diagrambox, right=of scripts] (train) {src/training/};
+  \node[diagrambox, right=of train] (data) {src/data/};
+  \node[diagrambox, below=of train] (dvc) {dvc.yaml};
+  \node[diagrambox, below=of model] (art) {models/};
+
+  \draw[diagramlink] (app) -- (api);
+  \draw[diagramlink] (api) -- (contracts);
+  \draw[diagramlink] (api) -- (model);
+  \draw[diagramlink] (api) -- (mon);
+  \draw[diagramlink] (model) -- (api);
+  \draw[diagramlink] (scripts) -- (train);
+  \draw[diagramlink] (scripts) -- (data);
+  \draw[diagramlink] (scripts) -- (model);
+  \draw[diagramlink] (dvc) -- (scripts);
+  \draw[diagramlink] (dvc) -- (data);
+  \draw[diagramlink] (dvc) -- (train);
+  \draw[diagramlink] (model) -- (art);
+\end{tikzpicture}%
+}
+\caption{Repository dependency graph}
+\end{figure}
 
 \subsection{Module Interaction Diagram}
-\begin{mermaidblock}
-flowchart LR
-  AppComponent --> SentimentService
-  SentimentService --> PredictAPI[/predict]
-  SentimentService --> ExplainAPI[/explain]
-  SentimentService --> BatchAPI[/batch_predict]
-  SentimentService --> HealthAPI[/health]
-  PredictAPI --> BaselineModelInference
-  ExplainAPI --> BaselineModelInference
-  BatchAPI --> BaselineModelInference
-  BaselineModelInference --> OnnxInferenceSession
-  BaselineModelInference --> HFModel
-  BaselineModelInference --> ABSA
-  BaselineModelInference --> SHAP
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.97\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (ui) {AppComponent};
+  \node[diagrambox, right=of ui] (svc) {SentimentAnalysisService};
+  \node[diagrambox, right=of svc] (api1) {\texttt{/predict}};
+  \node[diagrambox, below=of api1] (api2) {\texttt{/explain}};
+  \node[diagrambox, right=of api1] (api3) {\texttt{/batch\_predict}};
+  \node[diagrambox, below=of api3] (api4) {\texttt{/health}};
+  \node[diagrambox, right=of api2] (model) {BaselineModelInference};
+  \node[diagrambox, right=of model, yshift=10mm] (onnx) {ONNX};
+  \node[diagrambox, right=of model] (hf) {HF / PEFT};
+  \node[diagrambox, right=of model, yshift=-10mm] (aux) {ABSA / SHAP};
+
+  \draw[diagramlink] (ui) -- (svc);
+  \draw[diagramlink] (svc) -- (api1);
+  \draw[diagramlink] (svc) -- (api2);
+  \draw[diagramlink] (svc) -- (api3);
+  \draw[diagramlink] (svc) -- (api4);
+  \draw[diagramlink] (api1) -- (model);
+  \draw[diagramlink] (api2) -- (model);
+  \draw[diagramlink] (api3) -- (model);
+  \draw[diagramlink] (model) -- (onnx);
+  \draw[diagramlink] (model) -- (hf);
+  \draw[diagramlink] (model) -- (aux);
+\end{tikzpicture}%
+}
+\caption{Frontend to backend module interaction}
+\end{figure}
 
 \section{Section 4 - Execution Flow Analysis}
 \subsection{Workflow Matrix}
@@ -425,90 +454,102 @@ Deployment & \texttt{docker compose up} & build images \textrightarrow{} start s
 \end{longtable}
 
 \subsection{Startup Sequence}
-\begin{mermaidblock}
-sequenceDiagram
-  participant Uvicorn
-  participant FastAPI
-  participant Lifespan
-  participant Config as ModelConfig
-  participant Model as BaselineModelInference
-  participant Artifacts as models/
-  Uvicorn->>FastAPI: start app
-  FastAPI->>Lifespan: enter lifespan()
-  Lifespan->>Config: read MODEL_MODE and build config
-  Lifespan->>Model: instantiate global model
-  Model->>Artifacts: load ONNX or HF artifacts
-  Model->>Model: preload ABSA pipeline
-  alt load success
-    Lifespan-->>FastAPI: app ready
-  else load failure
-    Model-->>Lifespan: raise ModelError
-    Lifespan-->>FastAPI: startup abort
-  end
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[node distance=12mm and 12mm]
+  \node[diagrambox] (uv) {Uvicorn};
+  \node[diagrambox, right=of uv] (fa) {FastAPI};
+  \node[diagrambox, right=of fa] (ls) {lifespan()};
+  \node[diagrambox, right=of ls] (cfg) {ModelConfig};
+  \node[diagrambox, right=of cfg] (model) {BaselineModelInference};
+  \node[diagrambox, below=of model] (art) {models/ artifacts};
+  \node[diagrambox, below=of cfg] (absa) {ABSA preload};
+
+  \draw[diagramlink] (uv) -- (fa);
+  \draw[diagramlink] (fa) -- (ls);
+  \draw[diagramlink] (ls) -- (cfg);
+  \draw[diagramlink] (ls) -- (model);
+  \draw[diagramlink] (model) -- (art);
+  \draw[diagramlink] (model) -- (absa);
+\end{tikzpicture}%
+}
+\caption{Startup sequence}
+\end{figure}
 
 \subsection{Prediction Sequence}
-\begin{mermaidblock}
-sequenceDiagram
-  participant User
-  participant FE as Angular Service
-  participant API as FastAPI /predict
-  participant Lang as LanguageDetector
-  participant Model as BaselineModelInference
-  participant Metrics as Prometheus Histograms
-  User->>FE: submit text
-  FE->>API: POST /predict
-  API->>Lang: resolve_request_language()
-  API->>Model: predict_single(text, lang)
-  Model->>Model: _predict_probabilities()
-  Model->>Model: _extract_aspects()
-  Model->>Model: _predict_sarcasm_flag()
-  API->>Metrics: observe inference latency
-  API-->>FE: PredictResponse
-  FE-->>User: render sentiment, aspects, sarcasm, latency
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (u) {User};
+  \node[diagrambox, right=of u] (fe) {Angular service};
+  \node[diagrambox, right=of fe] (api) {\texttt{/predict}};
+  \node[diagrambox, right=of api] (lang) {LanguageDetector};
+  \node[diagrambox, right=of lang] (model) {BaselineModelInference};
+  \node[diagrambox, below=of model] (met) {Prometheus metrics};
+  \node[diagrambox, below=of lang] (resp) {PredictResponse};
+
+  \draw[diagramlink] (u) -- (fe);
+  \draw[diagramlink] (fe) -- (api);
+  \draw[diagramlink] (api) -- (lang);
+  \draw[diagramlink] (api) -- (model);
+  \draw[diagramlink] (model) -- (met);
+  \draw[diagramlink] (api) -- (resp);
+  \draw[diagramlink] (resp) -- (fe);
+\end{tikzpicture}%
+}
+\caption{Prediction sequence}
+\end{figure}
 
 \subsection{Batch Sequence}
-\begin{mermaidblock}
-sequenceDiagram
-  participant User
-  participant FE as BatchUploadComponent
-  participant API as FastAPI /batch_predict
-  participant Pandas
-  participant Worker as asyncio.to_thread
-  participant Model as BaselineModelInference
-  User->>FE: upload CSV
-  FE->>API: multipart POST /batch_predict
-  API->>Pandas: read_csv(bytes)
-  API->>API: validate text column and cap 500 rows
-  API->>Worker: run blocking batch inference
-  Worker->>Model: predict_batch(valid_texts, skip_absa=True)
-  Model-->>Worker: list of PredictionResult
-  API->>API: rebuild per-row results and errors
-  API-->>FE: BatchPredictResponse
-  FE-->>User: render summary and exportable results
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (u) {User};
+  \node[diagrambox, right=of u] (fe) {BatchUploadComponent};
+  \node[diagrambox, right=of fe] (api) {\texttt{/batch\_predict}};
+  \node[diagrambox, right=of api] (pd) {pandas read\_csv};
+  \node[diagrambox, right=of pd] (wk) {asyncio.to\_thread()};
+  \node[diagrambox, right=of wk] (model) {BaselineModelInference};
+  \node[diagrambox, below=of model] (resp) {BatchPredictResponse};
+
+  \draw[diagramlink] (u) -- (fe);
+  \draw[diagramlink] (fe) -- (api);
+  \draw[diagramlink] (api) -- (pd);
+  \draw[diagramlink] (api) -- (wk);
+  \draw[diagramlink] (wk) -- (model);
+  \draw[diagramlink] (model) -- (resp);
+  \draw[diagramlink] (resp) -- (fe);
+\end{tikzpicture}%
+}
+\caption{Batch prediction sequence}
+\end{figure}
 
 \subsection{Evaluation Sequence}
-\begin{mermaidblock}
-sequenceDiagram
-  participant Caller
-  participant API as FastAPI /evaluate
-  participant Task as BackgroundTask
-  participant Params as params.yaml
-  participant Data as data/processed/sentences.csv
-  participant Eval as src/model/evaluate.py
-  participant MLflow
-  Caller->>API: POST /evaluate
-  API->>API: check _evaluate_state.running
-  API->>Task: add _do_evaluate
-  API-->>Caller: started
-  Task->>Params: load params
-  Task->>Data: read processed data
-  Task->>Eval: evaluate_on_dataset()
-  Task->>MLflow: log metrics
-  Task->>API: update in-memory status
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (c) {Caller};
+  \node[diagrambox, right=of c] (api) {\texttt{/evaluate}};
+  \node[diagrambox, right=of api] (task) {Background task};
+  \node[diagrambox, right=of task] (params) {params.yaml};
+  \node[diagrambox, below=of params] (data) {data/processed};
+  \node[diagrambox, left=of data] (eval) {evaluate.py};
+  \node[diagrambox, right=of data] (mlflow) {MLflow};
+
+  \draw[diagramlink] (c) -- (api);
+  \draw[diagramlink] (api) -- (task);
+  \draw[diagramlink] (task) -- (params);
+  \draw[diagramlink] (task) -- (data);
+  \draw[diagramlink] (task) -- (eval);
+  \draw[diagramlink] (task) -- (mlflow);
+\end{tikzpicture}%
+}
+\caption{Evaluation sequence}
+\end{figure}
 
 \section{Section 5 - Frontend Analysis}
 \subsection{Architecture}
@@ -531,17 +572,32 @@ The frontend is an Angular standalone-component application. \texttt{AppComponen
 \end{table}
 
 \subsection{Frontend Data Flow}
-\begin{mermaidblock}
-flowchart LR
-  Input[ChatInput or BatchUpload] --> Service[SentimentAnalysisService]
-  Service --> Health[/api/health]
-  Service --> Predict[/api/predict]
-  Service --> Explain[/api/explain]
-  Service --> Batch[/api/batch_predict]
-  Service --> Signal[message signal]
-  Signal --> UI[AppComponent and child components]
-  Signal --> Storage[localStorage]
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (input) {ChatInput / BatchUpload};
+  \node[diagrambox, right=of input] (svc) {SentimentAnalysisService};
+  \node[diagrambox, right=of svc] (health) {\texttt{/api/health}};
+  \node[diagrambox, above=of health] (predict) {\texttt{/api/predict}};
+  \node[diagrambox, below=of health] (explain) {\texttt{/api/explain}};
+  \node[diagrambox, right=of health] (batch) {\texttt{/api/batch\_predict}};
+  \node[diagrambox, below=of batch] (signal) {message signal};
+  \node[diagrambox, right=of signal] (ui) {AppComponent / children};
+  \node[diagrambox, below=of ui] (store) {localStorage};
+
+  \draw[diagramlink] (input) -- (svc);
+  \draw[diagramlink] (svc) -- (health);
+  \draw[diagramlink] (svc) -- (predict);
+  \draw[diagramlink] (svc) -- (explain);
+  \draw[diagramlink] (svc) -- (batch);
+  \draw[diagramlink] (svc) -- (signal);
+  \draw[diagramlink] (signal) -- (ui);
+  \draw[diagramlink] (signal) -- (store);
+\end{tikzpicture}%
+}
+\caption{Frontend data flow}
+\end{figure}
 
 \subsection{API Integration}
 \begin{itemize}[leftmargin=1.2em]
@@ -590,17 +646,30 @@ The backend is a single FastAPI application with a global model singleton and re
 Validation is primarily schema-driven in \texttt{contracts/schemas.py}. \texttt{PredictRequest} enforces text length 1 to 2000. \texttt{ExplainResponse} validates that \texttt{tokens} and \texttt{shap\_values} lengths match. Batch CSV validation is route-local and checks parseability and presence of a \texttt{text} column.
 
 \subsection{Backend Control Flow}
-\begin{mermaidblock}
-flowchart LR
-  Request --> CORS
-  CORS --> Monitor[monitor_middleware]
-  Monitor --> Route[src/main.py routes]
-  Route --> Dependency[get_model()]
-  Route --> Lang[resolve_request_language]
-  Route --> Model[BaselineModelInference]
-  Route --> Schema[Pydantic response models]
-  Schema --> Response
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (req) {Request};
+  \node[diagrambox, right=of req] (cors) {CORS};
+  \node[diagrambox, right=of cors] (mon) {monitor\_middleware};
+  \node[diagrambox, right=of mon] (route) {Route handlers};
+  \node[diagrambox, right=of route] (dep) {get\_model()};
+  \node[diagrambox, below=of dep] (lang) {resolve\_request\_language()};
+  \node[diagrambox, left=of lang] (model) {BaselineModelInference};
+  \node[diagrambox, right=of lang] (schema) {Pydantic schemas};
+
+  \draw[diagramlink] (req) -- (cors);
+  \draw[diagramlink] (cors) -- (mon);
+  \draw[diagramlink] (mon) -- (route);
+  \draw[diagramlink] (route) -- (dep);
+  \draw[diagramlink] (route) -- (lang);
+  \draw[diagramlink] (route) -- (model);
+  \draw[diagramlink] (route) -- (schema);
+\end{tikzpicture}%
+}
+\caption{Backend request control flow}
+\end{figure}
 
 \subsection{Background Tasks and Long-running Work}
 \begin{itemize}[leftmargin=1.2em]
@@ -628,16 +697,30 @@ Middleware records request count and request latency for all paths. The predicti
 \end{table}
 
 \subsection{Inference Pipeline}
-\begin{mermaidblock}
-flowchart LR
-  Text --> LangGuard[_check_language]
-  LangGuard --> Sentiment[_predict_probabilities]
-  Sentiment --> SentimentLabel[label_map argmax]
-  SentimentLabel --> ABSA[_extract_aspects]
-  SentimentLabel --> Sarcasm[_predict_sarcasm_flag]
-  SentimentLabel --> Response[PredictionResult]
-  Text --> SHAP[get_shap_explanation]
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (text) {Text};
+  \node[diagrambox, right=of text] (lang) {Language guard};
+  \node[diagrambox, right=of lang] (sent) {Sentiment scoring};
+  \node[diagrambox, right=of sent] (label) {Label mapping};
+  \node[diagrambox, below=of label] (absa) {ABSA};
+  \node[diagrambox, right=of label] (sar) {Sarcasm};
+  \node[diagrambox, below=of sent] (shap) {SHAP};
+  \node[diagrambox, right=of sar] (resp) {PredictionResult};
+
+  \draw[diagramlink] (text) -- (lang);
+  \draw[diagramlink] (lang) -- (sent);
+  \draw[diagramlink] (sent) -- (label);
+  \draw[diagramlink] (label) -- (absa);
+  \draw[diagramlink] (label) -- (sar);
+  \draw[diagramlink] (label) -- (resp);
+  \draw[diagramlink] (text) -- (shap);
+\end{tikzpicture}%
+}
+\caption{Inference pipeline}
+\end{figure}
 
 \subsection{Stage Analysis}
 \begin{longtable}{@{}p{0.15\textwidth}p{0.16\textwidth}p{0.18\textwidth}p{0.12\textwidth}p{0.12\textwidth}p{0.18\textwidth}@{}}
@@ -663,20 +746,38 @@ Batch prediction & list of texts & chunked inference, optional ABSA skip and sar
 
 \section{Section 8 - ML Pipeline Analysis}
 \subsection{DVC Pipeline Graph}
-\begin{mermaidblock}
-flowchart TD
-  download --> preprocess
-  preprocess --> validate
-  preprocess --> evaluate_baseline
-  download_sarcasm --> finetune_sarcasm
-  download_sentiment --> prepare_eval
-  download_sentiment --> finetune_sentiment
-  finetune_sarcasm --> evaluate_finetuned
-  finetune_sentiment --> evaluate_finetuned
-  finetune_sarcasm --> export_onnx_sarcasm
-  finetune_sentiment --> export_onnx_sentiment
-  export_onnx_sentiment --> benchmark_onnx
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[node distance=9mm and 12mm]
+  \node[diagrambox] (d) {download};
+  \node[diagrambox, right=of d] (p) {preprocess};
+  \node[diagrambox, right=of p] (v) {validate};
+  \node[diagrambox, below=of p] (eb) {evaluate\_baseline};
+  \node[diagrambox, below=of d] (ds) {download\_sarcasm};
+  \node[diagrambox, right=of ds] (dsen) {download\_sentiment};
+  \node[diagrambox, right=of dsen] (pe) {prepare\_eval};
+  \node[diagrambox, below=of ds] (fts) {finetune\_sarcasm};
+  \node[diagrambox, right=of fts] (fse) {finetune\_sentiment};
+  \node[diagrambox, right=of fse] (ev) {evaluate\_finetuned};
+  \node[diagrambox, below=of fse] (ex) {export\_onnx};
+  \node[diagrambox, right=of ex] (bm) {benchmark\_onnx};
+
+  \draw[diagramlink] (d) -- (p);
+  \draw[diagramlink] (p) -- (v);
+  \draw[diagramlink] (p) -- (eb);
+  \draw[diagramlink] (ds) -- (fts);
+  \draw[diagramlink] (dsen) -- (pe);
+  \draw[diagramlink] (dsen) -- (fse);
+  \draw[diagramlink] (fts) -- (ev);
+  \draw[diagramlink] (fse) -- (ev);
+  \draw[diagramlink] (fts) -- (ex);
+  \draw[diagramlink] (fse) -- (ex);
+  \draw[diagramlink] (ex) -- (bm);
+\end{tikzpicture}%
+}
+\caption{DVC pipeline graph}
+\end{figure}
 
 \subsection{Pipeline Stage Analysis}
 \begin{longtable}{@{}p{0.16\textwidth}p{0.17\textwidth}p{0.16\textwidth}p{0.18\textwidth}p{0.15\textwidth}p{0.14\textwidth}@{}}
@@ -707,18 +808,34 @@ flowchart TD
 
 \section{Section 9 - Data Flow Analysis}
 \subsection{End-to-End Data Lineage}
-\begin{mermaidblock}
-flowchart LR
-  Raw[Raw XML and downloaded CSV] --> Prep[Preprocess and validation]
-  Prep --> Processed[data/processed]
-  Processed --> Train[Finetuning]
-  Processed --> EvalBase[Baseline evaluation]
-  Train --> Adapters[models/adapters]
-  Adapters --> Export[ONNX export]
-  Export --> OnnxArtifacts[models/onnx]
-  OnnxArtifacts --> Runtime[BaselineModelInference]
-  Runtime --> Prediction[Predict and Explain APIs]
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (raw) {Raw XML / CSV};
+  \node[diagrambox, right=of raw] (prep) {Preprocess / validate};
+  \node[diagrambox, right=of prep] (proc) {data/processed};
+  \node[diagrambox, below=of proc] (train) {Finetuning};
+  \node[diagrambox, right=of train] (ad) {models/adapters};
+  \node[diagrambox, right=of ad] (exp) {ONNX export};
+  \node[diagrambox, right=of exp] (onnx) {models/onnx};
+  \node[diagrambox, below=of onnx] (rt) {Runtime loading};
+  \node[diagrambox, left=of rt] (pred) {Predict / Explain};
+  \node[diagrambox, above=of pred] (base) {Baseline eval};
+
+  \draw[diagramlink] (raw) -- (prep);
+  \draw[diagramlink] (prep) -- (proc);
+  \draw[diagramlink] (proc) -- (train);
+  \draw[diagramlink] (proc) -- (base);
+  \draw[diagramlink] (train) -- (ad);
+  \draw[diagramlink] (ad) -- (exp);
+  \draw[diagramlink] (exp) -- (onnx);
+  \draw[diagramlink] (onnx) -- (rt);
+  \draw[diagramlink] (rt) -- (pred);
+\end{tikzpicture}%
+}
+\caption{End-to-end data lineage}
+\end{figure}
 
 \subsection{Artifact Inventory}
 \begin{longtable}{@{}p{0.18\textwidth}p{0.14\textwidth}p{0.18\textwidth}p{0.18\textwidth}p{0.22\textwidth}@{}}
@@ -1105,46 +1222,72 @@ Final verdict: \textbf{strong implementation-first assessment target, suitable f
 \subsection{Package Dependency Graph}
 The runtime package surface is concentrated in \texttt{requirements.txt} and is exercised by \texttt{src/main.py}, \texttt{src/model/baseline.py}, \texttt{src/model/onnx\_exporter.py}, \texttt{src/scripts/run\_finetuning.py}, and the frontend build in \texttt{app/sentiment-analysis-chatbot/package.json}. The important coupling is not package count; it is that the serving path depends on \texttt{fastapi}, \texttt{pydantic}, \texttt{pandas}, \texttt{torch}, \texttt{transformers}, \texttt{peft}, \texttt{onnxruntime}, \texttt{shap}, \texttt{prometheus-client}, and \texttt{uvicorn} all at once.
 
-\begin{mermaidblock}
-flowchart LR
-  main[src/main.py] --> fastapi[FastAPI / Uvicorn]
-  main --> schemas[contracts/schemas.py]
-  main --> baseline[src/model/baseline.py]
-  baseline --> transformers[transformers]
-  baseline --> torch[torch]
-  baseline --> onnx[onnxruntime]
-  baseline --> shap[shap]
-  baseline --> peft[peft]
-  baseline --> device[src/model/device.py]
-  main --> metrics[src/monitoring/metrics.py]
-  train[src/scripts/run_finetuning.py] --> datasets[datasets / pandas / sklearn]
-  train --> trainer[transformers.Trainer]
-  export[src/model/onnx_exporter.py] --> optimum[optimum.onnxruntime]
-  export --> peft
-  frontend[app/sentiment-analysis-chatbot] --> angular[Angular / RxJS / HttpClient]
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[node distance=9mm and 12mm]
+  \node[diagrambox] (main) {\texttt{src/main.py}};
+  \node[diagrambox, right=of main] (base) {\texttt{src/model/baseline.py}};
+  \node[diagrambox, above=of base] (schema) {contracts/schemas.py};
+  \node[diagrambox, below=of base] (met) {src/monitoring/metrics.py};
+  \node[diagrambox, right=of base] (onnx) {onnxruntime};
+  \node[diagrambox, right=of onnx] (torch) {torch / transformers / peft};
+  \node[diagrambox, below=of onnx] (device) {src/model/device.py};
+  \node[diagrambox, below=of torch] (train) {src/scripts/run\_finetuning.py};
+  \node[diagrambox, right=of train] (trainer) {Trainer / datasets};
+  \node[diagrambox, below=of train] (export) {src/model/onnx\_exporter.py};
+  \node[diagrambox, right=of export] (opt) {optimum.onnxruntime};
+  \node[diagrambox, below=of main] (fe) {Angular frontend};
+
+  \draw[diagramlink] (main) -- (schema);
+  \draw[diagramlink] (main) -- (base);
+  \draw[diagramlink] (main) -- (met);
+  \draw[diagramlink] (base) -- (onnx);
+  \draw[diagramlink] (base) -- (torch);
+  \draw[diagramlink] (base) -- (device);
+  \draw[diagramlink] (train) -- (trainer);
+  \draw[diagramlink] (export) -- (opt);
+  \draw[diagramlink] (fe) -- (main);
+\end{tikzpicture}%
+}
+\caption{Package and module dependency graph}
+\end{figure}
 
 \subsection{Module Dependency Graph}
-\begin{mermaidblock}
-flowchart TD
-  A[src.main] --> B[contracts.schemas]
-  A --> C[contracts.model_interface]
-  A --> D[src.model.baseline]
-  D --> E[src.model.config]
-  D --> F[src.model.onnx_inference]
-  D --> G[src.model.language_detector]
-  D --> H[contracts.errors]
-  D --> I[src.monitoring.metrics]
-  D --> J[src.model.device]
-  K[src.data.pipeline] --> L[src.data.transforms]
-  K --> M[src.data.utils]
-  N[src.scripts.run_finetuning] --> O[src.training]
-  N --> P[src.training.task_configs]
-  N --> Q[src.training.dataset_builder]
-  N --> R[src.training.class_weights]
-  S[app sentiment-analysis-chatbot] --> T[SentimentAnalysisService]
-  T --> A
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.98\textwidth}{!}{%
+\begin{tikzpicture}[node distance=9mm and 12mm]
+  \node[diagrambox] (a) {\texttt{src.main}};
+  \node[diagrambox, right=of a] (b) {contracts.schemas};
+  \node[diagrambox, right=of b] (c) {contracts.model\_interface};
+  \node[diagrambox, below=of b] (d) {src.model.baseline};
+  \node[diagrambox, right=of d] (e) {src.model.config};
+  \node[diagrambox, right=of e] (f) {src.model.onnx\_inference};
+  \node[diagrambox, below=of e] (g) {src.model.language\_detector};
+  \node[diagrambox, left=of g] (h) {contracts.errors};
+  \node[diagrambox, right=of g] (i) {src.monitoring.metrics};
+  \node[diagrambox, below=of d] (k) {src.data.pipeline};
+  \node[diagrambox, right=of k] (l) {src.data.transforms / utils};
+  \node[diagrambox, right=of l] (m) {src.scripts.run\_finetuning};
+  \node[diagrambox, right=of m] (n) {src.training.*};
+  \node[diagrambox, below=of a] (s) {SentimentAnalysisService};
+
+  \draw[diagramlink] (a) -- (b);
+  \draw[diagramlink] (a) -- (c);
+  \draw[diagramlink] (a) -- (d);
+  \draw[diagramlink] (d) -- (e);
+  \draw[diagramlink] (d) -- (f);
+  \draw[diagramlink] (d) -- (g);
+  \draw[diagramlink] (d) -- (h);
+  \draw[diagramlink] (d) -- (i);
+  \draw[diagramlink] (k) -- (l);
+  \draw[diagramlink] (m) -- (n);
+  \draw[diagramlink] (s) -- (a);
+\end{tikzpicture}%
+}
+\caption{Module dependency graph}
+\end{figure}
 
 \subsection{Runtime Dependency Graph}
 \begin{itemize}[leftmargin=1.2em]
@@ -1156,17 +1299,30 @@ flowchart TD
 \end{itemize}
 
 \subsection{Container Dependency Graph}
-\begin{mermaidblock}
-flowchart LR
-  FE[frontend container] --> API[fastapi_app container]
-  API --> MLFLOW[mlflow container]
-  PROM[prometheus container] --> API
-  GRAF[grafana container] --> PROM
-  TRAIN[trainer profile container] --> MLFLOW
-  TRAIN --> DATA[data/ volume]
-  TRAIN --> MODELS[models/ volume]
-  API --> MODELS
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.96\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 14mm]
+  \node[diagrambox] (fe) {frontend container};
+  \node[diagrambox, right=of fe] (api) {fastapi\_app container};
+  \node[diagrambox, right=of api] (mlflow) {mlflow container};
+  \node[diagrambox, above=of mlflow] (prom) {prometheus};
+  \node[diagrambox, below=of mlflow] (graf) {grafana};
+  \node[diagrambox, below=of api] (train) {trainer profile};
+  \node[diagrambox, below=of train] (data) {data/ volume};
+  \node[diagrambox, right=of data] (models) {models/ volume};
+
+  \draw[diagramlink] (fe) -- (api);
+  \draw[diagramlink] (api) -- (mlflow);
+  \draw[diagramlink] (api) -- (prom);
+  \draw[diagramlink] (prom) -- (graf);
+  \draw[diagramlink] (train) -- (data);
+  \draw[diagramlink] (train) -- (models);
+  \draw[diagramlink] (api) -- (models);
+\end{tikzpicture}%
+}
+\caption{Container dependency graph}
+\end{figure}
 
 \subsection{Model Dependency Graph}
 The model dependency chain is explicit:
@@ -1368,49 +1524,102 @@ The full top-100 inventory is the union of the top-20 files above and the broade
 
 \section{Section 26 - Execution Flow Analysis}
 \subsection{Startup}
-\begin{mermaidblock}
-flowchart TD
-  U[uvicorn] --> L[lifespan()]
-  L --> C[ModelConfig(mode from env)]
-  C --> B[BaselineModelInference()]
-  B --> M[_load_model()]
-  M --> P[preload()]
-  P --> H[/health becomes ready/]
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.90\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (u) {uvicorn};
+  \node[diagrambox, right=of u] (l) {lifespan()};
+  \node[diagrambox, right=of l] (c) {ModelConfig};
+  \node[diagrambox, right=of c] (b) {BaselineModelInference()};
+  \node[diagrambox, right=of b] (m) {\_load\_model()};
+  \node[diagrambox, right=of m] (p) {preload()};
+  \node[diagrambox, right=of p] (h) {\texttt{/health} ready};
+
+  \draw[diagramlink] (u) -- (l);
+  \draw[diagramlink] (l) -- (c);
+  \draw[diagramlink] (c) -- (b);
+  \draw[diagramlink] (b) -- (m);
+  \draw[diagramlink] (m) -- (p);
+  \draw[diagramlink] (p) -- (h);
+\end{tikzpicture}%
+}
+\caption{Startup flow}
+\end{figure}
 
 \subsection{Predict}
-\begin{mermaidblock}
-flowchart TD
-  R[POST /predict] --> V[PredictRequest validation]
-  V --> G[get_model()]
-  G --> L[resolve_request_language()]
-  L --> S[BaselineModelInference.predict_single()]
-  S --> A[_extract_aspects()]
-  S --> T[_predict_sarcasm_flag()]
-  S --> O[PredictResponse]
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.92\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (r) {\texttt{POST /predict}};
+  \node[diagrambox, right=of r] (v) {PredictRequest};
+  \node[diagrambox, right=of v] (g) {get\_model()};
+  \node[diagrambox, right=of g] (l) {resolve\_request\_language()};
+  \node[diagrambox, right=of l] (s) {predict\_single()};
+  \node[diagrambox, below=of s] (a) {\_extract\_aspects()};
+  \node[diagrambox, right=of s] (t) {\_predict\_sarcasm\_flag()};
+  \node[diagrambox, right=of t] (o) {PredictResponse};
+
+  \draw[diagramlink] (r) -- (v);
+  \draw[diagramlink] (v) -- (g);
+  \draw[diagramlink] (g) -- (l);
+  \draw[diagramlink] (l) -- (s);
+  \draw[diagramlink] (s) -- (a);
+  \draw[diagramlink] (s) -- (t);
+  \draw[diagramlink] (s) -- (o);
+\end{tikzpicture}%
+}
+\caption{Predict flow}
+\end{figure}
 
 \subsection{Explain}
-\begin{mermaidblock}
-flowchart TD
-  R[POST /explain] --> V[ExplainRequest validation]
-  V --> G[get_model()]
-  G --> L[resolve_request_language()]
-  L --> S[BaselineModelInference.get_shap_explanation()]
-  S --> X[shap.Explainer]
-  X --> O[ExplainResponse]
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.92\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (r) {\texttt{POST /explain}};
+  \node[diagrambox, right=of r] (v) {ExplainRequest};
+  \node[diagrambox, right=of v] (g) {get\_model()};
+  \node[diagrambox, right=of g] (l) {resolve\_request\_language()};
+  \node[diagrambox, right=of l] (s) {get\_shap\_explanation()};
+  \node[diagrambox, right=of s] (x) {shap.Explainer};
+  \node[diagrambox, right=of x] (o) {ExplainResponse};
+
+  \draw[diagramlink] (r) -- (v);
+  \draw[diagramlink] (v) -- (g);
+  \draw[diagramlink] (g) -- (l);
+  \draw[diagramlink] (l) -- (s);
+  \draw[diagramlink] (s) -- (x);
+  \draw[diagramlink] (x) -- (o);
+\end{tikzpicture}%
+}
+\caption{Explain flow}
+\end{figure}
 
 \subsection{Batch predict}
-\begin{mermaidblock}
-flowchart TD
-  R[POST /batch_predict] --> F[file read]
-  F --> P[pandas.read_csv()]
-  P --> C[text column / 500 row checks]
-  C --> T[asyncio.to_thread(_run_batch)]
-  T --> B[model.predict_batch(skip_absa=True)]
-  B --> R2[BatchPredictResponse]
-\end{mermaidblock}
+\begin{figure}[H]
+\centering
+\resizebox{0.92\textwidth}{!}{%
+\begin{tikzpicture}[node distance=10mm and 12mm]
+  \node[diagrambox] (r) {\texttt{POST /batch\_predict}};
+  \node[diagrambox, right=of r] (f) {file read};
+  \node[diagrambox, right=of f] (p) {pandas.read\_csv()};
+  \node[diagrambox, right=of p] (c) {text column / 500 rows};
+  \node[diagrambox, right=of c] (t) {asyncio.to\_thread()};
+  \node[diagrambox, right=of t] (b) {predict\_batch()};
+  \node[diagrambox, right=of b] (o) {BatchPredictResponse};
+
+  \draw[diagramlink] (r) -- (f);
+  \draw[diagramlink] (f) -- (p);
+  \draw[diagramlink] (p) -- (c);
+  \draw[diagramlink] (c) -- (t);
+  \draw[diagramlink] (t) -- (b);
+  \draw[diagramlink] (b) -- (o);
+\end{tikzpicture}%
+}
+\caption{Batch predict flow}
+\end{figure}
 
 \subsection{Evaluation, training, export, deployment}
 Evaluation is triggered by \texttt{/evaluate} and implements a dev-style background run rather than a persistent job service. Training starts at \texttt{src/scripts/run\_finetuning.py::main()} and follows \texttt{train()} into dataset shaping, PEFT construction, trainer execution, and adapter save. Export starts at \texttt{src/scripts/export\_onnx.py::main()} and uses \texttt{OnnxExporter.export\_fp32()} then \texttt{export\_int8()}. Deployment is the composition of \texttt{Dockerfile}, \texttt{Dockerfile.train}, and \texttt{docker-compose.yml}; the runtime contract is “backend container owns model load, frontend proxies \texttt{/api/*}, monitoring sidecars expose visibility”.

@@ -59,7 +59,7 @@
 \usepackage{float}
 \usepackage{caption}
 \usepackage{subcaption}
-\usepackage[most]{tcolorbox}
+\usepackage[skins,breakable]{tcolorbox}
 \usepackage{listings}
 \usepackage{fvextra}
 \usepackage{url}
@@ -69,6 +69,9 @@
 \usepackage{ifthen}
 
 % --- Breakable inline code ---
+\let\reporttexttt\texttt
+\renewcommand{\texttt}[1]{\nolinkurl{#1}}
+
 % --- Table helpers ---
 \newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
@@ -76,8 +79,6 @@
 \AtBeginEnvironment{tabularx}{\scriptsize\setlength{\tabcolsep}{2pt}}
 \AtBeginEnvironment{tabular}{\scriptsize\setlength{\tabcolsep}{2pt}}
 \AtBeginEnvironment{longtable}{\scriptsize\setlength{\tabcolsep}{2pt}}
-\rowcolors{2}{black!3}{white}
-
 % --- Callout boxes ---
 \tcbset{
   reportbox/.style={
