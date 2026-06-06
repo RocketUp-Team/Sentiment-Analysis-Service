@@ -59,6 +59,7 @@
 \usepackage{float}
 \usepackage{caption}
 \usepackage{subcaption}
+\usepackage[most]{tcolorbox}
 \usepackage{listings}
 \usepackage{fvextra}
 \usepackage{url}
@@ -72,9 +73,36 @@
 \newcolumntype{P}[1]{>{\centering\arraybackslash}p{#1}}
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 \newcolumntype{R}{>{\raggedleft\arraybackslash}X}
-\AtBeginEnvironment{tabularx}{\footnotesize\setlength{\tabcolsep}{3pt}}
-\AtBeginEnvironment{tabular}{\footnotesize\setlength{\tabcolsep}{3pt}}
-\AtBeginEnvironment{longtable}{\footnotesize\setlength{\tabcolsep}{3pt}}
+\AtBeginEnvironment{tabularx}{\scriptsize\setlength{\tabcolsep}{2pt}}
+\AtBeginEnvironment{tabular}{\scriptsize\setlength{\tabcolsep}{2pt}}
+\AtBeginEnvironment{longtable}{\scriptsize\setlength{\tabcolsep}{2pt}}
+\rowcolors{2}{black!3}{white}
+
+% --- Callout boxes ---
+\tcbset{
+  reportbox/.style={
+    enhanced,
+    breakable,
+    colback=white,
+    colframe=NavyBlue!65,
+    boxrule=0.6pt,
+    arc=1.5mm,
+    left=1.2mm,
+    right=1.2mm,
+    top=1.2mm,
+    bottom=1.2mm,
+    fonttitle=\bfseries
+  }
+}
+\newtcolorbox{EvidenceBox}[1][]{reportbox,title=Evidence Box,#1}
+\newtcolorbox{FindingBox}[1][]{reportbox,colframe=BrickRed!70,title=Finding Box,#1}
+\newtcolorbox{RiskBox}[1][]{reportbox,colframe=OrangeRed!80,title=Risk Box,#1}
+\newtcolorbox{RecommendationBox}[1][]{reportbox,colframe=ForestGreen!65,title=Recommendation Box,#1}
+\newtcolorbox{DecisionBox}[1][]{reportbox,colframe=RoyalBlue!70,title=Decision Box,#1}
+\newtcolorbox{TechnicalDebtBox}[1][]{reportbox,colframe=Purple!70,title=Technical Debt Box,#1}
+\newtcolorbox{OperationalImpactBox}[1][]{reportbox,colframe=TealBlue!70,title=Operational Impact Box,#1}
+\newtcolorbox{SecurityFindingBox}[1][]{reportbox,colframe=Maroon!70,title=Security Finding Box,#1}
+\newtcolorbox{PerformanceFindingBox}[1][]{reportbox,colframe=Goldenrod!80,title=Performance Finding Box,#1}
 
 % --- Code listings ---
 \definecolor{codegreen}{rgb}{0.2,0.6,0.2}

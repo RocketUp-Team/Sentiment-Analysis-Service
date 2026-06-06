@@ -21,12 +21,13 @@ Evidence order & Code, config, infrastructure, tests, legacy docs \\
 Primary runtime & FastAPI + in-process model runtime \\
 Primary UI & Angular single-page application behind Nginx \\
 Primary ML toolchain & DVC, HuggingFace, PEFT/LoRA, MLflow, ONNX Runtime \\
+Instructor & Le Thanh Hai \\
+
 \end{tabular}
 
 \vspace{0.6cm}
 \begin{tabular}{@{}ll@{}}
 Tech Lead & Le Quang Tuyen \\
-Instructor & Le Thanh Hai \\
 ML Engineer & Duong Binh An \\
 AI Engineer & Do Quoc Trung \\
 Solution Engineer & Duong Hong Quan \\
@@ -47,6 +48,55 @@ The report is derived from repository inspection. Missing code paths are marked 
 
 \tableofcontents
 \newpage
+
+\section*{Executive Dashboard}
+\addcontentsline{toc}{section}{Executive Dashboard}
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}l c c c c@{}}
+\toprule
+\textbf{Dimension} & \textbf{Architecture} & \textbf{Security} & \textbf{Operations} & \textbf{Overall} \\
+\midrule
+Current maturity & 7/10 & 3/10 & 5/10 & 6/10 \\
+Evidence density & High & High & Medium & High \\
+Production readiness & Partial & Weak & Partial & Limited \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Scorecard} & \textbf{Summary} \\
+\midrule
+Architecture quality & modular monolith runtime with an explicit offline ML plane and concrete runtime boundaries \\
+Security maturity & missing auth, permissive CORS, default admin password, public metrics and admin-style support services \\
+Operational maturity & monitoring exists, but durability, job state, and rollback behavior are weak \\
+Scalability maturity & ONNX and batch chunking help, but SHAP/ABSA remain heavy in-process workloads \\
+Maintainability maturity & contracts and tests are present, but key runtime classes are highly concentrated \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\textwidth}{@{}lX@{}}
+\toprule
+\textbf{Risk heatmap} & \textbf{Current state} \\
+\midrule
+Critical risks & unauthenticated public API, mocked batch status, in-memory evaluation state, default Grafana password \\
+High risks & wildcard CORS with credentials, SHAP and ABSA running in serving process, build-time secret exposure \\
+Medium risks & weak logging, shallow tracing, local artifact coupling, limited horizontal scaling semantics \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{EvidenceBox}
+\textbf{Files:} \texttt{src/main.py}, \texttt{src/model/baseline.py}, \texttt{docker-compose.yml}, \texttt{dvc.yaml}\\
+\textbf{Functions:} \texttt{predict\_single()}, \texttt{predict\_batch()}, \texttt{get\_shap\_explanation()}, \texttt{lifespan()}\\
+\textbf{Artifacts:} \texttt{models/onnx/}, \texttt{models/adapters/}, \texttt{infra/prometheus/}, \texttt{infra/grafana/}
+\end{EvidenceBox}
 
 \section*{Executive Report}
 \addcontentsline{toc}{section}{Executive Report}
