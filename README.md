@@ -1,348 +1,828 @@
 # Sentiment Analysis Service
 
-[![CI Pipeline](https://github.com/RocketUp-Team/Sentiment-Analysis-Service/actions/workflows/ci.yml/badge.svg)](https://github.com/RocketUp-Team/Sentiment-Analysis-Service/actions/workflows/ci.yml)
-[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/release/python-3110/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-green.svg)](https://fastapi.tiangolo.com/)
-[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
-[![MLflow](https://img.shields.io/badge/mlflow-2.x-orange.svg)](https://mlflow.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED.svg)](https://docs.docker.com/)
+[![DVC](https://img.shields.io/badge/DVC-managed-5C3EE8.svg)](https://dvc.org/)
+[![MLflow](https://img.shields.io/badge/MLflow-tracked-0194E2.svg)](https://mlflow.org/)
+[![Report](https://img.shields.io/badge/final%20report-PDF%20included-111827.svg)](./docs/final_project_report.pdf)
 
-> **DDM501 – AI in Production: From Models to Systems**
-> Final Project · FSB Institute of Management and Technology, FPT University
-> Instructor: Huynh Cong Viet Ngu
+Production-oriented sentiment analysis platform with:
 
-A **production-grade NLP microservice** that performs real-time sentiment classification, Aspect-Based Sentiment Analysis (ABSA), and model explainability using a pre-trained RoBERTa transformer. Fully containerised, monitored, and tracked.
+- real-time sentiment classification
+- aspect-based sentiment analysis
+- sarcasm detection
+- SHAP explainability
+- batch CSV inference
+- finetuning and ONNX export pipelines
+- Prometheus and Grafana observability
+- Angular frontend
+- DVC-managed data workflow
 
----
+This repository implements the backend service, model training utilities, monitoring stack, and frontend client for an end-to-end NLP system.
+
+## At A Glance
+
+| Area | What It Covers |
+|---|---|
+| Core API | `POST /predict`, `POST /explain`, `POST /batch_predict`, `GET /health`, `GET /metrics` |
+| Model modes | `baseline`, `finetuned`, `onnx`, `onnx_int8` |
+| Tasks | sentiment classification, ABSA, sarcasm detection, explainability |
+| Data flow | DVC download → preprocess → validate → evaluate → export |
+| Ops stack | Docker Compose, MLflow, Prometheus, Grafana |
+| UI | Angular chatbot-style frontend |
+
+## Start Here
+
+| If you want to... | Go to... |
+|---|---|
+| run the full stack | [Deployment](#deployment) |
+| inspect API payloads | [API Reference](#api-reference) |
+| reproduce the pipeline | [DVC Pipeline](#dvc-pipeline) |
+| review model behavior | [Responsible AI](#responsible-ai) |
+| follow the report structure | [Report Structure](#report-structure) |
+
+## Visual Overview
+
+```mermaid
+flowchart LR
+    U[User] --> F[Angular Frontend]
+    F --> A[FastAPI API]
+    A --> M[Model Inference]
+    A --> E[SHAP Explainability]
+    A --> B[Batch Processing]
+    A --> P[Prometheus Metrics]
+    P --> G[Grafana Dashboard]
+    A --> L[MLflow Tracking]
+```
+
+```mermaid
+flowchart TD
+    DVC[DVC Pipeline] --> R[Raw Data]
+    R --> P1[Preprocess]
+    P1 --> V[Validate]
+    V --> E1[Evaluate Baseline]
+    E1 --> F1[Finetune Adapters]
+    F1 --> O[Export ONNX]
+    O --> B1[Benchmark]
+```
+
+## Demo Screenshots
+
+| API demo | Observability |
+|---|---|
+| ![Predict and explain demo](./images/predict_explain.jpg) | ![MLflow dashboard](./images/mlflow_dashboard.png) |
+| ![Sentiment with aspects](./images/sample_1_pred-negative_aspects-food_service.png) | ![DVC flow](./images/dvc_flow.png) |
+
+## Architecture Gallery
+
+These assets document the implementation and experiment flow across the project.
+
+| MLflow run detail | DVC pipeline | Prediction output |
+|---|---|---|
+| ![MLflow detail](./images/mlflow_detail.png) | ![DVC flow](./images/dvc_flow.png) | ![Negative prediction](./images/sample_3_pred-negative.png) |
+
+## Key Results
+
+These numbers are recorded in the final report artifacts and should be read as repository-evidenced results, not universal guarantees.
+
+| Result | Value | Context |
+|---|---:|---|
+| Baseline accuracy | `0.8135` | SemEval test-set evaluation on `799` samples |
+| Baseline macro F1 | `0.7389` | Same baseline test-set run |
+| Fine-tuned overall F1 | `0.7926` | Sampled evaluation artifact from the finetuned run |
+| English F1 | `0.7892` | Fairness report |
+| Vietnamese F1 | `0.7335` | Fairness report |
+| ONNX INT8 throughput | `321.39 samples/s` | Benchmark artifact |
+| ONNX INT8 avg latency | `3.1115 s` | Benchmark artifact |
+| Processed data rows | `3,831` | Data-quality validation report |
+
+## Report-Aligned Highlights
+
+- End-to-end system from data ingestion to deployment
+- Explicit ABSA output for restaurant-domain reviews
+- SHAP explainability for token-level interpretation
+- Multilingual runtime gate for English and Vietnamese
+- Evaluation, fairness, and benchmarking artifacts checked into the repository
+- Multi-service deployment with monitoring and experiment tracking
+- Appendix G team ownership reflected in `CONTRIBUTING.md`
 
 ## Table of Contents
 
-- [Features](#features)
+- [Project Summary](#project-summary)
+- [Problem Statement](#problem-statement)
+- [Goals](#goals)
+- [Requirements and Success Metrics](#requirements-and-success-metrics)
+- [System Overview](#system-overview)
 - [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
+- [Technology Choices](#technology-choices)
+- [Demo Screenshots](#demo-screenshots)
+- [Architecture Gallery](#architecture-gallery)
+- [Start Here](#start-here)
+- [Data and Datasets](#data-and-datasets)
+- [Model Design](#model-design)
 - [API Reference](#api-reference)
-- [ML Pipeline](#ml-pipeline)
-- [Monitoring](#monitoring)
+- [DVC Pipeline](#dvc-pipeline)
+- [Training and Export](#training-and-export)
+- [Monitoring and Metrics](#monitoring-and-metrics)
+- [Responsible AI](#responsible-ai)
+- [Deployment](#deployment)
+- [Frontend](#frontend)
 - [Testing](#testing)
+- [Setup Guide](#setup-guide)
 - [Project Structure](#project-structure)
-- [Team](#team)
+- [Team Responsibilities](#team-responsibilities)
+- [Known Limitations](#known-limitations)
 
----
+## Project Summary
 
-## Features
+The system exposes a FastAPI service that predicts sentiment for a single text, explains predictions with SHAP, processes CSV batches, and supports evaluation against prepared datasets. The service can run in multiple model modes:
 
-| Feature | Description |
-|---|---|
-| 🔍 **Sentiment Classification** | Real-time positive / negative / neutral prediction via RoBERTa |
-| 🧩 **Aspect-Based Sentiment (ABSA)** | Zero-shot aspect extraction across 6 categories (food, service, ambiance, price, location, general) |
-| 💡 **Model Explainability** | Token-level SHAP attributions for every prediction |
-| 📦 **Batch Processing** | Upload a CSV file and get bulk predictions via async job |
-| 📊 **Full Observability** | Prometheus metrics + Grafana dashboards + alerting rules |
-| 🧪 **Experiment Tracking** | MLflow integration — params, metrics, and artifact logging |
-| 🔄 **Reproducible Pipeline** | DVC-managed data pipeline (download → preprocess → validate → evaluate) |
-| 🚀 **CI/CD** | GitHub Actions: lint, test, coverage on every push |
+- `onnx` - default inference path
+- `onnx_int8` - quantized ONNX inference
+- `finetuned` - LoRA adapters stacked on `xlm-roberta-base`
+- `baseline` - Hugging Face RoBERTa classifier
 
----
+The repository also includes:
+
+- a DVC pipeline for reproducible data preparation and evaluation
+- a training pipeline for sarcasm and sentiment adapters
+- Prometheus metrics and Grafana dashboards
+- an Angular UI for interacting with the API
+
+## Design Principles
+
+- stateless request handling
+- typed request and response contracts
+- reproducible data and model workflows
+- practical explainability instead of black-box inference
+- deployment-first structure with Docker and Compose
+- report-backed metrics and artifacts for evaluation
+
+## Problem Statement
+
+Sentiment analysis in production is not just a classification problem. A usable system must:
+
+- accept text from users or files
+- return low-latency predictions
+- support multilingual input
+- explain its predictions
+- scale to batch jobs
+- provide observability for operations
+- support model iteration and evaluation
+
+This project addresses those requirements with a containerized microservice architecture that combines NLP inference, data versioning, monitoring, and deployment tooling.
+
+## Goals
+
+The implementation targets the following practical outcomes:
+
+- provide a stable API for real-time sentiment prediction
+- extract aspect-level sentiment for restaurant-style review text
+- detect sarcasm using a dedicated adapter when available
+- offer model explanations for individual predictions
+- run batch inference over CSV inputs
+- support baseline, ONNX, and finetuned inference paths
+- track metrics and errors through Prometheus and Grafana
+- keep training and evaluation reproducible through DVC and MLflow
+
+## Requirements and Success Metrics
+
+### Functional Requirements
+
+- single-text prediction through `POST /predict`
+- ABSA returned alongside the overall sentiment label
+- CSV batch inference through `POST /batch_predict`
+- model explanations through `POST /explain`
+- health checks for readiness probing
+- metrics exposure for observability
+- background evaluation with MLflow logging
+- frontend access for end users
+
+### Non-Functional Requirements
+
+- low latency for single-request inference
+- reproducible data and training pipelines
+- containerized deployment
+- observable runtime behavior
+- maintainable typed Python codebase
+- test coverage across core layers
+
+### Success Metrics
+
+- sentiment classification and ABSA performance should be tracked on held-out evaluation data
+- request latency should remain practical for single-text inference
+- batch processing should remain stable for moderate file uploads
+- Prometheus and Grafana should expose request and inference telemetry
+- MLflow should capture training and evaluation runs
+
+These metrics are intended as operational guidance for the project rather than fixed contractual guarantees.
+
+## System Overview
+
+The service is organized around a single FastAPI application that orchestrates request validation, language detection, model inference, SHAP explainability, and metrics collection.
+
+```mermaid
+graph TD
+    User[User / Frontend] --> API[FastAPI Application]
+    API --> Model[Model Inference Engine]
+    API --> Metrics[Prometheus Middleware]
+    Metrics --> Prom[Prometheus]
+    Prom --> Grafana[Grafana]
+    API --> MLflow[MLflow Tracking]
+    API --> Batch[Batch Inference]
+    API --> Explain[SHAP Explanation]
+```
+
+Request flow:
+
+1. The client sends a request to `/predict`, `/explain`, or `/batch_predict`.
+2. FastAPI validates the payload using Pydantic schemas.
+3. The service resolves the language, or uses the caller-provided `lang`.
+4. The model layer performs sentiment inference.
+5. Optional ABSA extraction and sarcasm detection are added when available.
+6. The response is returned and request metrics are exported to Prometheus.
 
 ## Architecture
 
-```
-User / Browser
-      │
-      ▼
-Angular Frontend (:80)
-      │
-      ▼
-FastAPI Application (:8000)
-  ├── POST /predict   ──► RoBERTa Inference Engine
-  ├── POST /explain   ──► SHAP Explainer
-  ├── POST /batch_predict
-  ├── GET  /health
-  └── GET  /metrics   ──► Prometheus (:9091) ──► Grafana (:3000)
-                              │
-                          MLflow (:5005)
-```
+### Backend
 
-All services run on a shared Docker bridge network (`sentiment-network`) and are orchestrated by Docker Compose with resource limits.
+The API entrypoint is [`src/main.py`](./src/main.py). It defines:
 
----
+- startup model loading via FastAPI lifespan hooks
+- CORS configuration
+- exception handlers
+- prediction, explanation, batch, evaluation, and metrics endpoints
+- Prometheus middleware integration
 
-## Tech Stack
+### Model Layer
 
-| Layer | Technology |
-|---|---|
-| Backend API | FastAPI (Python 3.11) + Uvicorn |
-| ML Model | `cardiffnlp/twitter-roberta-base-sentiment-latest` |
-| ABSA Model | `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` |
-| Explainability | SHAP ≥ 0.42 |
-| Containerisation | Docker (multi-stage build) + Docker Compose |
-| Monitoring | Prometheus v2.45 + Grafana 10.0 |
-| Experiment Tracking | MLflow v2.x |
-| Data Versioning | DVC v3 |
-| CI/CD | GitHub Actions |
-| Testing | pytest + pytest-cov + httpx |
+The main implementation is [`src/model/baseline.py`](./src/model/baseline.py), which supports:
 
----
+- Hugging Face sentiment classification
+- ONNX inference sessions
+- optional sentiment and sarcasm adapters
+- zero-shot ABSA via a DeBERTa classifier
+- SHAP explanations for token-level attribution
 
-## Getting Started
+### Data Layer
 
-### Prerequisites
+The data pipeline is implemented in:
 
-- [Docker](https://docs.docker.com/get-docker/) ≥ 24
-- [Docker Compose](https://docs.docker.com/compose/) ≥ 2 (included with Docker Desktop)
+- [`src/data/downloader.py`](./src/data/downloader.py)
+- [`src/data/pipeline.py`](./src/data/pipeline.py)
+- [`src/data/validators.py`](./src/data/validators.py)
 
-### Quick Start — Full Stack
+### Training Layer
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/RocketUp-Team/Sentiment-Analysis-Service.git
-cd Sentiment-Analysis-Service
+The finetuning stack is implemented in:
 
-# 2. Launch all services (API + Frontend + Prometheus + Grafana + MLflow)
-docker-compose up --build
-```
+- [`src/scripts/run_finetuning.py`](./src/scripts/run_finetuning.py)
+- [`src/training/`](./src/training/)
+- [`src/scripts/export_onnx.py`](./src/scripts/export_onnx.py)
+- [`src/scripts/evaluate_finetuned.py`](./src/scripts/evaluate_finetuned.py)
 
-### Service URLs
+### Monitoring Layer
 
-| Service | URL | Credentials |
-|---|---|---|
-| API (Swagger UI) | http://localhost:8000/docs | — |
-| API (ReDoc) | http://localhost:8000/redoc | — |
-| Prometheus | http://localhost:9091 | — |
-| Grafana | http://localhost:3000 | `admin` / `admin` |
-| MLflow | http://localhost:5005 | — |
-| Frontend | http://localhost:80 | — |
+Operational metrics live in [`src/monitoring/metrics.py`](./src/monitoring/metrics.py) and are surfaced through Prometheus-compatible output.
 
-### Local Development (without Docker)
+## Report Structure
 
-```bash
-# Create and activate a Python 3.11 environment
-python -m venv .venv && source .venv/bin/activate
+The final report in [`docs/final_project_report.pdf`](./docs/final_project_report.pdf) documents the same system from an academic perspective:
 
-# Install dependencies
-pip install -r requirements.txt
+- problem definition and requirements
+- architecture and technology trade-offs
+- ML pipeline and deployment
+- monitoring and CI/CD
+- responsible AI, fairness, and privacy
+- documentation and appendix material
 
-# Download model weights
-python src/model/download_models.py
+The README keeps that structure, but presents it in a shorter, product-facing format.
 
-# Run the API
-uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
-```
+## Technology Choices
 
----
+The project makes the following implementation trade-offs:
+
+- `FastAPI` over Flask for typed request validation, automatic OpenAPI docs, and async-friendly endpoints
+- `Docker Compose` over Kubernetes for a simpler local-first deployment workflow
+- `MLflow` for experiment tracking because it is lightweight and self-hostable
+- `DVC` for reproducible data stages and artifact tracking
+- `Prometheus` plus `Grafana` for standard metrics scraping and dashboards
+- `ONNX Runtime` for faster inference options when exported model artifacts are available
+- `Angular` for the frontend because the project already ships a dedicated browser client
+
+## Data and Datasets
+
+The repository uses multiple datasets depending on the task:
+
+- `SemEval-2014 Restaurant` data for ABSA-style restaurant reviews
+- multilingual sentiment data for English and Vietnamese sentiment classification
+- `tweet_eval` irony data for sarcasm detection
+- manually curated Vietnamese sarcasm probe rows for evaluation
+
+The active data parameters are defined in [`params.yaml`](./params.yaml):
+
+- dataset name: `semeval2014_restaurants`
+- supported splits: `train`, `test`
+- validation ratio: `0.1`
+- split seed: `42`
+- max text length: `2000`
+
+### Preprocessing Rules
+
+The preprocessing pipeline applies:
+
+- lowercasing
+- whitespace trimming
+- duplicate removal
+- conflict label dropping
+- minimum text length filtering
+- sentiment derivation using a `negative_priority` strategy
+- aspect label normalization, including mapping `ambience` to `ambiance`
+
+### Validation Rules
+
+The validation step checks:
+
+- minimum sample count
+- null ratio thresholds
+- expected sentiment labels
+- expected aspect labels
+
+## Model Design
+
+### Inference Modes
+
+The runtime mode is selected with `MODEL_MODE`.
+
+- `baseline`
+  - loads `cardiffnlp/twitter-roberta-base-sentiment-latest`
+  - uses Hugging Face classification directly
+- `finetuned`
+  - loads `xlm-roberta-base`
+  - applies sentiment and sarcasm LoRA adapters
+- `onnx`
+  - loads `models/onnx/sentiment_fp32/model.onnx`
+  - may also load a sarcasm ONNX sibling if available
+- `onnx_int8`
+  - loads `models/onnx/sentiment_int8/model_quantized.onnx`
+
+### Language Support
+
+Supported languages are:
+
+- `en`
+- `vi`
+
+If the client omits `lang`, the service runs language detection first and records the detected language in the response.
+
+### Sentiment Output
+
+The primary sentiment labels are:
+
+- `negative`
+- `neutral`
+- `positive`
+
+### ABSA
+
+The ABSA path uses zero-shot classification over these categories:
+
+- `food`
+- `service`
+- `ambiance`
+- `price`
+- `location`
+- `general`
+
+If aspect extraction fails or the model is unavailable, the service falls back to an empty aspect list rather than failing the entire request.
+
+### Sarcasm Detection
+
+Sarcasm detection is integrated into the inference stack and is exposed as `sarcasm_flag` in sentiment responses. In finetuned mode, a dedicated sarcasm adapter is loaded alongside the sentiment adapter.
+
+### Explainability
+
+The `/explain` endpoint returns SHAP token attributions for the predicted class. The response includes:
+
+- tokens
+- SHAP values
+- base value
+- request latency
 
 ## API Reference
 
 ### `GET /health`
-Returns model load status and supported languages.
 
-```json
-{
-  "status": "healthy",
-  "model_loaded": true,
-  "version": "1.0.0",
-  "supported_languages": ["en"]
-}
-```
+Returns model readiness and supported languages.
+
+Response fields:
+
+- `status`
+- `model_loaded`
+- `version`
+- `supported_languages`
 
 ### `POST /predict`
-Single-text sentiment prediction with ABSA.
 
-**Request**
-```json
-{ "text": "The food was amazing but the service was slow.", "lang": "en" }
-```
+Single-text sentiment inference with optional ABSA and sarcasm detection.
 
-**Response**
+Request body:
+
+- `text` - required string, 1 to 2000 characters
+- `lang` - optional language code
+
+Response fields:
+
+- `text`
+- `sentiment`
+- `confidence`
+- `aspects`
+- `sarcasm_flag`
+- `detected_lang`
+- `lang_confidence`
+- `latency_ms`
+
+Example:
+
 ```json
 {
   "text": "The food was amazing but the service was slow.",
-  "sentiment": "positive",
-  "confidence": 0.8732,
-  "aspects": [
-    { "aspect": "food",    "sentiment": "positive", "confidence": 0.92 },
-    { "aspect": "service", "sentiment": "negative", "confidence": 0.87 }
-  ],
-  "sarcasm_flag": false,
-  "latency_ms": 134.5
+  "lang": "en"
 }
 ```
 
 ### `POST /explain`
-Token-level SHAP attributions for a prediction.
 
-**Request**
-```json
-{ "text": "The food was amazing!", "lang": "en" }
-```
+Returns token-level SHAP values for the given text.
 
-**Response**
-```json
-{
-  "tokens": ["The", "food", "was", "amazing", "!"],
-  "shap_values": [-0.02, 0.15, 0.01, 0.48, 0.09],
-  "base_value": 0.33,
-  "latency_ms": 820.1
-}
-```
+Response fields:
+
+- `tokens`
+- `shap_values`
+- `base_value`
+- `latency_ms`
 
 ### `POST /batch_predict`
-Upload a CSV file with a `text` column for bulk inference.
 
-```bash
-curl -X POST http://localhost:8000/batch_predict \
-  -F "file=@reviews.csv"
-```
+Uploads a CSV file with a `text` column and returns row-by-row sentiment predictions.
 
-**Response**
-```json
-{ "job_id": "uuid-...", "status": "processing", "total_items": 500, "created_at": "..." }
-```
+Behavior:
+
+- up to 500 rows are processed per request
+- empty rows are marked as failed
+- ABSA is skipped in batch mode to keep runtime acceptable on CPU
+
+Response fields:
+
+- `total_items`
+- `processed_items`
+- `failed_items`
+- `latency_ms`
+- `results`
+
+Each result item includes:
+
+- `row`
+- `text`
+- `sentiment`
+- `confidence`
+- `aspects`
+- `error`
+
+### `POST /evaluate`
+
+Triggers background evaluation against `data/processed/sentences.csv` and logs metrics to MLflow.
+
+### `GET /evaluate/status`
+
+Returns the evaluation worker state:
+
+- `running`
+- `last_run`
+- `last_error`
+
+### `GET /batch_status/{job_id}`
+
+Returns a mocked completed status object for batch tracking.
 
 ### `GET /metrics`
-Prometheus-compatible plain-text metrics endpoint.
 
----
+Returns Prometheus-formatted service metrics.
 
-## ML Pipeline
+## DVC Pipeline
 
-The data pipeline is managed by **DVC** and defined in `dvc.yaml`:
+The reproducible pipeline is defined in [`dvc.yaml`](./dvc.yaml).
 
-```
+### Stages
+
+1. `download`
+   - extracts SemEval XML files into `data/raw/sentences.csv` and `data/raw/aspects.csv`
+2. `preprocess`
+   - applies text cleaning, label mapping, and splitting into `data/processed/`
+3. `validate`
+   - generates `data/reports/quality_report.json`
+4. `evaluate_baseline`
+   - evaluates the baseline model and writes `data/reports/baseline_metrics.json`
+5. `download_sarcasm`
+   - downloads the sarcasm dataset
+6. `download_sentiment`
+   - downloads English and Vietnamese sentiment datasets
+7. `prepare_eval`
+   - builds `data/eval/mixed_lang_eval.csv` and `data/eval/vi_sarcasm_eval.csv`
+8. `finetune_sarcasm`
+   - trains the sarcasm adapter
+9. `finetune_sentiment`
+   - trains the sentiment adapter
+10. `evaluate_finetuned`
+   - produces finetuned evaluation reports
+11. `export_onnx_sentiment`
+   - exports sentiment ONNX artifacts
+12. `export_onnx_sarcasm`
+   - exports sarcasm ONNX artifacts
+13. `benchmark_onnx`
+   - benchmarks the exported sentiment model
+
+Run the pipeline with:
+
+```bash
 dvc repro
 ```
 
-| Stage | Script | Output |
-|---|---|---|
-| `download` | `src/data/downloader.py` | `data/raw/` |
+## Training and Export
 
-### Colab Training Pipeline
-The full end-to-end training and export pipeline is available in `notebooks/colab_full_pipeline.ipynb`. To run it on Google Colab, you must configure the following **Colab Secrets**:
+### Finetuning
 
-| Secret Key | Description |
-|---|---|
-| `MLFLOW_TRACKING_URI` | Your DagsHub MLflow tracking URI |
-| `DAGSHUB_USER` | Your DagsHub username |
-| `DAGSHUB_TOKEN` | Your DagsHub access token |
-| `GITHUB_TOKEN` | Your GitHub Personal Access Token |
-| `MODEL_VERSION` | The version tag for the model (e.g., `v1.2.0`) |
-| `GIT_USER_EMAIL` | Your git commit email (e.g. `you@example.com`) |
-| `GIT_USER_NAME` | Your git commit name (e.g. `Your Name`) |
-| `preprocess` | `src/data/pipeline.py` | `data/processed/` |
-| `validate` | `src/data/validators.py` | `data/reports/quality_report.json` |
-| `evaluate_baseline` | `src/model/evaluate.py` | `data/reports/baseline_metrics.json` + MLflow run |
+The finetuning CLI is [`src/scripts/run_finetuning.py`](./src/scripts/run_finetuning.py).
 
-### Dataset
-- **SemEval-2014 Task 4** — Restaurant Reviews corpus
-- Labels: `positive`, `negative`, `neutral`
-- Aspect categories: food, service, ambiance, price, location, general
+Supported tasks:
 
-### Preprocessing Steps
-1. Label normalisation (`LabelMapper`)
-2. Sentence-level sentiment derivation with `negative_priority` strategy (`SentimentDeriver`)
-3. Text cleaning — lowercase, strip whitespace (`TextCleaner`)
-4. Duplicate removal (`DuplicateRemover`)
-5. Length filtering — min 3 chars, max 2 000 chars (`LengthFilter`)
-6. Train/val/test split — 10% validation, seed 42 (`Splitter`)
+- `sentiment`
+- `sarcasm`
 
----
+Examples:
 
-## Monitoring
+```bash
+python -m src.scripts.run_finetuning --task sentiment
+python -m src.scripts.run_finetuning --task sarcasm --smoke
+```
 
-### Prometheus Metrics
+Training configuration is task-specific:
 
-| Metric | Type | Labels |
-|---|---|---|
-| `api_requests_total` | Counter | `method`, `endpoint`, `http_status` |
-| `api_request_latency_seconds` | Histogram | `method`, `endpoint` |
-| `model_inference_latency_seconds` | Histogram | — |
+- sentiment uses multilingual sentiment data and can oversample the minority class
+- sarcasm uses irony data with class weighting
 
-### Alerting Rules (`infra/prometheus/alert_rules.yml`)
+Artifacts are written under:
 
-| Alert | Condition | Severity |
-|---|---|---|
-| `HighErrorRate` | 5xx rate > 10% for 1 min | critical |
-| `HighInferenceLatency` | avg inference > 500 ms for 5 min | warning |
+- `models/adapters/sentiment/`
+- `models/adapters/sarcasm/`
+- `models/adapters_smoke/` for smoke runs
 
----
+### Evaluation Preparation
+
+[`src/scripts/prepare_eval.py`](./src/scripts/prepare_eval.py) produces:
+
+- `data/eval/mixed_lang_eval.csv`
+- `data/eval/vi_sarcasm_eval.csv`
+
+### ONNX Export
+
+ONNX export scripts build both fp32 and int8 model variants for inference benchmarking and runtime deployment.
+
+## Monitoring and Metrics
+
+### Prometheus
+
+The service exports request and inference metrics through Prometheus middleware.
+
+Typical metric categories include:
+
+- request counts
+- request latency
+- model inference latency
+
+### Grafana
+
+The Docker Compose stack includes Grafana provisioning through `infra/grafana/provisioning/`.
+
+### MLflow
+
+MLflow is used for:
+
+- data preprocessing experiments
+- baseline evaluation
+- finetuning runs
+- parameter and metric tracking
+
+### Generated Artifacts
+
+The repository includes outputs that support the report narrative:
+
+- `images/mlflow_dashboard.png` for experiment tracking visibility
+- `images/dvc_flow.png` for pipeline visualization
+- `images/sample_1_pred-negative_aspects-food_service.png` for ABSA output
+- `images/sample_3_pred-negative.png` for classification output
+- `docs/final_project_report.pdf` for the formal write-up
+
+## Responsible AI
+
+The repository includes explainability and operational safeguards that support responsible deployment:
+
+- `/explain` exposes SHAP-based token attributions for individual predictions
+- the model layer keeps inference stateless and avoids persisting user text in the API layer
+- the monitoring stack focuses on aggregate request and latency telemetry rather than payload logging
+- the evaluation workflow supports separate checks for multilingual sentiment and Vietnamese sarcasm probe data
+- the report includes fairness tracking across English and Vietnamese evaluation slices
+
+Known limitations remain:
+
+- the primary sentiment model is pretrained on social-media style text, so domain shift can affect performance
+- sarcasm handling depends on whether a sarcasm adapter or ONNX model is available
+- batch mode intentionally skips ABSA to avoid a large CPU latency penalty
+
+## Deployment
+
+### Docker Compose
+
+Bring up the full stack with:
+
+```bash
+docker compose up --build
+```
+
+Services:
+
+- API: `http://localhost:8000`
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+- Frontend: `http://localhost:80`
+- Prometheus: `http://localhost:9091`
+- Grafana: `http://localhost:3000`
+- MLflow: `http://localhost:5005`
+
+Grafana default credentials:
+
+- username: `admin`
+- password: `admin`
+
+### Runtime Configuration
+
+Set the model mode before startup:
+
+```powershell
+$env:MODEL_MODE = "onnx_int8"
+```
+
+```bash
+export MODEL_MODE=onnx_int8
+```
+
+The compose file also configures resource limits for the API, frontend, Prometheus, Grafana, MLflow, and optional training service.
+
+## Frontend
+
+The Angular client lives in [`app/sentiment-analysis-chatbot/`](./app/sentiment-analysis-chatbot/).
+
+Local development:
+
+```bash
+cd app/sentiment-analysis-chatbot
+npm install
+npm start
+```
+
+Production build:
+
+```bash
+npm run build
+```
+
+The frontend is designed to connect to the backend API and present real-time sentiment results in a browser UI.
 
 ## Testing
 
+Run the backend tests with:
+
 ```bash
-# Run all tests with coverage report
 pytest --cov=src tests/
-
-# Run only unit tests
-pytest tests/data/ tests/model/ tests/contracts/
-
-# Run only integration tests
-pytest tests/test_api.py
 ```
 
-| Test Layer | Location | Coverage |
-|---|---|---|
-| Unit — Data transforms | `tests/data/` | TextCleaner, LengthFilter, DuplicateRemover, Splitter, SentimentDeriver |
-| Unit — Model / Contracts | `tests/model/`, `tests/contracts/` | ModelConfig, Pydantic schemas, validators |
-| Integration — API | `tests/test_api.py` | All 5 endpoints via FastAPI TestClient |
+The repository also supports targeted test execution:
 
----
+```bash
+pytest tests/
+```
+
+The current test strategy includes:
+
+- unit tests for data transforms and training helpers
+- integration tests for FastAPI endpoints
+- model validation checks for output schema and runtime behavior
+- data validation checks for processed datasets
+
+## Setup Guide
+
+### 1. Clone the repository
+
+```bash
+git clone <repo-url>
+cd Sentiment-Analysis-Service
+```
+
+### 2. Create a Python environment
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+### 3. Install backend dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Prepare model artifacts
+
+Use the runtime mode you need:
+
+- `baseline` for the Hugging Face classifier
+- `finetuned` for LoRA adapters under `models/adapters/`
+- `onnx` or `onnx_int8` for exported ONNX artifacts
+
+### 5. Run the API
+
+```bash
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 6. Optional: run the full stack
+
+```bash
+docker compose up --build
+```
+
+### 7. Optional: run the pipeline
+
+```bash
+dvc repro
+```
 
 ## Project Structure
 
-```
+```text
 Sentiment-Analysis-Service/
-├── .github/workflows/ci.yml     # GitHub Actions CI pipeline
-├── app/                         # Angular frontend chatbot
-│   └── sentiment-analysis-chatbot/
-├── contracts/                   # Shared interfaces & schemas
-│   ├── model_interface.py       # Abstract ModelInference base class
-│   ├── schemas.py               # Pydantic request/response models
-│   └── errors.py                # Custom exception types
-├── data/                        # DVC-managed data artefacts
-│   ├── external/                # Source datasets
-│   ├── raw/                     # Downloaded raw CSVs
-│   ├── processed/               # Cleaned, split data
-│   └── reports/                 # Quality & evaluation reports
-├── docs/                        # Project documentation
-│   ├── final_project_report.tex # LaTeX report source
-│   ├── final_project_report.pdf # Compiled report
-│   ├── ARCHITECTURE.md          # System design docs
-│   └── plan.md                  # Project plan
-├── infra/
-│   ├── prometheus/              # prometheus.yml, alert_rules.yml
-│   └── grafana/provisioning/    # Datasource + dashboard JSON
-├── src/
-│   ├── main.py                  # FastAPI app entrypoint
-│   ├── data/                    # Data pipeline & transforms
-│   │   ├── downloader.py
-│   │   ├── pipeline.py
-│   │   ├── validators.py
-│   │   └── transforms/
-│   ├── model/                   # Inference engine
-│   │   ├── baseline.py          # BaselineModelInference (RoBERTa)
-│   │   ├── config.py            # ModelConfig dataclass
-│   │   └── evaluate.py          # Offline evaluation + MLflow logging
-│   └── monitoring/
-│       └── metrics.py           # Prometheus metrics + ASGI middleware
-├── tests/                       # pytest test suite
-├── Dockerfile                   # Multi-stage Docker build
-├── docker-compose.yml           # 5-service orchestration
-├── dvc.yaml                     # Reproducible ML pipeline stages
-├── params.yaml                  # All hyperparameters & config
-└── requirements.txt             # Python dependencies
+├── app/
+│   └── sentiment-analysis-chatbot/   # Angular frontend
+├── contracts/                        # Shared request/response schemas and interfaces
+├── data/                             # Raw, processed, eval data managed by DVC
+├── docs/                             # Architecture notes and project reports
+├── infra/                            # Prometheus and Grafana config
+├── models/                           # Adapters and exported ONNX artifacts
+├── src/                              # API, model, training, monitoring, scripts
+├── tests/                            # pytest suite
+├── Dockerfile                        # API image
+├── Dockerfile.train                  # Training image
+├── docker-compose.yml                # Full stack orchestration
+├── dvc.yaml                          # Reproducible pipeline
+├── params.yaml                       # Data and training parameters
+└── requirements.txt                  # Python dependencies
 ```
 
----
+## Team Responsibilities
 
-## Team
+The original project plan divides the work into three tracks:
 
-| # | Name | Role |
-|---|---|---|
-| 1 | Duong Hong Quan | ML Pipeline & Experiment Tracking (MLflow, DVC, `src/model/`) |
-| 2 | Pham Duc Long | Backend API & DevOps (FastAPI, Docker, CI/CD) |
-| 3 | Do Quoc Trung | Monitoring & Data Validation (Prometheus, Grafana, `src/data/`) |
+- AI core and modeling
+- backend, DevOps, and MLOps
+- frontend, documentation, and reporting
 
-**Course:** DDM501 – AI in Production: From Models to Systems
-**Institution:** FSB Institute of Management and Technology, FPT University
-**Instructor:** Huynh Cong Viet Ngu
+In practical repository terms, that maps to:
+
+- `src/model/`, `src/training/`, and `src/scripts/` for model work
+- `src/main.py`, `docker-compose.yml`, `infra/`, and `tests/` for backend and operations
+- `app/sentiment-analysis-chatbot/` and `docs/` for the frontend and documentation
+
+### Report and Presentation Notes
+
+For the report, slides, and demo narration, the following ownership split is the most useful reference:
+
+- Dương Binh An
+  - ML pipeline and dataset narrative
+  - model evaluation, benchmarking, and optimization sections
+  - DVC and MLflow explanation
+  - supporting plots, tables, and technical model write-up
+- Dương Hồng Quân
+  - system architecture and solution design narrative
+  - deployment and monitoring sections
+  - observability, integration, and runtime flow explanation
+  - demo flow and cross-service coordination slides
+
+If you are updating report-facing content, keep those names consistent with Appendix G in [`docs/final_project_report.tex`](./docs/final_project_report.tex).
+
+## Known Limitations
+
+- `GET /batch_status/{job_id}` is currently mocked rather than backed by a persistent job queue.
+- Batch inference skips ABSA to avoid high CPU latency.
+- The service depends on available model artifacts for ONNX and finetuned modes.
+- If those artifacts are absent, use `baseline` or regenerate the models through the training pipeline.
